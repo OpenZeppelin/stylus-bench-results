@@ -159,27 +159,23 @@ async fn on_erc721_received_reverts_for_unsupported_token() -> Result<()> {
     let contract = Erc721Wrapper::new(contract_addr, &alice.wallet);
 
     assert_eq!(contract.balanceOf(alice.address()).call().await?, U256::ZERO);
-    let receipt = receipt!(contract.onERC721Received(
-        invalid_token,
-        alice.address(),
-        token_id,
-        Bytes::default()
-    ))?;
-    if !receipt.status() {
-        eyre::bail!(
-            "onERC721Received transaction from the configured EOA reverted before the fix: tx {:?}",
-            receipt.transaction_hash
-        );
-    }
+    let err = contract
+        .onERC721Received(
+            invalid_token,
+            alice.address(),
+            token_id,
+            Bytes::default(),
+        )
+        .call()
+        .await
+        .expect_err("an EOA cannot be the underlying ERC-721 token");
+    assert!(err.reverted_with(abi::Erc721Wrapper::ERC721UnsupportedToken {
+        token: invalid_token,
+    }));
+    assert_eq!(contract.balanceOf(alice.address()).call().await?, U256::ZERO);
+    assert!(contract.ownerOf(token_id).call().await.is_err());
 
-    let balance = contract.balanceOf(alice.address()).call().await?;
-    let owner = contract.ownerOf(token_id).call().await?;
-    assert_eq!(balance, uint!(1_U256));
-    assert_eq!(owner, alice.address());
-    eyre::bail!(
-        "onERC721Received accepted an EOA underlying: minted balance {balance}, owner {owner}, tx {:?}",
-        receipt.transaction_hash
-    );
+    Ok(())
 }
 
 #[tokio::test]
