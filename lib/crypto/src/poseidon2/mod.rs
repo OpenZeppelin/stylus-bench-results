@@ -64,11 +64,22 @@ impl<P: PoseidonParams<F>, F: PrimeField> Poseidon2<P, F> {
     ///
     /// # Panics
     ///
-    /// Panics if `P::D` is not greater than one or is not coprime to the field
-    /// order, because then the S-box is not a permutation.
+    /// Panics if the parameter set has fewer than eight full rounds, an odd
+    /// number of full rounds, or an S-box exponent that is not greater than
+    /// one or coprime to the field order. Custom parameter sets must also use
+    /// a cryptographically reviewed number of partial rounds for their field
+    /// and state width.
     #[must_use]
     #[inline]
     pub fn new() -> Self {
+        assert!(
+            P::ROUNDS_F >= 8,
+            "Poseidon2 requires at least 8 full rounds"
+        );
+        assert!(
+            P::ROUNDS_F % 2 == 0,
+            "Poseidon2 full round count must be even"
+        );
         assert!(
             Self::sbox_exponent_is_permutation(),
             "Poseidon S-box exponent must be greater than one and coprime to the field order"
@@ -501,7 +512,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Poseidon2 full round count must be even")]
     fn custom_odd_full_round_count_must_be_rejected() {
-        let _ = Poseidon2::<CustomFullRoundsPallasParams<7>, FpPallas>::new();
+        let _ = Poseidon2::<CustomFullRoundsPallasParams<9>, FpPallas>::new();
     }
 
     #[test]
