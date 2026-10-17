@@ -15,9 +15,9 @@ use alloy_primitives::{uint, U256, U32};
 pub use generic_size::{Size, S160, S208, S224};
 pub use sol::*;
 use stylus_sdk::{
-    call::MethodError,
     prelude::*,
     storage::{StorageGuard, StorageGuardMut, StorageVec},
+    stylus_core::calls::errors::MethodError,
 };
 
 use crate::utils::{
@@ -372,7 +372,6 @@ impl<S: Size> Trace<S> {
         new_checkpoint.value.set(value);
     }
 }
-
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{uint, Address};

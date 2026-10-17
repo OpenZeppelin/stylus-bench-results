@@ -18,7 +18,7 @@ use alloc::{vec, vec::Vec};
 
 pub use sol::*;
 use stylus_sdk::{
-    call::MethodError, evm, msg, prelude::*, storage::StorageBool,
+    prelude::*, storage::StorageBool, stylus_core::calls::errors::MethodError,
 };
 
 #[cfg_attr(coverage_nightly, coverage(off))]
@@ -77,6 +77,7 @@ pub struct Pausable {
 }
 
 /// Pausable interface.
+#[public]
 pub trait IPausable {
     /// Returns true if the contract is paused, and false otherwise.
     ///
@@ -110,7 +111,7 @@ impl Pausable {
     pub fn pause(&mut self) -> Result<(), Error> {
         self.when_not_paused()?;
         self.paused.set(true);
-        evm::log(Paused { account: msg::sender() });
+        self.vm().log(Paused { account: self.vm().msg_sender() });
         Ok(())
     }
 
@@ -126,7 +127,7 @@ impl Pausable {
     pub fn unpause(&mut self) -> Result<(), Error> {
         self.when_paused()?;
         self.paused.set(false);
-        evm::log(Unpaused { account: msg::sender() });
+        self.vm().log(Unpaused { account: self.vm().msg_sender() });
         Ok(())
     }
 
@@ -164,7 +165,6 @@ impl Pausable {
         Ok(())
     }
 }
-
 #[cfg(test)]
 mod tests {
     use alloy_primitives::Address;

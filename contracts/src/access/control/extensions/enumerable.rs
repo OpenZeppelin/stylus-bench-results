@@ -44,6 +44,7 @@ pub struct AccessControlEnumerable {
 
 /// Interface for the [`AccessControlEnumerable`] extension.
 #[interface_id]
+#[public]
 pub trait IAccessControlEnumerable {
     /// The error type associated to the trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -162,7 +163,6 @@ impl AccessControlEnumerable {
         revoked
     }
 }
-
 #[public]
 impl IErc165 for AccessControlEnumerable {
     fn supports_interface(&self, interface_id: B32) -> bool {
@@ -170,7 +170,6 @@ impl IErc165 for AccessControlEnumerable {
             || <Self as IErc165>::interface_id() == interface_id
     }
 }
-
 #[cfg(test)]
 mod tests {
 

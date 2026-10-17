@@ -40,6 +40,7 @@ pub struct Erc1155MetadataUri {
 
 /// Interface for the optional metadata functions from the ERC-1155 standard.
 #[interface_id]
+#[public]
 pub trait IErc1155MetadataUri {
     /// Returns the URI for token type `id`.
     ///
@@ -85,7 +86,6 @@ impl IErc165 for Erc1155MetadataUri {
             || <Self as IErc165>::interface_id() == interface_id
     }
 }
-
 #[cfg(test)]
 mod tests {
     use motsu::prelude::Contract;

@@ -6,9 +6,9 @@ use alloc::{vec, vec::Vec};
 
 use alloy_primitives::{uint, Address, U256};
 use stylus_sdk::{
-    call::MethodError,
     prelude::*,
     storage::{StorageMap, StorageU256},
+    stylus_core::calls::errors::MethodError,
 };
 
 use crate::utils::math::storage::AddAssignChecked;
@@ -49,6 +49,7 @@ pub struct Nonces {
 }
 
 /// Interface for [`Nonces`]
+#[public]
 pub trait INonces {
     /// Returns the unused nonce for the given account.
     ///
@@ -126,7 +127,6 @@ impl Nonces {
         Ok(())
     }
 }
-
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{Address, U256};

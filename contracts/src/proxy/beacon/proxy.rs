@@ -79,16 +79,15 @@ impl BeaconProxy {
     /// * `&self` - Read access to the contract's state.
     #[must_use]
     pub fn get_beacon(&self) -> Address {
-        Erc1967Utils::get_beacon()
+        Erc1967Utils::get_beacon(self)
     }
 }
-
 unsafe impl IProxy for BeaconProxy {
     fn implementation(&self) -> Result<Address, Vec<u8>> {
-        Ok(IBeaconInterface::new(self.get_beacon()).implementation(self)?)
+        Ok(IBeaconInterface::new(self.get_beacon())
+            .implementation(self.vm(), Call::new())?)
     }
 }
-
 #[cfg(test)]
 mod tests {
     #![allow(clippy::needless_pass_by_value)]

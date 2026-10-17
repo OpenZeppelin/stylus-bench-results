@@ -21,7 +21,7 @@ use alloc::{vec, vec::Vec};
 use alloy_primitives::{aliases::B32, Address};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
-use stylus_sdk::{evm, msg, prelude::*, storage::StorageAddress};
+use stylus_sdk::{prelude::*, storage::StorageAddress};
 
 use crate::{
     access::ownable::{self, Ownable},
@@ -59,6 +59,7 @@ pub struct Ownable2Step {
 
 /// Interface for an [`Ownable2Step`] contract.
 #[interface_id]
+#[public]
 pub trait IOwnable2Step {
     /// The error type associated to the trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -176,7 +177,7 @@ impl IOwnable2Step for Ownable2Step {
         self.pending_owner.set(new_owner);
 
         let current_owner = self.owner();
-        evm::log(OwnershipTransferStarted {
+        self.vm().log(OwnershipTransferStarted {
             previous_owner: current_owner,
             new_owner,
         });
@@ -184,7 +185,7 @@ impl IOwnable2Step for Ownable2Step {
     }
 
     fn accept_ownership(&mut self) -> Result<(), Self::Error> {
-        let sender = msg::sender();
+        let sender = self.vm().msg_sender();
         let pending_owner = self.pending_owner();
         if sender != pending_owner {
             return Err(ownable::Error::UnauthorizedAccount(
@@ -223,7 +224,6 @@ impl Ownable2Step {
         self.ownable._transfer_ownership(new_owner);
     }
 }
-
 #[public]
 impl IErc165 for Ownable2Step {
     fn supports_interface(&self, interface_id: B32) -> bool {
@@ -232,7 +232,6 @@ impl IErc165 for Ownable2Step {
             || <Self as IErc165>::interface_id() == interface_id
     }
 }
-
 #[cfg(test)]
 mod tests {
     use motsu::prelude::Contract;

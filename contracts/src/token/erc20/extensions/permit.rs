@@ -16,7 +16,9 @@ use alloc::{vec, vec::Vec};
 
 use alloy_primitives::{aliases::B32, keccak256, Address, B256, U256, U8};
 use alloy_sol_types::SolType;
-use stylus_sdk::{block, call::MethodError, function_selector, prelude::*};
+use stylus_sdk::{
+    function_selector, prelude::*, stylus_core::calls::errors::MethodError,
+};
 
 use crate::{
     token::erc20::{self, Erc20},
@@ -233,7 +235,7 @@ impl<T: IEip712 + StorageType> Erc20Permit<T> {
         erc20: &mut Erc20,
         nonces: &mut Nonces,
     ) -> Result<(), Error> {
-        if U256::from(block::timestamp()) > deadline {
+        if U256::from(self.vm().block_timestamp()) > deadline {
             return Err(ERC2612ExpiredSignature { deadline }.into());
         }
 

@@ -15,9 +15,9 @@ use alloy_primitives::{aliases::B32, uint, Address, U256};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
 use stylus_sdk::{
-    call::MethodError,
     prelude::*,
     storage::{StorageMap, StorageU256, StorageVec},
+    stylus_core::calls::errors::MethodError,
 };
 
 use crate::{
@@ -86,6 +86,7 @@ pub struct Erc721Enumerable {
 /// This is the interface of the optional `Enumerable` extension
 /// of the ERC-721 standard.
 #[interface_id]
+#[public]
 pub trait IErc721Enumerable {
     /// The error type associated to this ERC-721 enumerable trait
     /// implementation.
@@ -361,7 +362,6 @@ impl Erc721Enumerable {
         }
     }
 }
-
 #[cfg(test)]
 mod tests {
     use motsu::prelude::*;

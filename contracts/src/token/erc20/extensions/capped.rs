@@ -10,7 +10,9 @@ use alloc::{vec, vec::Vec};
 use alloy_primitives::U256;
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
-use stylus_sdk::{call::MethodError, prelude::*, storage::StorageU256};
+use stylus_sdk::{
+    prelude::*, storage::StorageU256, stylus_core::calls::errors::MethodError,
+};
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -57,6 +59,7 @@ pub struct Capped {
 
 /// Interface for the token supply cap logic.
 #[interface_id]
+#[public]
 pub trait ICapped {
     /// Returns the cap on the token's total supply.
     #[must_use]
@@ -92,7 +95,6 @@ impl ICapped for Capped {
         self.cap.get()
     }
 }
-
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{uint, Address};

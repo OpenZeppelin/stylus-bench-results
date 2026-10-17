@@ -23,10 +23,9 @@ use alloy_primitives::{Address, U256};
 use openzeppelin_stylus_proc::interface_id;
 use stylus_sdk::{
     abi::Bytes,
-    call::{Call, MethodError},
-    contract, msg,
     prelude::*,
     storage::{StorageAddress, StorageU256},
+    stylus_core::calls::errors::MethodError,
 };
 
 use crate::token::erc20::{self, Erc20, IErc20};
@@ -175,6 +174,7 @@ unsafe impl TopLevelStorage for Erc20FlashMint {}
 ///
 /// [ERC-3156]: https://eips.ethereum.org/EIPS/eip-3156
 #[interface_id]
+#[public]
 pub trait IErc3156FlashLender {
     /// The error type associated to this trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -269,7 +269,7 @@ impl Erc20FlashMint {
     /// See [`IErc3156FlashLender::max_flash_loan`].
     #[must_use]
     pub fn max_flash_loan(&self, token: Address, erc20: &erc20::Erc20) -> U256 {
-        if token == contract::address() {
+        if token == self.vm().contract_address() {
             U256::MAX - erc20.total_supply()
         } else {
             U256::MIN
@@ -283,7 +283,7 @@ impl Erc20FlashMint {
         token: Address,
         _value: U256,
     ) -> Result<U256, Error> {
-        if token == contract::address() {
+        if token == self.vm().contract_address() {
             Ok(self.flash_fee_value.get())
         } else {
             Err(Error::UnsupportedToken(ERC3156UnsupportedToken { token }))
@@ -311,17 +311,19 @@ impl Erc20FlashMint {
         }
 
         let fee = self.flash_fee(token, value)?;
-        if !Address::has_code(&receiver) {
+        if self.vm().code_size(receiver) == 0 {
             return Err(Error::ERC3156InvalidReceiver(
                 ERC3156InvalidReceiver { receiver },
             ));
         }
         erc20._mint(receiver, value)?;
         let loan_receiver = IERC3156FlashBorrower::new(receiver);
+        let host = (*self.vm()).clone();
         let loan_return = loan_receiver
             .on_flash_loan(
-                Call::new_in(self),
-                msg::sender(),
+                &host,
+                Call::new_mutating(self),
+                self.vm().msg_sender(),
                 token,
                 value,
                 fee,
@@ -341,7 +343,11 @@ impl Erc20FlashMint {
         let allowance = value
             .checked_add(fee)
             .expect("allowance should not exceed `U256::MAX`");
-        erc20._spend_allowance(receiver, contract::address(), allowance)?;
+        erc20._spend_allowance(
+            receiver,
+            self.vm().contract_address(),
+            allowance,
+        )?;
 
         let flash_fee_receiver = self.flash_fee_receiver_address.get();
 
@@ -364,7 +370,6 @@ impl Erc20FlashMint {
 //             || <Self as IErc165>::interface_id() == interface_id
 //     }
 // }
-
 #[cfg(test)]
 mod tests {
     use motsu::prelude::*;

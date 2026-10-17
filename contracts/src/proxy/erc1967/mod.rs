@@ -86,10 +86,9 @@ impl Erc1967Proxy {
 
 unsafe impl IProxy for Erc1967Proxy {
     fn implementation(&self) -> Result<Address, Vec<u8>> {
-        Ok(Erc1967Utils::get_implementation())
+        Ok(Erc1967Utils::get_implementation(self))
     }
 }
-
 #[cfg(test)]
 mod tests {
     #![allow(clippy::needless_pass_by_value)]

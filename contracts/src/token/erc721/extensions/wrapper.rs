@@ -13,11 +13,8 @@ use alloy_primitives::{aliases::B32, Address, U256};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
 use stylus_sdk::{
-    abi::Bytes,
-    call::{self, Call, MethodError},
-    contract, msg,
-    prelude::*,
-    storage::StorageAddress,
+    abi::Bytes, prelude::*, storage::StorageAddress,
+    stylus_core::calls::errors::MethodError,
 };
 
 use crate::token::erc721::{
@@ -121,6 +118,7 @@ unsafe impl TopLevelStorage for Erc721Wrapper {}
 /// Interface of an extension of the ERC-721 token contract that supports token
 /// wrapping.
 #[interface_id]
+#[public]
 pub trait IErc721Wrapper: IErc721Receiver {
     /// The error type associated to this trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -205,9 +203,10 @@ impl Erc721Wrapper {
         token_ids: Vec<U256>,
         erc721: &mut Erc721,
     ) -> Result<bool, Error> {
-        let sender = msg::sender();
-        let contract_address = contract::address();
+        let sender = self.vm().msg_sender();
+        let contract_address = self.vm().contract_address();
         let underlying = Erc721Interface::new(self.underlying());
+        let host = (*self.vm()).clone();
 
         for token_id in token_ids {
             // This is an "unsafe" transfer that doesn't call any hook on
@@ -215,14 +214,15 @@ impl Erc721Wrapper {
             // (by design of this contract) and no other contracts expected to
             // be called from there, we are safe.
             match underlying.transfer_from(
-                Call::new_in(self),
+                &host,
+                Call::new_mutating(self),
                 sender,
                 contract_address,
                 token_id,
             ) {
                 Ok(()) => (),
                 Err(e) => {
-                    if let call::Error::Revert(ref reason) = e {
+                    if let stylus_sdk::stylus_core::calls::errors::Error::Revert(ref reason) = e {
                         if !reason.is_empty() {
                             return Err(Error::InvalidReceiverWithReason(
                                 erc721::InvalidReceiverWithReason {
@@ -252,8 +252,10 @@ impl Erc721Wrapper {
         token_ids: Vec<U256>,
         erc721: &mut Erc721,
     ) -> Result<bool, Error> {
-        let sender = msg::sender();
+        let sender = self.vm().msg_sender();
         let underlying = Erc721Interface::new(self.underlying());
+        let contract_address = self.vm().contract_address();
+        let host = (*self.vm()).clone();
 
         for token_id in token_ids {
             // Setting the `auth` argument enables the `_is_authorized` check
@@ -262,15 +264,16 @@ impl Erc721Wrapper {
             // not 0 here.
             erc721._update(Address::ZERO, token_id, sender)?;
             match underlying.safe_transfer_from(
-                Call::new_in(self),
-                contract::address(),
+                &host,
+                Call::new_mutating(self),
+                contract_address,
                 account,
                 token_id,
                 vec![].into(),
             ) {
                 Ok(()) => (),
                 Err(e) => {
-                    if let call::Error::Revert(ref reason) = e {
+                    if let stylus_sdk::stylus_core::calls::errors::Error::Revert(ref reason) = e {
                         if !reason.is_empty() {
                             return Err(Error::InvalidReceiverWithReason(
                                 erc721::InvalidReceiverWithReason {
@@ -318,7 +321,7 @@ impl Erc721Wrapper {
         _data: &Bytes,
         erc721: &mut Erc721,
     ) -> Result<B32, Error> {
-        let sender = msg::sender();
+        let sender = self.vm().msg_sender();
         if self.underlying() != sender {
             return Err(Error::UnsupportedToken(ERC721UnsupportedToken {
                 token: sender,
@@ -365,15 +368,15 @@ impl Erc721Wrapper {
     ) -> Result<U256, Error> {
         let underlying = Erc721Interface::new(self.underlying());
 
-        let owner = underlying.owner_of(Call::new_in(self), token_id).map_err(
-            |_| {
+        let owner = underlying
+            .owner_of(self.vm(), Call::new(), token_id)
+            .map_err(|_| {
                 Error::Erc721FailedOperation(Erc721FailedOperation {
                     token: self.underlying(),
                 })
-            },
-        )?;
+            })?;
 
-        let contract_address = contract::address();
+        let contract_address = self.vm().contract_address();
         if owner != contract_address {
             return Err(erc721::Error::IncorrectOwner(
                 erc721::ERC721IncorrectOwner {
@@ -390,7 +393,6 @@ impl Erc721Wrapper {
         Ok(token_id)
     }
 }
-
 #[cfg(test)]
 mod tests {
     use alloy_primitives::uint;

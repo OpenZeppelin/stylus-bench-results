@@ -14,7 +14,8 @@ use alloy_primitives::{aliases::B32, Address};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
 use stylus_sdk::{
-    call::MethodError, evm, msg, prelude::*, storage::StorageAddress,
+    prelude::*, storage::StorageAddress,
+    stylus_core::calls::errors::MethodError,
 };
 
 use crate::utils::introspection::erc165::IErc165;
@@ -73,6 +74,7 @@ pub struct Ownable {
 
 /// Interface for an [`Ownable`] contract.
 #[interface_id]
+#[public]
 pub trait IOwnable {
     /// Returns the address of the current owner.
     ///
@@ -244,7 +246,7 @@ impl Ownable {
     /// * [`Error::UnauthorizedAccount`] - If called by any account other than
     ///   the owner.
     pub fn only_owner(&self) -> Result<(), Error> {
-        let account = msg::sender();
+        let account = self.vm().msg_sender();
         if self.owner() != account {
             return Err(Error::UnauthorizedAccount(
                 OwnableUnauthorizedAccount { account },
@@ -268,10 +270,9 @@ impl Ownable {
     pub fn _transfer_ownership(&mut self, new_owner: Address) {
         let previous_owner = self.owner.get();
         self.owner.set(new_owner);
-        evm::log(OwnershipTransferred { previous_owner, new_owner });
+        self.vm().log(OwnershipTransferred { previous_owner, new_owner });
     }
 }
-
 #[public]
 impl IErc165 for Ownable {
     fn supports_interface(&self, interface_id: B32) -> bool {
@@ -279,7 +280,6 @@ impl IErc165 for Ownable {
             || <Self as IErc165>::interface_id() == interface_id
     }
 }
-
 #[cfg(test)]
 mod tests {
     use motsu::prelude::*;

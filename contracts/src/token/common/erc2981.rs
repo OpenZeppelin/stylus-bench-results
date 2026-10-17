@@ -26,9 +26,9 @@ use alloy_primitives::{
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
 use stylus_sdk::{
-    call::MethodError,
     prelude::*,
     storage::{StorageAddress, StorageMap},
+    stylus_core::calls::errors::MethodError,
 };
 
 use crate::utils::{
@@ -132,6 +132,7 @@ pub struct Erc2981 {
 /// tokens (NFTs) to enable universal support for royalty payments across all
 /// NFT marketplaces and ecosystem participants.
 #[interface_id]
+#[public]
 pub trait IErc2981: IErc165 {
     /// Returns how much royalty is owed and to whom, based on a sale price that
     /// may be denominated in any unit of exchange.
@@ -329,7 +330,6 @@ impl Erc2981 {
         self.token_royalty_info.delete(token_id);
     }
 }
-
 #[cfg(test)]
 mod tests {
     use alloy_primitives::uint;

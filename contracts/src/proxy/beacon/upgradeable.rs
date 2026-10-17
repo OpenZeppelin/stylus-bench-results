@@ -4,7 +4,10 @@ use alloc::{vec, vec::Vec};
 
 use alloy_primitives::Address;
 pub use sol::*;
-use stylus_sdk::{call::MethodError, evm, prelude::*, storage::StorageAddress};
+use stylus_sdk::{
+    prelude::*, storage::StorageAddress,
+    stylus_core::calls::errors::MethodError,
+};
 
 use crate::{
     access::ownable::{self, IOwnable, Ownable},
@@ -177,7 +180,7 @@ impl UpgradeableBeacon {
         &mut self,
         new_implementation: Address,
     ) -> Result<(), Error> {
-        if !new_implementation.has_code() {
+        if self.vm().code_size(new_implementation) == 0 {
             return Err(Error::InvalidImplementation(
                 BeaconInvalidImplementation {
                     implementation: new_implementation,
@@ -185,7 +188,7 @@ impl UpgradeableBeacon {
             ));
         }
         self.implementation.set(new_implementation);
-        evm::log(Upgraded { implementation: new_implementation });
+        self.vm().log(Upgraded { implementation: new_implementation });
         Ok(())
     }
 }
@@ -214,7 +217,6 @@ impl IOwnable for UpgradeableBeacon {
         Ok(self.ownable.renounce_ownership()?)
     }
 }
-
 #[cfg(test)]
 mod tests {
     use motsu::prelude::*;

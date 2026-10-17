@@ -7,8 +7,12 @@ use alloc::vec::Vec;
 use alloy_primitives::{address, uint, Address, B256, U256};
 use alloy_sol_types::SolType;
 use stylus_sdk::{
-    call::{self, MethodError, StaticCallContext},
+    call,
     prelude::*,
+    stylus_core::{
+        calls::{errors::MethodError, StaticCallContext},
+        host::Host,
+    },
 };
 
 /// Address of the `ecRecover` EVM precompile.
@@ -91,6 +95,7 @@ impl MethodError for Error {
 ///
 /// * If the `ecRecover` precompile fails to execute.
 pub fn recover(
+    host: &impl Host,
     context: impl StaticCallContext,
     hash: B256,
     v: u8,
@@ -99,7 +104,7 @@ pub fn recover(
 ) -> Result<Address, Error> {
     check_if_malleable(&s)?;
     // If the signature is valid (and not malleable), return the signer address.
-    _recover(context, hash, v, r, s)
+    _recover(host, context, hash, v, r, s)
 }
 
 /// Calls `ecRecover` EVM precompile.
@@ -125,6 +130,7 @@ pub fn recover(
 ///
 /// * If the `ecRecover` precompile fails to execute.
 fn _recover(
+    host: &impl Host,
     context: impl StaticCallContext,
     hash: B256,
     v: u8,
@@ -140,7 +146,7 @@ fn _recover(
         return Err(ECDSAInvalidSignature {}.into());
     }
 
-    let recovered = call::static_call(context, ECRECOVER_ADDR, &calldata)
+    let recovered = call::static_call(host, context, ECRECOVER_ADDR, &calldata)
         .expect("should call `ecRecover` precompile");
 
     let recovered = Address::from_slice(&recovered[12..]);
@@ -201,7 +207,6 @@ fn check_if_malleable(s: &B256) -> Result<(), Error> {
     }
     Ok(())
 }
-
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{b256, B256};

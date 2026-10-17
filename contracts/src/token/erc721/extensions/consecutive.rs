@@ -23,7 +23,9 @@ use alloy_primitives::{
     aliases::{B32, U96},
     uint, Address, U256,
 };
-use stylus_sdk::{abi::Bytes, call::MethodError, evm, msg, prelude::*};
+use stylus_sdk::{
+    abi::Bytes, prelude::*, stylus_core::calls::errors::MethodError,
+};
 
 use crate::{
     token::erc721::{
@@ -257,7 +259,8 @@ impl IErc721 for Erc721Consecutive {
         // Setting an "auth" argument enables the `_is_authorized` check which
         // verifies that the token exists (`!from.is_zero()`). Therefore, it is
         // not needed to verify that the return value is not 0 here.
-        let previous_owner = self._update(to, token_id, self.vm().msg_sender())?;
+        let previous_owner =
+            self._update(to, token_id, self.vm().msg_sender())?;
         if previous_owner != from {
             return Err(erc721::Error::IncorrectOwner(ERC721IncorrectOwner {
                 sender: from,
@@ -840,7 +843,6 @@ impl IErc165 for Erc721Consecutive {
         self.erc721.supports_interface(interface_id)
     }
 }
-
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{uint, Address, U256};

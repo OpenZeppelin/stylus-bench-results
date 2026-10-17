@@ -4,8 +4,7 @@ use alloc::vec::Vec;
 
 use alloy_primitives::Address;
 use stylus_sdk::{
-    call::{self, Call, Error},
-    prelude::*,
+    call, host::VM, prelude::*, stylus_core::calls::errors::Error,
 };
 
 pub mod beacon;
@@ -36,7 +35,9 @@ pub mod utils;
 /// address.
 ///
 /// [delegate_call]: stylus_sdk::call::delegate_call
-pub unsafe trait IProxy: TopLevelStorage + Sized {
+pub unsafe trait IProxy:
+    TopLevelStorage + HostAccess<Host = VM> + Sized
+{
     /// Delegates the current call to [`IProxy::implementation`].
     ///
     /// This function does not return to its internal call site, it will
@@ -61,7 +62,13 @@ pub unsafe trait IProxy: TopLevelStorage + Sized {
         implementation: Address,
         calldata: &[u8],
     ) -> Result<Vec<u8>, Error> {
-        call::delegate_call(Call::new_in(self), implementation, calldata)
+        let host = (*self.vm()).clone();
+        call::delegate_call(
+            &host,
+            Call::new_mutating(self),
+            implementation,
+            calldata,
+        )
     }
 
     /// This is a virtual function that should be overridden so it
@@ -108,7 +115,6 @@ pub unsafe trait IProxy: TopLevelStorage + Sized {
         Ok(self.delegate(self.implementation()?, calldata)?)
     }
 }
-
 #[cfg(test)]
 mod tests {
     use alloy_sol_macro::sol;
