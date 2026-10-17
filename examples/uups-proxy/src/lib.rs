@@ -108,6 +108,15 @@ impl UUPSProxyErc20Example {
 
     /// Initializes the contract.
     fn initialize(&mut self, owner: Address) -> Result<(), Error> {
+        // A nonzero owner identifies proxies initialized before the
+        // namespaced marker was introduced. Keep those proxies from being
+        // reinitialized when they upgrade to this implementation.
+        if self.ownable.owner() != Address::ZERO {
+            return Err(Error::InvalidInitialization(
+                uups_upgradeable::InvalidInitialization {},
+            ));
+        }
+        uups_upgradeable::initializer(self)?;
         self.uups.set_version()?;
         self.ownable.constructor(owner)?;
         Ok(())
