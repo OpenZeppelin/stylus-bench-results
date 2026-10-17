@@ -78,6 +78,22 @@ mod interface_id;
 ///     fn send_tokens(&self, recipient: Address, value: U256); // transfer(address,uint256) ❌ collision!
 /// }
 /// ```
+///
+/// Distinct Solidity signatures can also collide after hashing to four bytes.
+/// The following signatures both produce selector `0x9b3981c9`:
+///
+/// ```compile_fail
+/// use openzeppelin_stylus_proc::interface_id;
+///
+/// #[interface_id]
+/// trait CollidingSelectors {
+///     #[selector(name = "fn_47379")]
+///     fn first(&self);
+///
+///     #[selector(name = "fn_59942")]
+///     fn second(&self);
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn interface_id(attr: TokenStream, input: TokenStream) -> TokenStream {
     interface_id::interface_id(&attr, input)
