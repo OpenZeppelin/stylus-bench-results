@@ -861,6 +861,56 @@ mod tests {
         assert!(matches!(err, Error::InsufficientBalance(_)));
     }
 
+    #[test]
+    fn transfer_from_invalid_receiver_does_not_spend_allowance() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc20::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+        let bob = Address::from([2u8; 20]);
+        let one = uint!(1_U256);
+        let two = uint!(2_U256);
+
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        ._mint(alice, two)
+        .unwrap();
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .approve(bob, two)
+        .unwrap();
+
+        let err = ({
+            contract_vm.set_sender(bob);
+            &mut contract
+        })
+        .transfer_from(alice, Address::ZERO, one)
+        .unwrap_err();
+        assert!(matches!(err, Error::InvalidReceiver(_)));
+
+        assert_eq!(
+            two,
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .allowance(alice, bob)
+        );
+        assert_eq!(
+            two,
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .balance_of(alice)
+        );
+    }
+
     #[motsu::test]
     fn error_when_transfer_to_invalid_receiver(
         contract: Contract<Erc20>,
