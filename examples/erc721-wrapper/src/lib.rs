@@ -135,6 +135,7 @@ impl IErc721Wrapper for Erc721WrapperExample {
 
 #[public]
 impl IErc721Receiver for Erc721WrapperExample {
+    #[selector(name = "onERC721Received")]
     fn on_erc721_received(
         &mut self,
         operator: Address,

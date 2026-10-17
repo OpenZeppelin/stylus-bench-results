@@ -1,7 +1,7 @@
 #![cfg(feature = "devnet")]
 
 use abi::{Erc721, Erc721Wrapper};
-use alloy::primitives::{uint, Address, U256};
+use alloy::primitives::{uint, Address, Bytes, U256};
 use eyre::Result;
 use stylus_test_support::{
     constructor, receipt, watch, Account, Constructor, EventExt, Revert,
@@ -143,6 +143,43 @@ async fn deposit_for_reverts_when_unsupported_token() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[tokio::test]
+async fn on_erc721_received_reverts_for_unsupported_token() -> Result<()> {
+    let alice = Account::new().await?;
+    let invalid_token = alice.address();
+    let token_id = uint!(2_U256);
+    let contract_addr = alice
+        .as_deployer()
+        .with_constructor(ctr(invalid_token))
+        .deploy()
+        .await?
+        .contract_address;
+    let contract = Erc721Wrapper::new(contract_addr, &alice.wallet);
+
+    assert_eq!(contract.balanceOf(alice.address()).call().await?, U256::ZERO);
+    let receipt = receipt!(contract.onERC721Received(
+        invalid_token,
+        alice.address(),
+        token_id,
+        Bytes::default()
+    ))?;
+    if !receipt.status() {
+        eyre::bail!(
+            "onERC721Received transaction from the configured EOA reverted before the fix: tx {:?}",
+            receipt.transaction_hash
+        );
+    }
+
+    let balance = contract.balanceOf(alice.address()).call().await?;
+    let owner = contract.ownerOf(token_id).call().await?;
+    assert_eq!(balance, uint!(1_U256));
+    assert_eq!(owner, alice.address());
+    eyre::bail!(
+        "onERC721Received accepted an EOA underlying: minted balance {balance}, owner {owner}, tx {:?}",
+        receipt.transaction_hash
+    );
 }
 
 #[tokio::test]
