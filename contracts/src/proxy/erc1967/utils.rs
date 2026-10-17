@@ -628,7 +628,6 @@ mod tests {
             })
             .encode()
         );
-
         // implementation should remain unchanged.
         let implementation = ({
             contract_vm.set_sender(alice);
@@ -742,6 +741,9 @@ mod tests {
             })
             .encode(),
         );
+
+        assert_eq!(contract.test_get_implementation(), Address::ZERO);
+        assert!(contract_vm.get_emitted_logs().is_empty());
     }
 
     #[test]
@@ -804,6 +806,8 @@ mod tests {
             .expect_err("should fail with ERC1967NonPayable");
 
         assert_eq!(err, Error::NonPayable(ERC1967NonPayable {}).encode());
+        assert_eq!(contract.test_get_implementation(), Address::ZERO);
+        assert!(contract_vm.get_emitted_logs().is_empty());
     }
 
     #[test]
@@ -867,6 +871,7 @@ mod tests {
             Error::InvalidAdmin(ERC1967InvalidAdmin { admin: Address::ZERO })
                 .encode()
         );
+        assert_eq!(contract_vm.get_emitted_logs().len(), 1);
 
         // admin should remain unchanged.
         let admin = ({
@@ -1169,6 +1174,7 @@ mod tests {
             })
             .encode()
         );
+        assert_eq!(contract.test_get_beacon(), Address::ZERO);
     }
 
     #[test]
@@ -1197,6 +1203,7 @@ mod tests {
             })
             .encode()
         );
+        assert_eq!(contract.test_get_beacon(), Address::ZERO);
     }
 
     #[test]
@@ -1341,6 +1348,9 @@ mod tests {
             })
             .encode(),
         );
+
+        assert_eq!(contract.test_get_beacon(), Address::ZERO);
+        assert!(contract_vm.get_emitted_logs().is_empty());
     }
 
     #[test]
@@ -1409,6 +1419,8 @@ mod tests {
             .expect_err("should fail with ERC1967NonPayable");
 
         assert_eq!(err, Error::NonPayable(ERC1967NonPayable {}).encode());
+        assert_eq!(contract.test_get_beacon(), Address::ZERO);
+        assert!(contract_vm.get_emitted_logs().is_empty());
     }
 
     // test storage slot isolation.
