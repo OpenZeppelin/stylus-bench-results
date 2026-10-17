@@ -233,7 +233,7 @@ impl IErc721 for Erc721Consecutive {
     ) -> Result<(), Self::Error> {
         self.transfer_from(from, to, token_id)?;
         Ok(self.erc721._check_on_erc721_received(
-            msg::sender(),
+            self.vm().msg_sender(),
             from,
             to,
             token_id,
@@ -257,7 +257,7 @@ impl IErc721 for Erc721Consecutive {
         // Setting an "auth" argument enables the `_is_authorized` check which
         // verifies that the token exists (`!from.is_zero()`). Therefore, it is
         // not needed to verify that the return value is not 0 here.
-        let previous_owner = self._update(to, token_id, msg::sender())?;
+        let previous_owner = self._update(to, token_id, self.vm().msg_sender())?;
         if previous_owner != from {
             return Err(erc721::Error::IncorrectOwner(ERC721IncorrectOwner {
                 sender: from,
@@ -274,7 +274,7 @@ impl IErc721 for Erc721Consecutive {
         to: Address,
         token_id: U256,
     ) -> Result<(), Self::Error> {
-        self._approve(to, token_id, msg::sender(), true)
+        self._approve(to, token_id, self.vm().msg_sender(), true)
     }
 
     fn set_approval_for_all(
@@ -362,6 +362,7 @@ impl Erc721Consecutive {
     ///
     /// # Errors
     ///
+    /// * [`Error::ForbiddenBatchMint`] - If called after contract deployment.
     /// * [`erc721::Error::InvalidReceiver`] - If `to` is [`Address::ZERO`].
     /// * [`Error::ExceededMaxBatchMint`] - If `batch_size` exceeds
     ///   `max_batch_size` of the contract.
@@ -378,6 +379,10 @@ impl Erc721Consecutive {
 
         // Minting a batch of size 0 is a no-op.
         if batch_size > U96::ZERO {
+            if self.vm().code_size(self.vm().contract_address()) > 0 {
+                return Err(ERC721ForbiddenBatchMint {}.into());
+            }
+
             if to.is_zero() {
                 return Err(erc721::Error::InvalidReceiver(
                     ERC721InvalidReceiver { receiver: Address::ZERO },
@@ -405,7 +410,7 @@ impl Erc721Consecutive {
                 alloy_primitives::U128::from(batch_size),
             );
 
-            evm::log(ConsecutiveTransfer {
+            self.vm().log(ConsecutiveTransfer {
                 from_token_id: next.to::<U256>(),
                 to_token_id: last.to::<U256>(),
                 from_address: Address::ZERO,
@@ -538,7 +543,7 @@ impl Erc721Consecutive {
         }
 
         self.erc721.owners.setter(token_id).set(to);
-        evm::log(Transfer { from, to, token_id });
+        self.vm().log(Transfer { from, to, token_id });
         Ok(from)
     }
 
@@ -611,7 +616,7 @@ impl Erc721Consecutive {
     ) -> Result<(), Error> {
         self._mint(to, token_id)?;
         Ok(self.erc721._check_on_erc721_received(
-            msg::sender(),
+            self.vm().msg_sender(),
             Address::ZERO,
             to,
             token_id,
@@ -742,7 +747,7 @@ impl Erc721Consecutive {
     ) -> Result<(), Error> {
         self._transfer(from, to, token_id)?;
         Ok(self.erc721._check_on_erc721_received(
-            msg::sender(),
+            self.vm().msg_sender(),
             from,
             to,
             token_id,
@@ -795,7 +800,7 @@ impl Erc721Consecutive {
             }
 
             if emit_event {
-                evm::log(Approval { owner, approved: to, token_id });
+                self.vm().log(Approval { owner, approved: to, token_id });
             }
         }
 
