@@ -1,6 +1,4 @@
-//! Simple math operations missing in `stylus_sdk::storage`.
-mod checked;
-mod unchecked;
-
-pub(crate) use checked::AddAssignChecked;
-pub(crate) use unchecked::{AddAssignUnchecked, SubAssignUnchecked};
+//! Storage arithmetic helpers.
+//!
+//! Use the `update_check_*` and `update_wrap_*` methods on
+//! `stylus_sdk::storage::StorageUint` directly.

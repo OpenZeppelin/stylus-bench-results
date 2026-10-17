@@ -96,29 +96,11 @@ impl Erc20Example {
 
     // Add token minting feature.
     //
-    // Make sure to handle `Capped` properly. You should not call
-    // [`Erc20::_update`] to mint tokens -- it will the break `Capped`
-    // mechanism.
+    // Apply the cap policy before minting. `Capped::check_increase` keeps this
+    // validation and its standard error payload reusable in composed tokens.
     fn mint(&mut self, account: Address, value: U256) -> Result<(), Error> {
         self.pausable.when_not_paused()?;
-        let max_supply = self.capped.cap();
-
-        // Overflow check required.
-        let supply = self
-            .erc20
-            .total_supply()
-            .checked_add(value)
-            .expect("new supply should not exceed `U256::MAX`");
-
-        if supply > max_supply {
-            return Err(capped::Error::ExceededCap(
-                capped::ERC20ExceededCap {
-                    increased_supply: supply,
-                    cap: max_supply,
-                },
-            ))?;
-        }
-
+        self.capped.check_increase(self.erc20.total_supply(), value)?;
         self.erc20._mint(account, value)?;
         Ok(())
     }

@@ -1,10 +1,15 @@
 use benches::{
-    access_control, erc1155, erc1155_metadata_uri, erc20, erc721,
-    merkle_proofs, ownable, pedersen, poseidon, poseidon_asm_sol, poseidon_sol,
-    report::BenchmarkReport,
+    access_control, erc1155, erc1155_metadata_uri, erc1155_supply, erc20,
+    erc721, merkle_proofs, ownable, pedersen, poseidon, poseidon_asm_sol,
+    poseidon_sol, report::BenchmarkReport, vesting_wallet,
 };
 use futures::FutureExt;
 use itertools::Itertools;
+
+// Nitro's gas estimator can exhaust its request worker when several contract
+// suites deploy and estimate transactions at the same time. Keep measurements
+// deterministic and run one suite at a time.
+const MAX_PARALLEL: usize = 1;
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -16,15 +21,15 @@ async fn main() -> eyre::Result<()> {
         ownable::bench().boxed(),
         erc1155::bench().boxed(),
         erc1155_metadata_uri::bench().boxed(),
+        erc1155_supply::bench().boxed(),
         pedersen::bench().boxed(),
         poseidon_sol::bench().boxed(),
         poseidon_asm_sol::bench().boxed(),
         poseidon::bench().boxed(),
+        vesting_wallet::bench().boxed(),
     ];
 
-    // Run benchmarks max 3 at the same time.
-    // Otherwise, nitro test node can overload and revert transaction.
-    const MAX_PARALLEL: usize = 3;
+    // Run one suite at a time so Nitro's gas estimator stays reliable.
     let mut report = BenchmarkReport::default();
     for chunk in &benchmarks.into_iter().chunks(MAX_PARALLEL) {
         report = futures::future::try_join_all(chunk)

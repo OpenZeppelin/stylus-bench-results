@@ -20,6 +20,7 @@ pub struct Erc20Metadata {
 
 /// Interface for the optional metadata functions from the ERC-20 standard.
 #[interface_id]
+#[public]
 pub trait IErc20Metadata: IErc165 {
     /// Returns the name of the token.
     ///
@@ -48,7 +49,7 @@ pub trait IErc20Metadata: IErc165 {
     /// function ([`DEFAULT_DECIMALS`]), unless it's overridden.
     ///
     /// NOTE: This information is only used for *display* purposes: in
-    /// no way it affects any of the arithmetic of the contract, including
+    /// no way it affects any of the arithmetic of the including
     /// [`super::super::IErc20::balance_of`] and
     /// [`super::super::IErc20::transfer`].
     ///
@@ -100,30 +101,44 @@ impl IErc165 for Erc20Metadata {
 
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::Contract;
+    use stylus_sdk::testing::TestVM;
     use stylus_sdk::{alloy_primitives::Address, prelude::*};
 
     use super::*;
 
     unsafe impl TopLevelStorage for Erc20Metadata {}
 
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual = <Erc20Metadata as IErc20Metadata>::interface_id();
         let expected: B32 = 0xa219a025_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
-    fn supports_interface(contract: Contract<Erc20Metadata>, alice: Address) {
-        assert!(contract.sender(alice).supports_interface(
-            <Erc20Metadata as IErc20Metadata>::interface_id()
-        ));
-        assert!(contract
-            .sender(alice)
-            .supports_interface(<Erc20Metadata as IErc165>::interface_id()));
+    #[test]
+    fn supports_interface() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc20Metadata::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
+        assert!(({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .supports_interface(<Erc20Metadata as IErc20Metadata>::interface_id()));
+        assert!(({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .supports_interface(<Erc20Metadata as IErc165>::interface_id()));
 
         let fake_interface_id: B32 = 0x12345678_u32.into();
-        assert!(!contract.sender(alice).supports_interface(fake_interface_id));
+        assert!(!({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .supports_interface(fake_interface_id));
     }
 }

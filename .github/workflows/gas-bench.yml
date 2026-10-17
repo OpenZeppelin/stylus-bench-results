@@ -25,14 +25,8 @@ jobs:
           cache-key: "gas-bench"
           rustflags: ""
 
-      - name: Install cargo-stylus
-        run: cargo install --locked --force cargo-stylus@0.6.3
-
       - name: Install wasm-opt
         run: cargo install wasm-opt@0.116.1
-
-      - name: Setup nitro node
-        run: ./scripts/nitro-testnode.sh -d -i
 
       - name: run benches
         run: ./scripts/bench.sh

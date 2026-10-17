@@ -6,7 +6,6 @@ use alloc::{string::String, vec, vec::Vec};
 use alloy_primitives::U256;
 pub use sol::*;
 use stylus_sdk::{
-    evm,
     prelude::*,
     storage::{StorageMap, StorageString},
 };
@@ -64,7 +63,7 @@ impl Erc721UriStorage {
     /// * [`MetadataUpdate`].
     pub fn _set_token_uri(&mut self, token_id: U256, token_uri: String) {
         self.token_uris.setter(token_id).set_str(token_uri);
-        evm::log(MetadataUpdate { token_id });
+        self.vm().log(MetadataUpdate { token_id });
     }
 
     /// Check [`IErc721Metadata::token_uri()`] for more details.
@@ -99,8 +98,8 @@ impl Erc721UriStorage {
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{uint, Address};
-    use motsu::prelude::*;
     use stylus_sdk::prelude::*;
+    use stylus_sdk::testing::TestVM;
 
     use super::*;
     use crate::{
@@ -159,48 +158,78 @@ mod tests {
 
     unsafe impl TopLevelStorage for Erc721MetadataExample {}
 
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual = <Erc721MetadataExample as IErc721Metadata>::interface_id();
         let expected: B32 = 0x5b5e139f_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
-    fn supports_interface(
-        contract: Contract<Erc721MetadataExample>,
-        alice: Address,
-    ) {
-        assert!(contract.sender(alice).supports_interface(
+    #[test]
+    fn supports_interface() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc721MetadataExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
+        assert!(({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .supports_interface(
             <Erc721MetadataExample as IErc721Metadata>::interface_id()
         ));
-        assert!(contract.sender(alice).supports_interface(
-            <Erc721MetadataExample as IErc165>::interface_id()
-        ));
+        assert!(
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .supports_interface(
+                <Erc721MetadataExample as IErc165>::interface_id()
+            )
+        );
 
         let fake_interface_id: B32 = 0x12345678_u32.into();
-        assert!(!contract.sender(alice).supports_interface(fake_interface_id));
+        assert!(!({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .supports_interface(fake_interface_id));
     }
-    #[motsu::test]
-    fn token_uri_works(
-        contract: Contract<Erc721MetadataExample>,
-        alice: Address,
-    ) {
-        contract
-            .sender(alice)
-            .erc721
-            ._mint(alice, TOKEN_ID)
-            .expect("should mint a token for Alice");
+    #[test]
+    fn token_uri_works() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc721MetadataExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
 
-        let token_uri = String::from("https://docs.openzeppelin.com/contracts/5.x/api/token/erc721#Erc721URIStorage");
-        contract.sender(alice).set_token_uri(TOKEN_ID, token_uri.clone());
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .erc721
+        ._mint(alice, TOKEN_ID)
+        .expect("should mint a token for Alice");
+
+        let token_uri = String::from(
+            "https://docs.openzeppelin.com/contracts/5.x/api/token/erc721#Erc721URIStorage",
+        );
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .set_token_uri(TOKEN_ID, token_uri.clone());
 
         assert_eq!(
             token_uri,
-            contract
-                .sender(alice)
-                .token_uri(TOKEN_ID)
-                .expect("should return token URI")
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .token_uri(TOKEN_ID)
+            .expect("should return token URI")
         );
     }
 }

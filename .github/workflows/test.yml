@@ -1,8 +1,7 @@
 name: test
 # This is the main CI workflow that runs the test suite on all pushes to main
 # and all pull requests. It runs the following jobs:
-# - required: runs the test suite on ubuntu with stable and beta rust
-# toolchains.
+# - required: runs the test suite on ubuntu with stable Rust 1.91.0.
 # - os-check: runs the test suite on mac and windows.
 # - coverage: runs the test suite and collects coverage information.
 # See `check.yml` for information about how the concurrency cancellation and
@@ -27,21 +26,16 @@ env:
 jobs:
   required:
     runs-on: ubuntu-latest
-    name: ubuntu / ${{ matrix.toolchain }}
-    strategy:
-      matrix:
-        # Run on stable and beta to ensure that tests won't break on the next
-        # version of the rust toolchain.
-        toolchain: [stable, beta]
+    name: ubuntu / 1.91.0
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
 
-      - name: Install rust ${{ matrix.toolchain }}
+      - name: Install Rust 1.91.0
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: ${{ matrix.toolchain }}
+          toolchain: 1.91.0
           rustflags: ""
 
       - name: "Install nextest"
@@ -57,11 +51,11 @@ jobs:
 
         # https://twitter.com/jonhoo/status/1571290371124260865
       - name: Run unit tests
-        run: cargo nextest run --locked --all-targets -p openzeppelin-stylus -p openzeppelin-stylus-proc -p openzeppelin-crypto --features ruint
+        run: cargo nextest run --locked --workspace --all-targets --features openzeppelin-crypto/ruint
 
         # https://github.com/rust-lang/cargo/issues/6669
       - name: Run doc tests
-        run: cargo test --locked --doc
+        run: cargo test --locked --workspace --doc --features openzeppelin-crypto/ruint
   os-check:
     # Run cargo test on MacOS and Windows.
     runs-on: ${{ matrix.os }}
@@ -80,7 +74,7 @@ jobs:
       - name: Install rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.91.0
           rustflags: ""
 
       - name: "Install nextest"
@@ -93,7 +87,7 @@ jobs:
         run: cargo generate-lockfile
 
       - name: Run unit tests
-        run: cargo nextest run --locked --all-targets -p openzeppelin-stylus -p openzeppelin-stylus-proc -p openzeppelin-crypto --features ruint
+        run: cargo nextest run --locked --workspace --all-targets --features openzeppelin-crypto/ruint
 
   coverage:
     # Use llvm-cov to build and collect coverage and outputs in a format that
@@ -147,13 +141,13 @@ jobs:
         run: cargo generate-lockfile
 
       - name: Cargo llvm-cov
-        run: cargo llvm-cov --locked --lcov --output-path lcov.info -p openzeppelin-stylus -p openzeppelin-stylus-proc -p openzeppelin-crypto
+        run: cargo llvm-cov --locked --lcov --output-path lcov.info -p openzeppelin-stylus -p openzeppelin-stylus-proc -p openzeppelin-crypto --features openzeppelin-crypto/ruint
 
       - name: Record Rust version
         run: echo "RUST=$(rustc --version)" >> "$GITHUB_ENV"
 
       - name: Prepare report for Codecov
-        run: cargo nextest run --profile ci --locked --all-targets -p openzeppelin-stylus -p openzeppelin-stylus-proc -p openzeppelin-crypto --features ruint
+        run: cargo nextest run --profile ci --locked --all-targets -p openzeppelin-stylus -p openzeppelin-stylus-proc -p openzeppelin-crypto --features openzeppelin-crypto/ruint
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}

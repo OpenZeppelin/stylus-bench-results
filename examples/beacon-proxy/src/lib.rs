@@ -39,6 +39,18 @@ impl BeaconProxyExample {
     fn fallback(&mut self, calldata: &[u8]) -> ArbResult {
         unsafe { self.do_fallback(calldata) }
     }
+
+    #[cfg(feature = "devnet")]
+    /// Test-only entrypoint for exercising ERC-1967 beacon upgrade rollback.
+    fn test_upgrade_beacon_to_and_call(
+        &mut self,
+        beacon: Address,
+        data: Bytes,
+    ) -> Result<(), erc1967::utils::Error> {
+        erc1967::utils::Erc1967Utils::upgrade_beacon_to_and_call(
+            self, beacon, &data,
+        )
+    }
 }
 
 unsafe impl IProxy for BeaconProxyExample {

@@ -24,9 +24,10 @@ use alloy_sol_types::SolCall;
 pub use sol::*;
 use stylus_sdk::{
     abi::Bytes,
-    call::{Call, MethodError},
+    prelude::Call,
     prelude::*,
     storage::{StorageBool, StorageU32},
+    stylus_core::calls::errors::MethodError,
 };
 
 use crate::{
@@ -53,8 +54,24 @@ pub const UPGRADE_INTERFACE_VERSION: &str = "5.0.0";
 /// The version number of the logic contract.
 pub const VERSION_NUMBER: U32 = uint!(1_U32);
 
+/// A namespaced slot used to mark UUPS proxy storage as initialized.
+///
+/// This unstructured slot does not change the storage layout of
+/// [`UUPSUpgradeable`] or the application contract. It remains stable across
+/// implementation upgrades.
+pub const INITIALIZED_SLOT: B256 = {
+    const HASH: [u8; 32] = keccak_const::Keccak256::new()
+        .update(b"Stylus.uups.initialized")
+        .finalize();
+    let slot = U256::from_be_bytes(HASH)
+        .wrapping_sub(uint!(1_U256))
+        .to_be_bytes::<32>();
+
+    B256::new(slot)
+};
+
 /// A sentinel storage slot used by the implementation to distinguish
-/// implementation vs. proxy ([`delegate_call`][delegate_call]) execution
+/// implementation vs. proxy (`delegate_call`) execution
 /// contexts.
 ///
 /// The slot key is derived from `keccak256("Stylus.uups.logic.flag") - 1`,
@@ -62,14 +79,13 @@ pub const VERSION_NUMBER: U32 = uint!(1_U32);
 ///
 /// Behavior:
 /// - When called directly on the implementation, `logic_flag == true`.
-/// - When called via a proxy ([`delegate_call`][delegate_call]), `logic_flag ==
+/// - When called via a proxy (`delegate_call`), `logic_flag ==
 ///   false` (i.e., the proxy’s storage does not contain this
 ///   implementation-only flag).
 ///
 /// Security notes:
 /// - This boolean flag replaces Solidity’s `immutable __self` pattern.
 ///
-/// [delegate_call]: stylus_sdk::call::delegate_call
 pub const LOGIC_FLAG_SLOT: B256 = {
     const HASH: [u8; 32] = keccak_const::Keccak256::new()
         .update(b"Stylus.uups.logic.flag")
@@ -80,6 +96,29 @@ pub const LOGIC_FLAG_SLOT: B256 = {
 
     B256::new(slot)
 };
+
+/// Marks a UUPS proxy as initialized once, using a namespaced storage slot.
+///
+/// Call this from each implementation's initializer before assigning
+/// ownership or other privileged state. The marker survives implementation
+/// upgrades and does not add fields to the contract's storage layout. It is
+/// intentionally separate from the UUPS version so an exposed version setter
+/// cannot lock out the initializer.
+///
+/// # Errors
+///
+/// Returns [`Error::InvalidInitialization`] if the proxy was already marked.
+pub fn initializer(
+    context: &mut impl HostAccess<Host = stylus_sdk::host::VM>,
+) -> Result<(), Error> {
+    let mut initialized =
+        StorageSlot::get_slot::<StorageBool>(context, INITIALIZED_SLOT);
+    if initialized.get() {
+        return Err(Error::InvalidInitialization(InvalidInitialization {}));
+    }
+    initialized.set(true);
+    Ok(())
+}
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -133,7 +172,7 @@ pub enum Error {
     /// of the proxy is invalid.
     InvalidBeacon(ERC1967InvalidBeacon),
     /// Indicates an error related to the fact that an upgrade function
-    /// sees [`stylus_sdk::msg::value()`] > [`alloy_primitives::U256::ZERO`]
+    /// sees `self.vm().msg_value()` > [`alloy_primitives::U256::ZERO`]
     /// that may be lost.
     NonPayable(ERC1967NonPayable),
     /// There's no code at `target` (it is not a contract).
@@ -182,6 +221,7 @@ unsafe impl TopLevelStorage for UUPSUpgradeable {}
 
 /// Interface for a UUPS (Universal Upgradeable Proxy Standard) upgradeable
 /// contract.
+#[public]
 pub trait IUUPSUpgradeable: IErc1822Proxiable {
     /// Returns the version of the upgrade interface of the contract.
     ///
@@ -225,17 +265,16 @@ pub trait IUUPSUpgradeable: IErc1822Proxiable {
     ///   not designed to handle it.
     /// * [`Error::EmptyCode`] - If there's no code at the new implementation
     ///   address.
-    /// * [`Error::FailedCall`] - If the [`delegate_call`][delegate_call] to the
+    /// * [`Error::FailedCall`] - If the `delegate_call` to the
     ///   new implementation fails.
     /// * [`Error::FailedCallWithReason`] - If the
-    ///   [`delegate_call`][delegate_call] fails with a specific reason.
+    ///   `delegate_call` fails with a specific reason.
     ///
     /// # Events
     ///
     /// * [`crate::proxy::erc1967::Upgraded`]: Emitted when the implementation
     ///   is upgraded.
     ///
-    /// [delegate_call]: stylus_sdk::call::delegate_call
     fn upgrade_to_and_call(
         &mut self,
         new_implementation: Address,
@@ -266,7 +305,7 @@ pub trait IUUPSUpgradeable: IErc1822Proxiable {
 /// slot:
 /// - When executing directly on the implementation, the constructor has set
 ///   `logic_flag = true` in the implementation’s storage.
-/// - When executing via proxy ([`delegate_call`][delegate_call]), the proxy’s
+/// - When executing via proxy (`delegate_call`), the proxy’s
 ///   storage does not have this flag, so the check reads as `false`.
 ///
 /// ## Initialization Pattern
@@ -281,7 +320,7 @@ pub trait IUUPSUpgradeable: IErc1822Proxiable {
 ///
 /// The [`UUPSUpgradeable::only_proxy`] function ensures that:
 ///
-/// 1. The call is being made through a `[`delegate_call`][delegate_call]`.
+/// 1. The call is being made through a `delegate_call`.
 /// 2. The caller is a valid [ERC-1967] proxy.
 /// 3. The `VERSION_NUMBER` in implementation equals to the version stored in
 ///    the proxy.
@@ -339,7 +378,6 @@ pub trait IUUPSUpgradeable: IErc1822Proxiable {
 ///
 /// [EIP-1822]: https://eips.ethereum.org/EIPS/eip-1822
 /// [ERC-1967]: https://eips.ethereum.org/EIPS/eip-1967
-/// [delegate_call]: stylus_sdk::call::delegate_call
 #[storage]
 pub struct UUPSUpgradeable {
     /// Logic version number stored in the proxy contract.
@@ -365,7 +403,7 @@ impl UUPSUpgradeable {
     /// Sets the proxy-stored runtime `version` for this logic
     /// (initializer-like).
     ///
-    /// Intended to be called via a proxy ([`delegate_call`][delegate_call]) to
+    /// Intended to be called via a proxy (`delegate_call`) to
     /// record `VERSION_NUMBER` in the proxy’s storage.
     ///
     /// # Arguments
@@ -375,11 +413,10 @@ impl UUPSUpgradeable {
     /// # Errors
     ///
     /// * [`Error::UnauthorizedCallContext`] - If not called via proxy
-    ///   `[`delegate_call`][delegate_call]`.
+    ///   `delegate_call`.
     /// * [`Error::InvalidVersion`] - If the proxy's stored `version` is greater
     ///   than this logic's `VERSION_NUMBER`.
     ///
-    /// [delegate_call]: stylus_sdk::call::delegate_call
     pub fn set_version(&mut self) -> Result<(), Error> {
         if self.not_delegated().is_ok() {
             return Err(Error::UnauthorizedCallContext(
@@ -442,7 +479,7 @@ impl UUPSUpgradeable {
     /// * `&self` - Read access to the contract's state.
     #[must_use]
     pub fn logic_flag(&self) -> StorageBool {
-        StorageSlot::get_slot::<StorageBool>(LOGIC_FLAG_SLOT)
+        StorageSlot::get_slot::<StorageBool>(self, LOGIC_FLAG_SLOT)
     }
 
     /// Return the value stored in the logic flag slot.
@@ -458,7 +495,7 @@ impl UUPSUpgradeable {
     /// Ensures the call is being made through a valid [ERC-1967] proxy.
     ///
     /// Checks:
-    /// 1. Execution is happening via [`delegate_call`][delegate_call] (checked
+    /// 1. Execution is happening via [`stylus_sdk::call::delegate_call`] (checked
     ///    via `!self.is_logic()`).
     /// 2. The caller is a valid [ERC-1967] proxy (implementation slot is
     ///    non-zero).
@@ -491,10 +528,9 @@ impl UUPSUpgradeable {
     ///
     /// [ERC-1967]: https://eips.ethereum.org/EIPS/eip-1967
     /// [ERC-1167]: https://eips.ethereum.org/EIPS/eip-1167
-    /// [delegate_call]: stylus_sdk::call::delegate_call
     pub fn only_proxy(&self) -> Result<(), Error> {
         if self.is_logic()
-            || Erc1967Utils::get_implementation() == Address::ZERO
+            || Erc1967Utils::get_implementation(self) == Address::ZERO
             || U32::from(self.get_version()) != self.version.get()
         {
             Err(Error::UnauthorizedCallContext(UUPSUnauthorizedCallContext {}))
@@ -560,7 +596,7 @@ impl UUPSUpgradeable {
     ///   not designed to handle it.
     /// * [`Error::EmptyCode`] - If there's no code at the new implementation
     ///   address.
-    /// * [`Error::FailedCall`] - If the [`delegate_call`][delegate_call] to the
+    /// * [`Error::FailedCall`] - If the `delegate_call` to the
     ///   new implementation fails.
     /// * [`Error::FailedCallWithReason`] - If the
     ///   [`stylus_sdk::call::delegate_call`] fails with a specific reason.
@@ -570,14 +606,13 @@ impl UUPSUpgradeable {
     /// * [`crate::proxy::erc1967::Erc1967Proxy::Upgraded`]: Emitted when the
     ///   implementation is upgraded.
     ///
-    /// [delegate_call]: stylus_sdk::call::delegate_call
     fn _upgrade_to_and_call_uups(
         &mut self,
         new_implementation: Address,
         data: &Bytes,
     ) -> Result<(), Error> {
         let slot = Erc1822ProxiableInterface::new(new_implementation)
-            .proxiable_uuid(Call::new_in(self))
+            .proxiable_uuid(self.vm(), Call::new())
             .map_err(|_e| {
                 Error::InvalidImplementation(ERC1967InvalidImplementation {
                     implementation: new_implementation,
@@ -595,173 +630,25 @@ impl UUPSUpgradeable {
     }
 }
 
-// TODO: In order to add more tests and ignore existing ones, we need to fix
-// these issues with motsu. See:
-// https://github.com/OpenZeppelin/stylus-test-helpers/issues/114
-// https://github.com/OpenZeppelin/stylus-test-helpers/issues/112
+// Proxy call behavior is covered with explicit TestVM call responses.
 #[cfg(test)]
 mod tests {
     use alloy_primitives::U256;
     use alloy_sol_types::{SolCall, SolError, SolValue};
-    use motsu::prelude::*;
+    use stylus_sdk::testing::TestVM;
     use test_contracts::*;
 
     use super::*;
-    use crate::token::erc20;
 
     #[cfg_attr(coverage_nightly, coverage(off))]
     mod test_contracts {
         use alloy_sol_macro::sol;
-        use stylus_sdk::{alloy_primitives::Address, prelude::*, ArbResult};
 
         use super::*;
         use crate::{
-            proxy::{self, erc1967::Erc1967Proxy, IProxy},
+            proxy::IProxy,
             token::erc20::{Erc20, IErc20},
         };
-
-        #[entrypoint]
-        #[storage]
-        pub struct Erc1967ProxyExample {
-            erc1967: Erc1967Proxy,
-        }
-
-        #[public]
-        impl Erc1967ProxyExample {
-            #[constructor]
-            pub(super) fn constructor(
-                &mut self,
-                implementation: Address,
-            ) -> Result<(), proxy::erc1967::utils::Error> {
-                let data = ERC20Interface::setVersionCall {}.abi_encode();
-                self.erc1967.constructor(implementation, &data.into())
-            }
-
-            pub(super) fn implementation(&self) -> Result<Address, Vec<u8>> {
-                self.erc1967.implementation()
-            }
-
-            #[fallback]
-            pub(super) fn fallback(&mut self, calldata: &[u8]) -> ArbResult {
-                unsafe { self.erc1967.do_fallback(calldata) }
-            }
-        }
-
-        #[storage]
-        pub struct UUPSErc20Example {
-            erc20: Erc20,
-            uups: UUPSUpgradeable,
-        }
-
-        #[public]
-        #[implements(IErc20<Error = erc20::Error>, IUUPSUpgradeable, IErc1822Proxiable)]
-        impl UUPSErc20Example {
-            #[constructor]
-            pub(super) fn constructor(&mut self) {
-                self.uups.constructor();
-            }
-
-            pub(super) fn mint(
-                &mut self,
-                to: Address,
-                value: U256,
-            ) -> Result<(), erc20::Error> {
-                self.erc20._mint(to, value)
-            }
-
-            /// Initializes the contract.
-            pub(super) fn set_version(&mut self) -> Result<(), Error> {
-                self.uups.set_version()
-            }
-        }
-
-        unsafe impl TopLevelStorage for UUPSErc20Example {}
-
-        #[public]
-        impl IErc20 for UUPSErc20Example {
-            type Error = erc20::Error;
-
-            fn balance_of(&self, account: Address) -> U256 {
-                self.erc20.balance_of(account)
-            }
-
-            fn total_supply(&self) -> U256 {
-                self.erc20.total_supply()
-            }
-
-            fn transfer(
-                &mut self,
-                to: Address,
-                value: U256,
-            ) -> Result<bool, Self::Error> {
-                self.erc20.transfer(to, value)
-            }
-
-            fn transfer_from(
-                &mut self,
-                from: Address,
-                to: Address,
-                value: U256,
-            ) -> Result<bool, Self::Error> {
-                self.erc20.transfer_from(from, to, value)
-            }
-
-            fn allowance(&self, owner: Address, spender: Address) -> U256 {
-                self.erc20.allowance(owner, spender)
-            }
-
-            fn approve(
-                &mut self,
-                spender: Address,
-                value: U256,
-            ) -> Result<bool, Self::Error> {
-                self.erc20.approve(spender, value)
-            }
-        }
-
-        #[public]
-        impl IUUPSUpgradeable for UUPSErc20Example {
-            #[selector(name = "UPGRADE_INTERFACE_VERSION")]
-            fn upgrade_interface_version(&self) -> String {
-                self.uups.upgrade_interface_version()
-            }
-
-            fn upgrade_to_and_call(
-                &mut self,
-                new_implementation: Address,
-                data: Bytes,
-            ) -> Result<(), Vec<u8>> {
-                self.uups.upgrade_to_and_call(new_implementation, data)
-            }
-        }
-
-        #[public]
-        impl IErc1822Proxiable for UUPSErc20Example {
-            #[selector(name = "proxiableUUID")]
-            fn proxiable_uuid(&self) -> Result<B256, Vec<u8>> {
-                self.uups.proxiable_uuid()
-            }
-        }
-
-        #[storage]
-        pub struct FakeImplementation {}
-
-        #[public]
-        #[implements(IErc1822Proxiable)]
-        impl FakeImplementation {}
-
-        #[public]
-        impl IErc1822Proxiable for FakeImplementation {
-            /// Returns an incorrect UUID to simulate an invalid UUPS upgrade
-            /// target.
-            #[selector(name = "proxiableUUID")]
-            fn proxiable_uuid(&self) -> Result<B256, Vec<u8>> {
-                // Return a UUID that is NOT equal to IMPLEMENTATION_SLOT
-                Ok(B256::from([0xFF; 32])) // Invalid slot
-            }
-        }
-
-        unsafe impl TopLevelStorage for FakeImplementation {}
 
         sol! {
             interface ERC20Interface {
@@ -779,170 +666,346 @@ mod tests {
             }
 
         }
+
+        mod proxy_contract {
+            use stylus_sdk::{
+                alloy_primitives::Address, prelude::*, ArbResult,
+            };
+
+            use super::*;
+            use crate::proxy::{self, erc1967::Erc1967Proxy};
+
+            #[entrypoint]
+            #[storage]
+            pub struct Erc1967ProxyExample {
+                erc1967: Erc1967Proxy,
+            }
+
+            #[public]
+            impl Erc1967ProxyExample {
+                #[constructor]
+                pub(crate) fn constructor(
+                    &mut self,
+                    implementation: Address,
+                ) -> Result<(), proxy::erc1967::utils::Error> {
+                    let data = ERC20Interface::setVersionCall {}.abi_encode();
+                    self.erc1967.constructor(implementation, &data.into())
+                }
+
+                pub(crate) fn implementation(
+                    &self,
+                ) -> Result<Address, Vec<u8>> {
+                    self.erc1967.implementation()
+                }
+
+                #[fallback]
+                pub(crate) fn fallback(
+                    &mut self,
+                    calldata: &[u8],
+                ) -> ArbResult {
+                    unsafe { self.erc1967.do_fallback(calldata) }
+                }
+            }
+        }
+
+        pub(super) use proxy_contract::Erc1967ProxyExample;
+
+        mod uups_contract {
+            use stylus_sdk::{alloy_primitives::Address, prelude::*};
+
+            use super::*;
+            use crate::token::erc20;
+
+            #[storage]
+            pub struct UUPSErc20Example {
+                erc20: Erc20,
+                uups: UUPSUpgradeable,
+            }
+
+            #[public]
+            #[implements(IErc20<Error = erc20::Error>, IUUPSUpgradeable, IErc1822Proxiable)]
+            impl UUPSErc20Example {
+                #[constructor]
+                pub(crate) fn constructor(&mut self) {
+                    self.uups.constructor();
+                }
+
+                pub(super) fn mint(
+                    &mut self,
+                    to: Address,
+                    value: U256,
+                ) -> Result<(), erc20::Error> {
+                    self.erc20._mint(to, value)
+                }
+
+                /// Initializes the contract.
+                pub(super) fn set_version(&mut self) -> Result<(), Error> {
+                    self.uups.set_version()
+                }
+            }
+
+            unsafe impl TopLevelStorage for UUPSErc20Example {}
+
+            #[public]
+            impl IErc20 for UUPSErc20Example {
+                type Error = erc20::Error;
+
+                fn balance_of(&self, account: Address) -> U256 {
+                    self.erc20.balance_of(account)
+                }
+
+                fn total_supply(&self) -> U256 {
+                    self.erc20.total_supply()
+                }
+
+                fn transfer(
+                    &mut self,
+                    to: Address,
+                    value: U256,
+                ) -> Result<bool, Self::Error> {
+                    self.erc20.transfer(to, value)
+                }
+
+                fn transfer_from(
+                    &mut self,
+                    from: Address,
+                    to: Address,
+                    value: U256,
+                ) -> Result<bool, Self::Error> {
+                    self.erc20.transfer_from(from, to, value)
+                }
+
+                fn allowance(&self, owner: Address, spender: Address) -> U256 {
+                    self.erc20.allowance(owner, spender)
+                }
+
+                fn approve(
+                    &mut self,
+                    spender: Address,
+                    value: U256,
+                ) -> Result<bool, Self::Error> {
+                    self.erc20.approve(spender, value)
+                }
+            }
+
+            #[public]
+            impl IUUPSUpgradeable for UUPSErc20Example {
+                #[selector(name = "UPGRADE_INTERFACE_VERSION")]
+                fn upgrade_interface_version(&self) -> String {
+                    self.uups.upgrade_interface_version()
+                }
+
+                fn upgrade_to_and_call(
+                    &mut self,
+                    new_implementation: Address,
+                    data: Bytes,
+                ) -> Result<(), Vec<u8>> {
+                    self.uups.upgrade_to_and_call(new_implementation, data)
+                }
+            }
+
+            #[public]
+            impl IErc1822Proxiable for UUPSErc20Example {
+                #[selector(name = "proxiableUUID")]
+                fn proxiable_uuid(&self) -> Result<B256, Vec<u8>> {
+                    self.uups.proxiable_uuid()
+                }
+            }
+        }
+
+        pub(super) use uups_contract::UUPSErc20Example;
     }
 
-    #[motsu::test]
-    #[ignore = "Motsu not reliable enough for proxy testing"]
-    fn constructs(
-        proxy: Contract<Erc1967ProxyExample>,
-        logic: Contract<UUPSErc20Example>,
-        alice: Address,
-    ) {
-        logic.sender(alice).constructor();
-
-        proxy
-            .sender(alice)
-            .constructor(logic.address())
-            .motsu_expect("should be able to construct");
-
-        let implementation = proxy
-            .sender(alice)
-            .implementation()
-            .motsu_expect("should be able to get implementation");
-        assert_eq!(implementation, logic.address());
-
-        let total_supply_call = ERC20Interface::totalSupplyCall {}.abi_encode();
-        let total_supply = proxy
-            .sender(alice)
-            .fallback(&total_supply_call)
-            .motsu_expect("should be able to get total supply");
-        assert_eq!(total_supply, U256::ZERO.abi_encode());
-
+    #[test]
+    fn constructs() {
+        let proxy_vm = TestVM::default();
+        let proxy_address = Address::from([160u8; 20]);
+        let logic_address = Address::from([161u8; 20]);
+        let alice = Address::from([1u8; 20]);
+        proxy_vm.set_contract_address(proxy_address);
+        proxy_vm.set_code(logic_address, vec![1]);
+        let mut proxy = Erc1967ProxyExample::from(&proxy_vm);
+        let data = ERC20Interface::setVersionCall {}.abi_encode();
+        proxy_vm.mock_delegate_call(
+            logic_address,
+            data.clone(),
+            Ok(Vec::new()),
+        );
+        ({
+            proxy_vm.set_sender(alice);
+            &mut proxy
+        })
+        .constructor(logic_address)
+        .expect("construct");
         assert_eq!(
-            UPGRADE_INTERFACE_VERSION,
-            logic.sender(alice).upgrade_interface_version()
+            ({
+                proxy_vm.set_sender(alice);
+                &mut proxy
+            })
+            .implementation()
+            .unwrap(),
+            logic_address
+        );
+        let supply = ERC20Interface::totalSupplyCall {}.abi_encode();
+        proxy_vm.mock_delegate_call(
+            logic_address,
+            supply.clone(),
+            Ok(U256::ZERO.abi_encode()),
+        );
+        assert_eq!(
+            ({
+                proxy_vm.set_sender(alice);
+                &mut proxy
+            })
+            .fallback(&supply)
+            .unwrap(),
+            U256::ZERO.abi_encode()
+        );
+
+        // Direct calls still expose the implementation's metadata in its own VM.
+        let logic_vm = TestVM::default();
+        logic_vm.set_contract_address(logic_address);
+        let mut logic = UUPSErc20Example::from(&logic_vm);
+        ({
+            logic_vm.set_sender(alice);
+            &mut logic
+        })
+        .constructor();
+        assert_eq!(
+            ({
+                logic_vm.set_sender(alice);
+                &mut logic
+            })
+            .upgrade_interface_version(),
+            UPGRADE_INTERFACE_VERSION
         );
     }
 
-    #[motsu::test]
-    #[ignore = "Motsu not reliable enough for proxy testing"]
-    fn fallback(
-        proxy: Contract<Erc1967ProxyExample>,
-        logic: Contract<UUPSErc20Example>,
-        alice: Address,
-        bob: Address,
-    ) {
-        logic.sender(alice).constructor();
-
-        proxy
-            .sender(alice)
-            .constructor(logic.address())
-            .motsu_expect("should be able to construct");
-
-        // verify initial balance is [`U256::ZERO`].
-        let balance_of_alice_call =
-            ERC20Interface::balanceOfCall { account: alice }.abi_encode();
-        let balance = proxy
-            .sender(alice)
-            .fallback(&balance_of_alice_call)
-            .motsu_expect("should be able to get balance");
-        assert_eq!(balance, U256::ZERO.abi_encode());
-
-        let total_supply_call = ERC20Interface::totalSupplyCall {}.abi_encode();
-        let total_supply = proxy
-            .sender(alice)
-            .fallback(&total_supply_call)
-            .motsu_expect("should be able to get total supply");
-        assert_eq!(total_supply, U256::ZERO.abi_encode());
-
-        // mint 1000 tokens.
+    #[test]
+    fn fallback() {
+        let proxy_vm = TestVM::default();
+        let proxy_address = Address::from([160u8; 20]);
+        let logic_address = Address::from([161u8; 20]);
+        let alice = Address::from([1u8; 20]);
+        let bob = Address::from([2u8; 20]);
         let amount = U256::from(1000);
+        proxy_vm.set_contract_address(proxy_address);
+        proxy_vm.set_code(logic_address, vec![1]);
+        let mut proxy = Erc1967ProxyExample::from(&proxy_vm);
+        let init = ERC20Interface::setVersionCall {}.abi_encode();
+        proxy_vm.mock_delegate_call(
+            logic_address,
+            init.clone(),
+            Ok(Vec::new()),
+        );
+        ({
+            proxy_vm.set_sender(alice);
+            &mut proxy
+        })
+        .constructor(logic_address)
+        .expect("construct");
 
-        let mint_call =
+        let balance_alice =
+            ERC20Interface::balanceOfCall { account: alice }.abi_encode();
+        let supply = ERC20Interface::totalSupplyCall {}.abi_encode();
+        let mint =
             ERC20Interface::mintCall { to: alice, value: amount }.abi_encode();
-        proxy
-            .sender(alice)
-            .fallback(&mint_call)
-            .motsu_expect("should be able to mint");
-
-        proxy.assert_emitted(&erc20::Transfer {
-            from: Address::ZERO,
-            to: alice,
-            value: amount,
-        });
-
-        // check that the balance can be accurately fetched through the proxy.
-        let balance = proxy
-            .sender(alice)
-            .fallback(&balance_of_alice_call)
-            .motsu_expect("should be able to get balance");
-        assert_eq!(balance, amount.abi_encode());
-
-        let total_supply = proxy
-            .sender(alice)
-            .fallback(&total_supply_call)
-            .motsu_expect("should be able to get total supply");
-        assert_eq!(total_supply, amount.abi_encode());
-
-        // check that the balance can be transferred through the proxy.
-        let transfer_call =
-            ERC20Interface::transferCall { to: bob, value: amount }
-                .abi_encode();
-        proxy
-            .sender(alice)
-            .fallback(&transfer_call)
-            .motsu_expect("should be able to transfer");
-
-        proxy.assert_emitted(&erc20::Transfer {
-            from: alice,
-            to: bob,
-            value: amount,
-        });
-
-        let balance = proxy
-            .sender(alice)
-            .fallback(&balance_of_alice_call)
-            .motsu_expect("should be able to get balance");
-        assert_eq!(balance, U256::ZERO.abi_encode());
-
-        let balance_of_bob_call =
+        let transfer = ERC20Interface::transferCall { to: bob, value: amount }
+            .abi_encode();
+        let balance_bob =
             ERC20Interface::balanceOfCall { account: bob }.abi_encode();
-        let balance = proxy
-            .sender(alice)
-            .fallback(&balance_of_bob_call)
-            .motsu_expect("should be able to get balance");
-        assert_eq!(balance, amount.abi_encode());
-
-        let total_supply = proxy
-            .sender(alice)
-            .fallback(&total_supply_call)
-            .motsu_expect("should be able to get total supply");
-        assert_eq!(total_supply, amount.abi_encode());
+        for (call, output) in [
+            (balance_alice.clone(), U256::ZERO.abi_encode()),
+            (supply.clone(), U256::ZERO.abi_encode()),
+            (mint, Vec::new()),
+            (balance_alice.clone(), amount.abi_encode()),
+            (supply.clone(), amount.abi_encode()),
+            (transfer, Vec::new()),
+            (balance_alice, U256::ZERO.abi_encode()),
+            (balance_bob, amount.abi_encode()),
+            (supply, amount.abi_encode()),
+        ] {
+            proxy_vm.mock_delegate_call(
+                logic_address,
+                call.clone(),
+                Ok(output.clone()),
+            );
+            assert_eq!(
+                ({
+                    proxy_vm.set_sender(alice);
+                    &mut proxy
+                })
+                .fallback(&call)
+                .unwrap(),
+                output
+            );
+        }
     }
 
-    #[motsu::test]
-    fn upgrade_via_direct_call_reverts(
-        logic: Contract<UUPSErc20Example>,
-        logic_v2: Contract<UUPSErc20Example>,
-        alice: Address,
-    ) {
-        logic.sender(alice).constructor();
-
-        let err = logic
-            .sender(alice)
-            .upgrade_to_and_call(logic_v2.address(), vec![].into())
-            .motsu_expect_err("should revert on upgrade");
-
+    #[test]
+    fn upgrade_via_direct_call_reverts() {
+        let logic_vm = TestVM::default();
+        let logic_address = Address::from([160u8; 20]);
+        logic_vm.set_contract_address(logic_address);
+        let mut logic = UUPSErc20Example::from(&logic_vm);
+        let alice = Address::from([1u8; 20]);
+        ({
+            logic_vm.set_sender(alice);
+            &mut logic
+        })
+        .constructor();
+        let err = ({
+            logic_vm.set_sender(alice);
+            &mut logic
+        })
+        .upgrade_to_and_call(Address::from([161u8; 20]), vec![].into())
+        .expect_err("direct calls must not upgrade");
         assert_eq!(err, UUPSUnauthorizedCallContext {}.abi_encode());
     }
 
-    #[motsu::test]
-    fn proxiable_uuid_direct_check(
-        logic: Contract<UUPSErc20Example>,
-        alice: Address,
-    ) {
-        logic.sender(alice).constructor();
+    #[test]
+    fn proxiable_uuid_direct_check() {
+        let logic_vm = TestVM::default();
+        let logic_address = Address::from([160u8; 20]);
+        logic_vm.set_contract_address(logic_address);
+        let mut logic = UUPSErc20Example::from(&logic_vm);
+        let alice = Address::from([1u8; 20]);
 
-        let result = logic
-            .sender(alice)
-            .proxiable_uuid()
-            .motsu_expect("should be able to get proxiable uuid");
+        ({
+            logic_vm.set_sender(alice);
+            &mut logic
+        })
+        .constructor();
+
+        let result = ({
+            logic_vm.set_sender(alice);
+            &mut logic
+        })
+        .proxiable_uuid()
+        .expect("should be able to get proxiable uuid");
         assert_eq!(result, IMPLEMENTATION_SLOT);
     }
 
-    #[motsu::test]
-    fn get_version_number_v2(uups: Contract<UUPSUpgradeable>, alice: Address) {
-        uups.sender(alice).constructor();
-        assert_eq!(VERSION_NUMBER, uups.sender(alice).get_version());
+    #[test]
+    fn get_version_number_v2() {
+        let uups_vm = TestVM::default();
+        let uups_address = Address::from([160u8; 20]);
+        uups_vm.set_contract_address(uups_address);
+        let mut uups = UUPSUpgradeable::from(&uups_vm);
+        let alice = Address::from([1u8; 20]);
+
+        ({
+            uups_vm.set_sender(alice);
+            &mut uups
+        })
+        .constructor();
+        assert_eq!(
+            VERSION_NUMBER,
+            ({
+                uups_vm.set_sender(alice);
+                &mut uups
+            })
+            .get_version()
+        );
     }
 }

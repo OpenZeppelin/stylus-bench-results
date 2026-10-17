@@ -98,3 +98,6 @@ pub mod finance;
 pub mod proxy;
 pub mod token;
 pub mod utils;
+
+#[cfg(test)]
+mod test_utils;

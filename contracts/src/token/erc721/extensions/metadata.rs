@@ -28,6 +28,7 @@ pub struct Erc721Metadata {
 
 /// Interface for the optional metadata functions from the ERC-721 standard.
 #[interface_id]
+#[public]
 pub trait IErc721Metadata: IErc165 {
     /// The error type associated to this trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -119,7 +120,7 @@ impl Erc721Metadata {
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{aliases::B32, Address};
-    use motsu::prelude::Contract;
+    use stylus_sdk::testing::TestVM;
 
     use super::*;
     use crate::{
@@ -170,36 +171,77 @@ mod tests {
 
     unsafe impl TopLevelStorage for Erc721MetadataExample {}
 
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual = <Erc721MetadataExample as IErc721Metadata>::interface_id();
         let expected: B32 = 0x5b5e139f_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
-    fn supports_interface(
-        contract: Contract<Erc721MetadataExample>,
-        alice: Address,
-    ) {
-        assert!(contract.sender(alice).supports_interface(
+    #[test]
+    fn supports_interface() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc721MetadataExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
+        assert!(({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .supports_interface(
             <Erc721MetadataExample as IErc721Metadata>::interface_id()
         ));
-        assert!(contract.sender(alice).supports_interface(
-            <Erc721MetadataExample as IErc165>::interface_id()
-        ));
+        assert!(
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .supports_interface(
+                <Erc721MetadataExample as IErc165>::interface_id()
+            )
+        );
 
         let fake_interface_id: B32 = 0x12345678_u32.into();
-        assert!(!contract.sender(alice).supports_interface(fake_interface_id));
+        assert!(!({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .supports_interface(fake_interface_id));
     }
 
-    #[motsu::test]
-    fn constructor(contract: Contract<Erc721MetadataExample>, alice: Address) {
+    #[test]
+    fn constructor() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc721MetadataExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
         let name: String = "Erc721MetadataExample".to_string();
         let symbol: String = "OZ".to_string();
-        contract.sender(alice).constructor(name.clone(), symbol.clone());
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .constructor(name.clone(), symbol.clone());
 
-        assert_eq!(contract.sender(alice).name(), name);
-        assert_eq!(contract.sender(alice).symbol(), symbol);
+        assert_eq!(
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .name(),
+            name
+        );
+        assert_eq!(
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .symbol(),
+            symbol
+        );
     }
 }

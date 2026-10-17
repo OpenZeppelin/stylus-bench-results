@@ -1,11 +1,7 @@
 # This workflow runs our end-to-end tests suite.
 #
-# It roughly follows these steps:
-# - Install rust
-# - Install `cargo-stylus`
-# - Spin up `nitro-testnode`
-#
-# Contract deployments and account funding happen on a per-test basis.
+# The SDK integration-test tooling manages a Nitro devnet in Docker. Each integration-test binary
+# shares its node across tests and creates funded accounts as needed.
 name: e2e
 permissions:
   contents: read
@@ -28,14 +24,12 @@ jobs:
       - name: Install rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
+          toolchain: 1.91.0
           cache-key: "e2e-tests"
           rustflags: ""
 
-      - name: Install cargo-stylus
-        run: cargo install --locked --force cargo-stylus@0.6.3
-
-      - name: Setup nitro node
-        run: ./scripts/nitro-testnode.sh -d -i
+      - name: Install wasm-opt
+        run: cargo install wasm-opt@0.116.1
 
       - name: run integration tests
         run: ./scripts/e2e-tests.sh

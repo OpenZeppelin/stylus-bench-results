@@ -128,7 +128,7 @@ use crate::storage::refs::Refs;
 use crate::storage::RemoteId;
 ```
 
-This is enforced by `rustfmt`. Note that this is a `nightly` feature.
+This is enforced by `rustfmt`.
 
 ### Variable naming
 
@@ -215,7 +215,7 @@ Always check your code with the linter (`clippy`), by running:
 And make sure your code is formatted with, using:
 
 ```shell
-    cargo +nightly fmt
+    cargo +1.91.0 fmt
 ```
 
 Finally, ensure there is no trailing whitespace anywhere.
@@ -230,17 +230,11 @@ Make sure all tests are passing with:
 
 ### Running end-to-end tests
 
-To run e2e tests, you need to have a local nitro test node up and running.
-Run the following command and wait till script exit successfully:
+The Stylus SDK starts and manages a Nitro devnet in Docker for integration tests.
+With Docker running, use:
 
 ```shell
-./scripts/nitro-testnode.sh -i -d
-```
-
-Then you will be able to run e2e tests:
-
-```shell
-./scripts/e2e-tests.sh "*"
+./scripts/e2e-tests.sh
 ```
 
 ### Running fuzz tests

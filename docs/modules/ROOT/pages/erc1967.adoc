@@ -106,23 +106,29 @@ The `Erc1967Utils` library provides helper functions for managing ERC-1967 stora
 [source,rust]
 ----
 use openzeppelin_stylus::proxy::erc1967::utils::Erc1967Utils;
+use stylus_sdk::alloy_primitives::Address;
 
-// Get the current implementation address
-let implementation = Erc1967Utils::get_implementation();
+impl MyErc1967Proxy {
+    fn current_implementation(&self) -> Address {
+        Erc1967Utils::get_implementation(self)
+    }
 
-// Get the current admin address
-let admin = Erc1967Utils::get_admin();
+    fn current_admin(&self) -> Address {
+        Erc1967Utils::get_admin(self)
+    }
 
-// Get the current beacon address
-let beacon = Erc1967Utils::get_beacon();
+    fn current_beacon(&self) -> Address {
+        Erc1967Utils::get_beacon(self)
+    }
+}
 ----
 
 === Upgrading Implementation
 
 [source,rust]
 ----
-use openzeppelin_stylus::proxy::erc1967::utils::Erc1967Utils;
-use stylus_sdk::{abi::Bytes, prelude::*};
+use openzeppelin_stylus::proxy::erc1967::{Erc1967Utils, Error};
+use stylus_sdk::{abi::Bytes, alloy_primitives::Address, prelude::*};
 
 impl MyErc1967Proxy {
     /// Upgrade to a new implementation
@@ -130,7 +136,7 @@ impl MyErc1967Proxy {
         &mut self,
         new_implementation: Address,
         data: Bytes,
-    ) -> Result<(), erc1967::utils::Error> {
+    ) -> Result<(), Error> {
         Erc1967Utils::upgrade_to_and_call(self, new_implementation, &data)
     }
 }
@@ -140,12 +146,13 @@ impl MyErc1967Proxy {
 
 [source,rust]
 ----
-use openzeppelin_stylus::proxy::erc1967::utils::Erc1967Utils;
+use openzeppelin_stylus::proxy::erc1967::{Erc1967Utils, Error};
+use stylus_sdk::alloy_primitives::Address;
 
 impl MyErc1967Proxy {
     /// Change the admin address
-    fn change_admin(&mut self, new_admin: Address) -> Result<(), erc1967::utils::Error> {
-        Erc1967Utils::change_admin(new_admin)
+    fn change_admin(&mut self, new_admin: Address) -> Result<(), Error> {
+        Erc1967Utils::change_admin(self, new_admin)
     }
 }
 ----
@@ -154,8 +161,8 @@ impl MyErc1967Proxy {
 
 [source,rust]
 ----
-use openzeppelin_stylus::proxy::erc1967::utils::Erc1967Utils;
-use stylus_sdk::{abi::Bytes, prelude::*};
+use openzeppelin_stylus::proxy::erc1967::{Erc1967Utils, Error};
+use stylus_sdk::{abi::Bytes, alloy_primitives::Address, prelude::*};
 
 impl MyErc1967Proxy {
     /// Upgrade to a new beacon
@@ -163,7 +170,7 @@ impl MyErc1967Proxy {
         &mut self,
         new_beacon: Address,
         data: Bytes,
-    ) -> Result<(), erc1967::utils::Error> {
+    ) -> Result<(), Error> {
         Erc1967Utils::upgrade_beacon_to_and_call(self, new_beacon, &data)
     }
 }

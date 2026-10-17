@@ -7,8 +7,9 @@ use alloc::vec::Vec;
 use alloy_primitives::{address, uint, Address, B256, U256};
 use alloy_sol_types::SolType;
 use stylus_sdk::{
-    call::{self, MethodError, StaticCallContext},
+    call::{self},
     prelude::*,
+    stylus_core::calls::errors::MethodError,
 };
 
 /// Address of the `ecRecover` EVM precompile.
@@ -91,7 +92,7 @@ impl MethodError for Error {
 ///
 /// * If the `ecRecover` precompile fails to execute.
 pub fn recover(
-    context: impl StaticCallContext,
+    context: &impl HostAccess,
     hash: B256,
     v: u8,
     r: B256,
@@ -125,7 +126,7 @@ pub fn recover(
 ///
 /// * If the `ecRecover` precompile fails to execute.
 fn _recover(
-    context: impl StaticCallContext,
+    context: &impl HostAccess,
     hash: B256,
     v: u8,
     r: B256,
@@ -140,8 +141,9 @@ fn _recover(
         return Err(ECDSAInvalidSignature {}.into());
     }
 
-    let recovered = call::static_call(context, ECRECOVER_ADDR, &calldata)
-        .expect("should call `ecRecover` precompile");
+    let recovered =
+        call::static_call(context.vm(), Call::new(), ECRECOVER_ADDR, &calldata)
+            .expect("should call `ecRecover` precompile");
 
     let recovered = Address::from_slice(&recovered[12..]);
 

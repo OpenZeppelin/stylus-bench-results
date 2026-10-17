@@ -30,6 +30,14 @@ struct Eip712;
 impl IEip712 for Eip712 {
     const NAME: &'static str = "ERC-20 Permit Example";
     const VERSION: &'static str = "1";
+
+    fn chain_id(&self) -> U256 {
+        U256::from(self.vm().chain_id())
+    }
+
+    fn contract_address(&self) -> Address {
+        self.vm().contract_address()
+    }
 }
 
 #[public]

@@ -1,9 +1,9 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "devnet")]
 #![allow(clippy::unreadable_literal)]
 
 use abi::Erc721;
 use alloy::primitives::{aliases::B32, Address, U256};
-use e2e::{
+use stylus_test_support::{
     constructor, receipt, watch, Account, Constructor, EventExt, Revert,
 };
 
@@ -29,8 +29,10 @@ fn ctr(base_uri: &str) -> Constructor {
 // Integration Tests: ERC-721 Metadata Extension
 // ============================================================================
 
-#[e2e::test]
-async fn constructs(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn constructs() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(
@@ -41,8 +43,8 @@ async fn constructs(alice: Account) -> eyre::Result<()> {
         .contract_address;
     let contract = Erc721::new(contract_addr, &alice.wallet);
 
-    let Erc721::nameReturn { name } = contract.name().call().await?;
-    let Erc721::symbolReturn { symbol } = contract.symbol().call().await?;
+    let name = contract.name().call().await?;
+    let symbol = contract.symbol().call().await?;
 
     assert_eq!(TOKEN_NAME.to_owned(), name);
     assert_eq!(TOKEN_SYMBOL.to_owned(), symbol);
@@ -54,10 +56,11 @@ async fn constructs(alice: Account) -> eyre::Result<()> {
 // Integration Tests: ERC-721 URI Storage Extension
 // ============================================================================
 
-#[e2e::test]
+#[tokio::test]
 async fn error_when_checking_token_uri_for_nonexistent_token(
-    alice: Account,
 ) -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(""))
@@ -81,10 +84,11 @@ async fn error_when_checking_token_uri_for_nonexistent_token(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn return_empty_token_uri_when_without_base_uri_and_token_uri(
-    alice: Account,
 ) -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(""))
@@ -98,18 +102,18 @@ async fn return_empty_token_uri_when_without_base_uri_and_token_uri(
 
     watch!(contract.mint(alice.address(), token_id))?;
 
-    let Erc721::tokenURIReturn { tokenURI } =
-        contract.tokenURI(token_id).call().await?;
+    let token_uri = contract.tokenURI(token_id).call().await?;
 
-    assert_eq!("", tokenURI);
+    assert_eq!("", token_uri);
 
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn return_token_uri_with_base_uri_and_without_token_uri(
-    alice: Account,
 ) -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
     let base_uri = "https://github.com/OpenZeppelin/rust-contracts-stylus/";
 
     let contract_addr = alice
@@ -125,17 +129,16 @@ async fn return_token_uri_with_base_uri_and_without_token_uri(
 
     watch!(contract.mint(alice.address(), token_id))?;
 
-    let Erc721::tokenURIReturn { tokenURI } =
-        contract.tokenURI(token_id).call().await?;
+    let token_uri = contract.tokenURI(token_id).call().await?;
 
-    assert_eq!(base_uri.to_owned() + &token_id.to_string(), tokenURI);
+    assert_eq!(base_uri.to_owned() + &token_id.to_string(), token_uri);
     Ok(())
 }
 
-#[e2e::test]
-async fn return_token_uri_with_base_uri_and_token_uri(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn return_token_uri_with_base_uri_and_token_uri() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
     let base_uri = "https://github.com/OpenZeppelin/rust-contracts-stylus/";
 
     let contract_addr = alice
@@ -154,21 +157,23 @@ async fn return_token_uri_with_base_uri_and_token_uri(
     let token_uri = String::from(
         "blob/main/contracts/src/token/erc721/extensions/uri_storage.rs",
     );
+    let expected_token_uri = format!("{base_uri}{token_uri}");
 
     let receipt = receipt!(contract.setTokenURI(token_id, token_uri.clone()))?;
 
     assert!(receipt.emits(Erc721::MetadataUpdate { tokenId: token_id }));
 
-    let Erc721::tokenURIReturn { tokenURI } =
-        contract.tokenURI(token_id).call().await?;
+    let actual_token_uri = contract.tokenURI(token_id).call().await?;
 
-    assert_eq!(base_uri.to_owned() + &token_uri, tokenURI);
+    assert_eq!(expected_token_uri, actual_token_uri);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn set_token_uri_before_mint(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn set_token_uri_before_mint() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
     let base_uri = "https://github.com/OpenZeppelin/rust-contracts-stylus/";
 
     let contract_addr = alice
@@ -195,6 +200,7 @@ async fn set_token_uri_before_mint(alice: Account) -> eyre::Result<()> {
     let token_uri = String::from(
         "blob/main/contracts/src/token/erc721/extensions/uri_storage.rs",
     );
+    let expected_token_uri = format!("{base_uri}{token_uri}");
 
     let receipt = receipt!(contract.setTokenURI(token_id, token_uri.clone()))?;
 
@@ -202,18 +208,17 @@ async fn set_token_uri_before_mint(alice: Account) -> eyre::Result<()> {
 
     watch!(contract.mint(alice.address(), token_id))?;
 
-    let Erc721::tokenURIReturn { tokenURI } =
-        contract.tokenURI(token_id).call().await?;
+    let actual_token_uri = contract.tokenURI(token_id).call().await?;
 
-    assert_eq!(base_uri.to_owned() + &token_uri, tokenURI);
+    assert_eq!(expected_token_uri, actual_token_uri);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn return_token_uri_after_burn_and_remint(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn return_token_uri_after_burn_and_remint() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
     let base_uri = "https://github.com/OpenZeppelin/rust-contracts-stylus/";
 
     let alice_addr = alice.address();
@@ -257,14 +262,12 @@ async fn return_token_uri_after_burn_and_remint(
         tokenId: token_id
     }));
 
-    let Erc721::ownerOfReturn { ownerOf: owner_of } =
-        contract.ownerOf(token_id).call().await?;
+    let owner_of = contract.ownerOf(token_id).call().await?;
     assert_eq!(alice_addr, owner_of);
 
-    let Erc721::tokenURIReturn { tokenURI } =
-        contract.tokenURI(token_id).call().await?;
+    let token_uri = contract.tokenURI(token_id).call().await?;
 
-    assert_eq!(base_uri.to_owned() + &token_id.to_string(), tokenURI);
+    assert_eq!(base_uri.to_owned() + &token_id.to_string(), token_uri);
     Ok(())
 }
 
@@ -272,8 +275,10 @@ async fn return_token_uri_after_burn_and_remint(
 // Integration Tests: ERC-165 Support Interface
 // ============================================================================
 
-#[e2e::test]
-async fn supports_interface(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn supports_interface() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(
@@ -285,29 +290,26 @@ async fn supports_interface(alice: Account) -> eyre::Result<()> {
     let contract = Erc721::new(contract_addr, &alice.wallet);
 
     let erc721_metadata_interface_id: B32 = 0x5b5e139f_u32.into();
-    let supports_interface = contract
-        .supportsInterface(erc721_metadata_interface_id)
-        .call()
-        .await?
-        ._0;
+    let supports_interface =
+        contract.supportsInterface(erc721_metadata_interface_id).call().await?;
 
     assert!(supports_interface);
 
     let erc721_interface_id: B32 = 0x80ac58cd_u32.into();
     let supports_interface =
-        contract.supportsInterface(erc721_interface_id).call().await?._0;
+        contract.supportsInterface(erc721_interface_id).call().await?;
 
     assert!(supports_interface);
 
     let erc165_interface_id: B32 = 0x01ffc9a7_u32.into();
     let supports_interface =
-        contract.supportsInterface(erc165_interface_id).call().await?._0;
+        contract.supportsInterface(erc165_interface_id).call().await?;
 
     assert!(supports_interface);
 
     let invalid_interface_id: B32 = 0xffffffff_u32.into();
     let supports_interface =
-        contract.supportsInterface(invalid_interface_id).call().await?._0;
+        contract.supportsInterface(invalid_interface_id).call().await?;
 
     assert!(!supports_interface);
 

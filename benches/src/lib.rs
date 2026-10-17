@@ -1,10 +1,17 @@
-use std::process::Command;
+#![allow(
+    clippy::items_after_statements,
+    clippy::large_futures,
+    clippy::missing_errors_doc,
+    clippy::wildcard_imports
+)]
 
 use alloy::primitives::Address;
 use alloy_primitives::U128;
-use e2e::{Account, Constructor};
 use eyre::WrapErr;
 use serde::Deserialize;
+use stylus_test_support::{
+    cache_contract, deploy_wasm_file, Account, Constructor,
+};
 
 pub mod access_control;
 pub mod erc1155;
@@ -64,48 +71,17 @@ async fn deploy(
             contract_type
         ));
 
-    let deployer = match constructor {
-        Some(constructor) => {
-            account.as_deployer().with_constructor(constructor)
-        }
-        None => account.as_deployer(),
-    };
-
-    let address = deployer.deploy_wasm(&wasm_path).await?.contract_address;
+    let address =
+        deploy_wasm_file(&wasm_path, &account.wallet, constructor.as_ref())
+            .await?
+            .contract_address;
 
     match opt {
         Opt::Cache | Opt::CacheWasmOpt => {
-            cache_contract(account, address, 0)?;
+            cache_contract(address, 0, &account.wallet).await?;
         }
         Opt::None => {}
     }
 
     Ok(address)
-}
-
-/// Try to cache a contract on the stylus network.
-/// Already cached contracts won't be cached, and this function will not return
-/// an error.
-/// Output will be forwarded to the child process.
-fn cache_contract(
-    account: &Account,
-    contract_addr: Address,
-    bid: u32,
-) -> eyre::Result<()> {
-    // We don't need a status code.
-    // Since it is not zero when the contract is already cached.
-    Command::new("cargo")
-        .args(["stylus", "cache", "bid"])
-        .args(["-e", &env("RPC_URL")?])
-        .args(["--private-key", &format!("0x{}", account.pk())])
-        .arg(contract_addr.to_string())
-        .arg(bid.to_string())
-        .status()
-        .context("failed to execute `cargo stylus cache bid` command")?;
-    Ok(())
-}
-
-/// Load the `name` environment variable.
-fn env(name: &str) -> eyre::Result<String> {
-    std::env::var(name).wrap_err(format!("failed to load {name}"))
 }

@@ -130,7 +130,7 @@ pub trait Precompiles: TopLevelStorage {
     ) -> bool;
 }
 
-impl<T: TopLevelStorage> Precompiles for T {
+impl<T: TopLevelStorage + HostAccess> Precompiles for T {
     fn ec_recover(
         &self,
         hash: B256,

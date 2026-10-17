@@ -1,15 +1,15 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "devnet")]
 
 use abi::Erc4626;
 use alloy::primitives::{uint, Address, U256};
-use e2e::{
-    constructor, receipt, send, watch, Account, Constructor, EventExt, Panic,
-    PanicCode, Revert,
-};
 use eyre::Result;
 use mock::{
     erc20, erc20::ERC20Mock, erc20_failing_transfer,
     erc20_failing_transfer::ERC20FailingTransferMock,
+};
+use stylus_test_support::{
+    constructor, receipt, send, watch, Account, Constructor, EventExt, Panic,
+    PanicCode, Revert,
 };
 
 const DECIMALS_OFFSET: u8 = 0;
@@ -63,8 +63,10 @@ async fn deploy(
 
 mod constructor {
     use super::*;
-    #[e2e::test]
-    async fn success(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn success() -> Result<()> {
+        let alice = Account::new().await?;
+
         let asset_address = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -75,10 +77,10 @@ mod constructor {
 
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let decimals = contract.decimals().call().await?.decimals;
+        let decimals = contract.decimals().call().await?;
         assert_eq!(decimals, 18);
 
-        let asset = contract.asset().call().await?.asset;
+        let asset = contract.asset().call().await?;
         assert_eq!(asset, asset_address);
 
         Ok(())
@@ -88,35 +90,37 @@ mod constructor {
 mod total_assets {
     use super::*;
 
-    #[e2e::test]
-    async fn reports_zero_total_assets_when_empty(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn reports_zero_total_assets_when_empty() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let total = contract.totalAssets().call().await?.totalAssets;
+        let total = contract.totalAssets().call().await?;
         assert_eq!(U256::ZERO, total);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reports_correct_total_assets_after_deposit(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn reports_correct_total_assets_after_deposit() -> Result<()> {
+        let alice = Account::new().await?;
+
         let initial_deposit = uint!(1000_U256);
         let (contract_addr, _) = deploy(&alice, initial_deposit).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let total = contract.totalAssets().call().await?.totalAssets;
+        let total = contract.totalAssets().call().await?;
         assert_eq!(initial_deposit, total);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn updates_after_external_transfer(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn updates_after_external_transfer() -> Result<()> {
+        let alice = Account::new().await?;
+
         let initial_deposit = uint!(1000_U256);
         let additional_amount = uint!(500_U256);
         let (contract_addr, asset_addr) =
@@ -128,25 +132,29 @@ mod total_assets {
         // Transfer additional tokens directly to the vault
         watch!(asset.mint(contract_addr, additional_amount))?;
 
-        let total = contract.totalAssets().call().await?.totalAssets;
+        let total = contract.totalAssets().call().await?;
         assert_eq!(initial_deposit + additional_amount, total);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn handles_max_uint256_balance(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn handles_max_uint256_balance() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::MAX).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let total = contract.totalAssets().call().await?.totalAssets;
+        let total = contract.totalAssets().call().await?;
         assert_eq!(U256::MAX, total);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_for_zero_address_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_for_zero_address_asset() -> Result<()> {
+        let alice = Account::new().await?;
+
         // Deploy with zero address as asset
         let contract_addr = alice
             .as_deployer()
@@ -169,8 +177,10 @@ mod total_assets {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_for_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_for_invalid_asset() -> Result<()> {
+        let alice = Account::new().await?;
+
         // Deploy with zero address as asset
         let contract_addr = alice
             .as_deployer()
@@ -193,8 +203,10 @@ mod total_assets {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reflects_balance_after_withdrawal(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reflects_balance_after_withdrawal() -> Result<()> {
+        let alice = Account::new().await?;
+
         let initial_deposit = uint!(1000_U256);
         let withdrawal = uint!(400_U256);
         let (contract_addr, asset_addr) =
@@ -209,7 +221,7 @@ mod total_assets {
         watch!(asset.regular_approve(contract_addr, alice_addr, withdrawal))?;
         watch!(asset.transferFrom(contract_addr, alice_addr, withdrawal))?;
 
-        let total = contract.totalAssets().call().await?.totalAssets;
+        let total = contract.totalAssets().call().await?;
         assert_eq!(initial_deposit - withdrawal, total);
 
         Ok(())
@@ -219,70 +231,74 @@ mod total_assets {
 mod convert_to_shares {
     use super::*;
 
-    #[e2e::test]
-    async fn converts_zero_assets_to_zero_shares(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn converts_zero_assets_to_zero_shares() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let shares = contract.convertToShares(U256::ZERO).call().await?.shares;
+        let shares = contract.convertToShares(U256::ZERO).call().await?;
         assert_eq!(U256::ZERO, shares);
 
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_zero_shares_for_asset_amount_less_then_vault_assets(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let initial_assets = uint!(1000_U256);
         let assets_to_convert = uint!(100_U256);
         let (contract_addr, _) = deploy(&alice, initial_assets).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let shares =
-            contract.convertToShares(assets_to_convert).call().await?.shares;
+        let shares = contract.convertToShares(assets_to_convert).call().await?;
 
         assert_eq!(U256::ZERO, shares);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_shares_equal_to_deposit_when_vault_is_empty(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_shares_equal_to_deposit_when_vault_is_empty() -> Result<()>
+    {
+        let alice = Account::new().await?;
+
         let assets_to_convert = uint!(101_U256);
         let (contract_addr, _) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let shares =
-            contract.convertToShares(assets_to_convert).call().await?.shares;
+        let shares = contract.convertToShares(assets_to_convert).call().await?;
 
         assert_eq!(assets_to_convert, shares);
 
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_shares_proportional_to_deposit_when_vault_has_assets(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let assets_to_convert = uint!(101_U256);
         let (contract_addr, _) = deploy(&alice, initial_assets).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
         let expected_shares = uint!(1_U256);
-        let shares =
-            contract.convertToShares(assets_to_convert).call().await?.shares;
+        let shares = contract.convertToShares(assets_to_convert).call().await?;
 
         assert_eq!(expected_shares, shares);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_invalid_asset() -> Result<()> {
+        let alice = Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -306,8 +322,10 @@ mod convert_to_shares {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_result_overflows(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_result_overflows() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::MAX).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -321,10 +339,11 @@ mod convert_to_shares {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -350,21 +369,24 @@ mod convert_to_shares {
 mod convert_to_assets {
     use super::*;
 
-    #[e2e::test]
-    async fn converts_zero_shares_to_zero_assets(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn converts_zero_shares_to_zero_assets() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let assets = contract.convertToAssets(U256::ZERO).call().await?.assets;
+        let assets = contract.convertToAssets(U256::ZERO).call().await?;
         assert_eq!(U256::ZERO, assets);
 
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_more_assets_than_expected_when_no_shares_were_ever_minted(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let tokens = uint!(100_U256);
 
         let (contract_addr, _) = deploy(&alice, tokens).await?;
@@ -373,17 +395,17 @@ mod convert_to_assets {
         let shares = uint!(69_U256);
         let expected_assets = uint!(6969_U256);
 
-        let assets = contract.convertToAssets(shares).call().await?.assets;
+        let assets = contract.convertToAssets(shares).call().await?;
 
         assert_eq!(assets, expected_assets);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_assets_proportional_to_shares(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_assets_proportional_to_shares() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, asset_addr) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
         let asset = ERC20Mock::new(asset_addr, &alice.wallet);
@@ -401,15 +423,17 @@ mod convert_to_assets {
         ))?;
         watch!(contract.mint(shares, alice.address()))?;
 
-        let assets = contract.convertToAssets(shares).call().await?.assets;
+        let assets = contract.convertToAssets(shares).call().await?;
 
         assert_eq!(assets, expected_assets);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_invalid_asset() -> Result<()> {
+        let alice = Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -433,10 +457,11 @@ mod convert_to_assets {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -462,15 +487,17 @@ mod convert_to_assets {
 mod max_deposit {
     use super::*;
 
-    #[e2e::test]
-    async fn returns_max_uint256_for_any_address(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn returns_max_uint256_for_any_address() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let max = contract.maxDeposit(alice.address()).call().await?.maxDeposit;
+        let max = contract.maxDeposit(alice.address()).call().await?;
         assert_eq!(U256::MAX, max);
 
-        let max = contract.maxDeposit(Address::ZERO).call().await?.maxDeposit;
+        let max = contract.maxDeposit(Address::ZERO).call().await?;
         assert_eq!(U256::MAX, max);
 
         Ok(())
@@ -480,70 +507,74 @@ mod max_deposit {
 mod preview_deposit {
     use super::*;
 
-    #[e2e::test]
-    async fn returns_zero_assets_for_zero_shares(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn returns_zero_assets_for_zero_shares() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let shares = contract.previewDeposit(U256::ZERO).call().await?.shares;
+        let shares = contract.previewDeposit(U256::ZERO).call().await?;
         assert_eq!(U256::ZERO, shares);
 
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_zero_shares_for_asset_amount_less_then_vault_assets(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let initial_assets = uint!(1000_U256);
         let assets_to_convert = uint!(100_U256);
         let (contract_addr, _) = deploy(&alice, initial_assets).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let shares =
-            contract.previewDeposit(assets_to_convert).call().await?.shares;
+        let shares = contract.previewDeposit(assets_to_convert).call().await?;
 
         assert_eq!(U256::ZERO, shares);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_shares_equal_to_deposit_when_vault_is_empty(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_shares_equal_to_deposit_when_vault_is_empty() -> Result<()>
+    {
+        let alice = Account::new().await?;
+
         let assets_to_convert = uint!(101_U256);
         let (contract_addr, _) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let shares =
-            contract.previewDeposit(assets_to_convert).call().await?.shares;
+        let shares = contract.previewDeposit(assets_to_convert).call().await?;
 
         assert_eq!(assets_to_convert, shares);
 
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_shares_proportional_to_deposit_when_vault_has_assets(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let assets_to_convert = uint!(101_U256);
         let (contract_addr, _) = deploy(&alice, initial_assets).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
         let expected_shares = uint!(1_U256);
-        let shares =
-            contract.previewDeposit(assets_to_convert).call().await?.shares;
+        let shares = contract.previewDeposit(assets_to_convert).call().await?;
 
         assert_eq!(expected_shares, shares);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_invalid_asset() -> Result<()> {
+        let alice = Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -567,8 +598,10 @@ mod preview_deposit {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_result_overflows(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_result_overflows() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::MAX).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -582,10 +615,11 @@ mod preview_deposit {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -611,8 +645,10 @@ mod preview_deposit {
 mod deposit {
     use super::*;
 
-    #[e2e::test]
-    async fn reverts_when_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_invalid_asset() -> Result<()> {
+        let alice = Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -631,8 +667,10 @@ mod deposit {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn mints_zero_shares_for_zero_assets(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn mints_zero_shares_for_zero_assets() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, asset_addr) =
             deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
@@ -642,9 +680,9 @@ mod deposit {
         watch!(erc20_alice.mint(alice_address, uint!(1000_U256)))?;
 
         let initial_alice_balance =
-            erc20_alice.balanceOf(alice_address).call().await?._0;
+            erc20_alice.balanceOf(alice_address).call().await?;
         let initial_alice_shares =
-            contract.balanceOf(alice_address).call().await?.balance;
+            contract.balanceOf(alice_address).call().await?;
 
         let receipt = receipt!(contract.deposit(U256::ZERO, alice.address()))?;
         assert!(receipt.emits(Erc4626::Deposit {
@@ -654,21 +692,20 @@ mod deposit {
             shares: U256::ZERO,
         }));
 
-        let alice_balance =
-            erc20_alice.balanceOf(alice_address).call().await?._0;
+        let alice_balance = erc20_alice.balanceOf(alice_address).call().await?;
         assert_eq!(initial_alice_balance, alice_balance);
 
-        let alice_shares =
-            contract.balanceOf(alice_address).call().await?.balance;
+        let alice_shares = contract.balanceOf(alice_address).call().await?;
         assert_eq!(initial_alice_shares, alice_shares);
 
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn mints_zero_shares_for_asset_amount_less_then_vault_assets(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let initial_assets = uint!(1000_U256);
         let assets_to_convert = uint!(100_U256);
         let (contract_addr, asset_addr) =
@@ -680,9 +717,9 @@ mod deposit {
         watch!(erc20_alice.mint(alice_address, assets_to_convert))?;
 
         let initial_alice_balance =
-            erc20_alice.balanceOf(alice_address).call().await?._0;
+            erc20_alice.balanceOf(alice_address).call().await?;
         let initial_alice_shares =
-            contract.balanceOf(alice_address).call().await?.balance;
+            contract.balanceOf(alice_address).call().await?;
 
         watch!(erc20_alice.regular_approve(
             alice_address,
@@ -700,21 +737,19 @@ mod deposit {
             shares: U256::ZERO,
         }));
 
-        let alice_balance =
-            erc20_alice.balanceOf(alice_address).call().await?._0;
+        let alice_balance = erc20_alice.balanceOf(alice_address).call().await?;
         assert_eq!(initial_alice_balance - assets_to_convert, alice_balance);
 
-        let alice_shares =
-            contract.balanceOf(alice_address).call().await?.balance;
+        let alice_shares = contract.balanceOf(alice_address).call().await?;
         assert_eq!(initial_alice_shares, alice_shares);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn mints_shares_equal_to_deposit_when_vault_is_empty(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn mints_shares_equal_to_deposit_when_vault_is_empty() -> Result<()> {
+        let alice = Account::new().await?;
+
         let assets_to_convert = uint!(101_U256);
         let (contract_addr, asset_addr) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
@@ -724,9 +759,9 @@ mod deposit {
         watch!(erc20_alice.mint(alice_address, assets_to_convert))?;
 
         let initial_alice_balance =
-            erc20_alice.balanceOf(alice_address).call().await?._0;
+            erc20_alice.balanceOf(alice_address).call().await?;
         let initial_alice_shares =
-            contract.balanceOf(alice_address).call().await?.balance;
+            contract.balanceOf(alice_address).call().await?;
 
         watch!(erc20_alice.regular_approve(
             alice_address,
@@ -744,21 +779,20 @@ mod deposit {
             shares: assets_to_convert,
         }));
 
-        let alice_balance =
-            erc20_alice.balanceOf(alice_address).call().await?._0;
+        let alice_balance = erc20_alice.balanceOf(alice_address).call().await?;
         assert_eq!(initial_alice_balance - assets_to_convert, alice_balance);
 
-        let alice_shares =
-            contract.balanceOf(alice_address).call().await?.balance;
+        let alice_shares = contract.balanceOf(alice_address).call().await?;
         assert_eq!(initial_alice_shares + assets_to_convert, alice_shares);
 
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn mints_shares_proportional_to_deposit_when_vault_has_assets(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let assets_to_convert = uint!(101_U256);
         let (contract_addr, asset_addr) =
@@ -775,9 +809,9 @@ mod deposit {
         ))?;
 
         let initial_alice_balance =
-            erc20_alice.balanceOf(alice_address).call().await?._0;
+            erc20_alice.balanceOf(alice_address).call().await?;
         let initial_alice_shares =
-            contract.balanceOf(alice_address).call().await?.balance;
+            contract.balanceOf(alice_address).call().await?;
 
         let receipt =
             receipt!(contract.deposit(assets_to_convert, alice.address()))?;
@@ -791,19 +825,19 @@ mod deposit {
             shares: expected_shares,
         }));
 
-        let alice_balance =
-            erc20_alice.balanceOf(alice_address).call().await?._0;
+        let alice_balance = erc20_alice.balanceOf(alice_address).call().await?;
         assert_eq!(initial_alice_balance - assets_to_convert, alice_balance);
 
-        let alice_shares =
-            contract.balanceOf(alice_address).call().await?.balance;
+        let alice_shares = contract.balanceOf(alice_address).call().await?;
         assert_eq!(initial_alice_shares + expected_shares, alice_shares);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_no_approval_on_assets(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_no_approval_on_assets() -> Result<()> {
+        let alice = Account::new().await?;
+
         let assets_to_convert = uint!(101_U256);
         let (contract_addr, asset_addr) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
@@ -822,11 +856,11 @@ mod deposit {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_result_overflows(
-        alice: Account,
-        bob: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_result_overflows() -> Result<()> {
+        let alice = Account::new().await?;
+        let bob = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::MAX).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -837,10 +871,11 @@ mod deposit {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -867,15 +902,17 @@ mod deposit {
 mod max_mint {
     use super::*;
 
-    #[e2e::test]
-    async fn returns_max_uint256_for_any_address(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn returns_max_uint256_for_any_address() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let max = contract.maxMint(alice.address()).call().await?.maxMint;
+        let max = contract.maxMint(alice.address()).call().await?;
         assert_eq!(U256::MAX, max);
 
-        let max = contract.maxMint(Address::ZERO).call().await?.maxMint;
+        let max = contract.maxMint(Address::ZERO).call().await?;
         assert_eq!(U256::MAX, max);
 
         Ok(())
@@ -885,21 +922,24 @@ mod max_mint {
 mod preview_mint {
     use super::*;
 
-    #[e2e::test]
-    async fn returns_zero_shares_to_zero_assets(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn returns_zero_shares_to_zero_assets() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let assets = contract.previewMint(U256::ZERO).call().await?.assets;
+        let assets = contract.previewMint(U256::ZERO).call().await?;
         assert_eq!(U256::ZERO, assets);
 
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_more_assets_than_expected_when_no_shares_were_ever_minted(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let tokens = uint!(100_U256);
 
         let (contract_addr, _) = deploy(&alice, tokens).await?;
@@ -908,15 +948,17 @@ mod preview_mint {
         let shares = uint!(69_U256);
         let expected_assets = uint!(6969_U256);
 
-        let assets = contract.previewMint(shares).call().await?.assets;
+        let assets = contract.previewMint(shares).call().await?;
 
         assert_eq!(assets, expected_assets);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_invalid_asset() -> Result<()> {
+        let alice = Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -940,8 +982,10 @@ mod preview_mint {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_overflows(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_overflows() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::from(1)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -955,10 +999,11 @@ mod preview_mint {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -984,8 +1029,10 @@ mod preview_mint {
 mod mint {
     use super::*;
 
-    #[e2e::test]
-    async fn reverts_when_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_invalid_asset() -> Result<()> {
+        let alice = Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -1004,8 +1051,10 @@ mod mint {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn creates_zero_shares_for_zero_assets(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn creates_zero_shares_for_zero_assets() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, asset_addr) =
             deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
@@ -1023,21 +1072,21 @@ mod mint {
             shares,
         }));
 
-        let alice_balance =
-            contract.balanceOf(alice_address).call().await?.balance;
+        let alice_balance = contract.balanceOf(alice_address).call().await?;
         assert_eq!(alice_balance, shares);
 
         let alice_assets_balance =
-            asset.balanceOf(alice_address).call().await?._0;
+            asset.balanceOf(alice_address).call().await?;
         assert_eq!(alice_assets_balance, alice_assets);
 
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn requires_more_assets_than_expected_when_no_shares_were_ever_minted(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let tokens = uint!(100_U256);
 
         let (contract_addr, asset_addr) = deploy(&alice, tokens).await?;
@@ -1052,9 +1101,9 @@ mod mint {
         watch!(asset.regular_approve(alice_address, contract_addr, assets))?;
 
         let initial_alice_assets =
-            asset.balanceOf(alice_address).call().await?._0;
+            asset.balanceOf(alice_address).call().await?;
         let initial_alice_shares =
-            contract.balanceOf(alice_address).call().await?.balance;
+            contract.balanceOf(alice_address).call().await?;
 
         let receipt = receipt!(contract.mint(shares, alice_address))?;
 
@@ -1065,18 +1114,19 @@ mod mint {
             shares,
         }));
 
-        let alice_shares =
-            contract.balanceOf(alice_address).call().await?.balance;
+        let alice_shares = contract.balanceOf(alice_address).call().await?;
         assert_eq!(alice_shares, shares + initial_alice_shares);
 
-        let alice_assets = asset.balanceOf(alice_address).call().await?._0;
+        let alice_assets = asset.balanceOf(alice_address).call().await?;
         assert_eq!(alice_assets, initial_alice_assets - assets);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_no_approval_on_assets(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_no_approval_on_assets() -> Result<()> {
+        let alice = Account::new().await?;
+
         let tokens = uint!(100_U256);
 
         let (contract_addr, asset_addr) = deploy(&alice, tokens).await?;
@@ -1099,8 +1149,10 @@ mod mint {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_overflows(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_overflows() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::from(1)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -1111,10 +1163,11 @@ mod mint {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -1143,38 +1196,38 @@ mod mint {
 mod max_withdraw {
     use super::*;
 
-    #[e2e::test]
-    async fn returns_zero_for_vault_with_no_shares(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_zero_for_vault_with_no_shares() -> Result<()> {
+        let alice = Account::new().await?;
+
         let initial_assets = uint!(1000_U256);
         let (contract_addr, _) = deploy(&alice, initial_assets).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let max =
-            contract.maxWithdraw(alice.address()).call().await?.maxWithdraw;
+        let max = contract.maxWithdraw(alice.address()).call().await?;
         assert_eq!(U256::ZERO, max);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_zero_when_vault_is_empty(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn returns_zero_when_vault_is_empty() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let max =
-            contract.maxWithdraw(alice.address()).call().await?.maxWithdraw;
+        let max = contract.maxWithdraw(alice.address()).call().await?;
         assert_eq!(U256::ZERO, max);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_convertible_assets_for_sole_share_owner(
-        alice: Account,
-        bob: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_convertible_assets_for_sole_share_owner() -> Result<()> {
+        let alice = Account::new().await?;
+        let bob = Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let (contract_addr, asset_addr) =
             deploy(&alice, initial_assets).await?;
@@ -1193,21 +1246,21 @@ mod max_withdraw {
         ))?;
         watch!(contract.mint(shares_to_mint, alice.address()))?;
 
-        let max =
-            contract.maxWithdraw(alice.address()).call().await?.maxWithdraw;
+        let max = contract.maxWithdraw(alice.address()).call().await?;
         assert_eq!(assets_to_deposit, max);
 
-        let max = contract.maxWithdraw(bob.address()).call().await?.maxWithdraw;
+        let max = contract.maxWithdraw(bob.address()).call().await?;
         assert_eq!(U256::ZERO, max);
 
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_convertible_assets_for_sole_share_owner_when_vault_was_empty(
-        alice: Account,
-        bob: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+        let bob = Account::new().await?;
+
         let (contract_addr, asset_addr) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
         let asset = ERC20Mock::new(asset_addr, &alice.wallet);
@@ -1225,21 +1278,21 @@ mod max_withdraw {
         ))?;
         watch!(contract.mint(shares_to_mint, alice.address()))?;
 
-        let max =
-            contract.maxWithdraw(alice.address()).call().await?.maxWithdraw;
+        let max = contract.maxWithdraw(alice.address()).call().await?;
         assert_eq!(assets_to_deposit, max);
 
-        let max = contract.maxWithdraw(bob.address()).call().await?.maxWithdraw;
+        let max = contract.maxWithdraw(bob.address()).call().await?;
         assert_eq!(U256::ZERO, max);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_convertible_assets_to_multiple_share_owners(
-        alice: Account,
-        bob: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_convertible_assets_to_multiple_share_owners() -> Result<()>
+    {
+        let alice = Account::new().await?;
+        let bob = Account::new().await?;
+
         let (contract_addr, asset_addr) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
         let contract_bob = Erc4626::new(contract_addr, &bob.wallet);
@@ -1268,18 +1321,19 @@ mod max_withdraw {
         ))?;
         watch!(contract_bob.mint(shares_to_mint, bob.address()))?;
 
-        let max =
-            contract.maxWithdraw(alice.address()).call().await?.maxWithdraw;
+        let max = contract.maxWithdraw(alice.address()).call().await?;
         assert_eq!(assets_to_deposit, max);
 
-        let max = contract.maxWithdraw(bob.address()).call().await?.maxWithdraw;
+        let max = contract.maxWithdraw(bob.address()).call().await?;
         assert_eq!(assets_to_deposit, max);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_for_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_for_invalid_asset() -> Result<()> {
+        let alice = Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -1304,10 +1358,11 @@ mod max_withdraw {
 
     // Cannot test when denominator overflows, as amount of shares is always >=
     // amount of assets
-    #[e2e::test]
-    async fn reverts_when_multiplier_overflows_during_conversion(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_multiplier_overflows_during_conversion() -> Result<()>
+    {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::MAX).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -1322,10 +1377,11 @@ mod max_withdraw {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -1351,8 +1407,10 @@ mod max_withdraw {
 mod preview_withdraw {
     use super::*;
 
-    #[e2e::test]
-    async fn reverts_when_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_invalid_asset() -> Result<()> {
+        let alice = Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -1376,70 +1434,74 @@ mod preview_withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_zero_assets_for_zero_shares(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn returns_zero_assets_for_zero_shares() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let shares = contract.previewWithdraw(U256::ZERO).call().await?.shares;
+        let shares = contract.previewWithdraw(U256::ZERO).call().await?;
         assert_eq!(U256::ZERO, shares);
 
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_one_share_for_asset_amount_less_then_vault_assets(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let initial_assets = uint!(1000_U256);
         let assets_to_convert = uint!(100_U256);
         let (contract_addr, _) = deploy(&alice, initial_assets).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let shares =
-            contract.previewWithdraw(assets_to_convert).call().await?.shares;
+        let shares = contract.previewWithdraw(assets_to_convert).call().await?;
 
         assert_eq!(uint!(1_U256), shares);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_shares_equal_to_deposit_when_vault_is_empty(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_shares_equal_to_deposit_when_vault_is_empty() -> Result<()>
+    {
+        let alice = Account::new().await?;
+
         let assets_to_convert = uint!(101_U256);
         let (contract_addr, _) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let shares =
-            contract.previewWithdraw(assets_to_convert).call().await?.shares;
+        let shares = contract.previewWithdraw(assets_to_convert).call().await?;
 
         assert_eq!(assets_to_convert, shares);
 
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_shares_proportional_to_deposit_when_vault_has_assets(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let assets_to_convert = uint!(101_U256);
         let (contract_addr, _) = deploy(&alice, initial_assets).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
         let expected_shares = uint!(1_U256);
-        let shares =
-            contract.previewWithdraw(assets_to_convert).call().await?.shares;
+        let shares = contract.previewWithdraw(assets_to_convert).call().await?;
 
         assert_eq!(expected_shares, shares);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_result_overflows(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_result_overflows() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::MAX).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -1453,10 +1515,11 @@ mod preview_withdraw {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -1482,8 +1545,10 @@ mod preview_withdraw {
 mod withdraw {
     use super::*;
 
-    #[e2e::test]
-    async fn reverts_when_exceeds_max_withdraw(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_exceeds_max_withdraw() -> Result<()> {
+        let alice = Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let shares_to_mint = uint!(10_U256);
         let assets_to_deposit = uint!(1010_U256);
@@ -1503,8 +1568,7 @@ mod withdraw {
         ))?;
         watch!(contract.mint(shares_to_mint, alice.address()))?;
 
-        let max_withdraw =
-            contract.maxWithdraw(alice.address()).call().await?.maxWithdraw;
+        let max_withdraw = contract.maxWithdraw(alice.address()).call().await?;
 
         let err = send!(contract.withdraw(
             assets_to_withdraw,
@@ -1523,10 +1587,10 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_withdrawing_from_empty_vault(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_withdrawing_from_empty_vault() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -1546,11 +1610,11 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_caller_lacks_allowance(
-        alice: Account,
-        bob: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_caller_lacks_allowance() -> Result<()> {
+        let alice = Account::new().await?;
+        let bob = Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let shares_to_mint = uint!(10_U256);
         let assets_to_deposit = uint!(1010_U256);
@@ -1589,10 +1653,10 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_withdrawing_from_zero_address(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_withdrawing_from_zero_address() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -1623,8 +1687,10 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_transfer_fails(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_transfer_fails() -> Result<()> {
+        let alice = Account::new().await?;
+
         let shares_to_mint = uint!(10_U256);
         let assets_to_deposit = shares_to_mint;
         let assets_to_withdraw = uint!(1_U256);
@@ -1665,8 +1731,10 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_calculation_overflows(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_calculation_overflows() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, asset_addr) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
         let asset = ERC20Mock::new(asset_addr, &alice.wallet);
@@ -1692,11 +1760,11 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn succeeds_with_no_initial_assets(
-        alice: Account,
-        bob: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn succeeds_with_no_initial_assets() -> Result<()> {
+        let alice = Account::new().await?;
+        let bob = Account::new().await?;
+
         let shares_to_mint = uint!(10_U256);
         let assets_to_deposit = shares_to_mint;
         let assets_to_withdraw = uint!(5_U256);
@@ -1707,7 +1775,7 @@ mod withdraw {
 
         // Initial state check
         let initial_max_withdraw =
-            contract.maxWithdraw(alice.address()).call().await?.maxWithdraw;
+            contract.maxWithdraw(alice.address()).call().await?;
         assert_eq!(U256::ZERO, initial_max_withdraw);
 
         // Mint shares
@@ -1719,8 +1787,8 @@ mod withdraw {
         ))?;
         watch!(contract.mint(shares_to_mint, alice.address()))?;
 
-        let alice_balance = asset.balanceOf(alice.address()).call().await?._0;
-        let bob_balance = asset.balanceOf(bob.address()).call().await?._0;
+        let alice_balance = asset.balanceOf(alice.address()).call().await?;
+        let bob_balance = asset.balanceOf(bob.address()).call().await?;
         assert_eq!(U256::ZERO, alice_balance);
         assert_eq!(U256::ZERO, bob_balance);
 
@@ -1742,9 +1810,9 @@ mod withdraw {
 
         // Verify updated state
         let final_max_withdraw =
-            contract.maxWithdraw(alice.address()).call().await?.maxWithdraw;
+            contract.maxWithdraw(alice.address()).call().await?;
         let final_max_redeem =
-            contract.maxRedeem(alice.address()).call().await?.maxRedeem;
+            contract.maxRedeem(alice.address()).call().await?;
         assert_eq!(assets_to_deposit - assets_to_withdraw, final_max_withdraw);
         assert_eq!(shares_to_mint - assets_to_withdraw, final_max_redeem);
 
@@ -1766,25 +1834,25 @@ mod withdraw {
 
         // Verify final state
         let final_max_withdraw =
-            contract.maxWithdraw(alice.address()).call().await?.maxWithdraw;
+            contract.maxWithdraw(alice.address()).call().await?;
         let final_max_redeem =
-            contract.maxRedeem(alice.address()).call().await?.maxRedeem;
+            contract.maxRedeem(alice.address()).call().await?;
         assert_eq!(U256::ZERO, final_max_withdraw);
         assert_eq!(U256::ZERO, final_max_redeem);
 
-        let alice_balance = asset.balanceOf(alice.address()).call().await?._0;
-        let bob_balance = asset.balanceOf(bob.address()).call().await?._0;
+        let alice_balance = asset.balanceOf(alice.address()).call().await?;
+        let bob_balance = asset.balanceOf(bob.address()).call().await?;
         assert_eq!(assets_to_withdraw, alice_balance);
         assert_eq!(assets_to_withdraw, bob_balance);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn succeeds_with_initial_assets(
-        alice: Account,
-        bob: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn succeeds_with_initial_assets() -> Result<()> {
+        let alice = Account::new().await?;
+        let bob = Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let shares_to_mint = uint!(10_U256);
         let assets_to_deposit = uint!(1010_U256);
@@ -1797,8 +1865,7 @@ mod withdraw {
         let asset = ERC20Mock::new(asset_addr, &alice.wallet);
 
         // Initial state check
-        let initial_total_assets =
-            contract.totalAssets().call().await?.totalAssets;
+        let initial_total_assets = contract.totalAssets().call().await?;
         assert_eq!(initial_assets, initial_total_assets);
 
         // Mint shares
@@ -1810,13 +1877,12 @@ mod withdraw {
         ))?;
         watch!(contract.mint(shares_to_mint, alice.address()))?;
 
-        let alice_balance = asset.balanceOf(alice.address()).call().await?._0;
-        let bob_balance = asset.balanceOf(bob.address()).call().await?._0;
+        let alice_balance = asset.balanceOf(alice.address()).call().await?;
+        let bob_balance = asset.balanceOf(bob.address()).call().await?;
         assert_eq!(U256::ZERO, alice_balance);
         assert_eq!(U256::ZERO, bob_balance);
 
-        let pre_withdraw_assets =
-            contract.totalAssets().call().await?.totalAssets;
+        let pre_withdraw_assets = contract.totalAssets().call().await?;
 
         // Perform withdrawal
         let receipt = receipt!(contract.withdraw(
@@ -1834,8 +1900,7 @@ mod withdraw {
             shares: shares_to_redeem,
         }));
 
-        let post_withdraw_assets =
-            contract.totalAssets().call().await?.totalAssets;
+        let post_withdraw_assets = contract.totalAssets().call().await?;
         assert_eq!(
             pre_withdraw_assets - assets_to_withdraw,
             post_withdraw_assets
@@ -1860,17 +1925,16 @@ mod withdraw {
         }));
 
         // Verify the final state
-        let post_withdraw_assets =
-            contract.totalAssets().call().await?.totalAssets;
+        let post_withdraw_assets = contract.totalAssets().call().await?;
         assert_eq!(
             pre_withdraw_assets - assets_to_withdraw,
             post_withdraw_assets
         );
 
         let final_max_withdraw =
-            contract.maxWithdraw(alice.address()).call().await?.maxWithdraw;
+            contract.maxWithdraw(alice.address()).call().await?;
         let final_max_redeem =
-            contract.maxRedeem(alice.address()).call().await?.maxRedeem;
+            contract.maxRedeem(alice.address()).call().await?;
         assert_eq!(
             assets_to_deposit - assets_to_withdraw - assets_to_withdraw,
             final_max_withdraw
@@ -1880,16 +1944,18 @@ mod withdraw {
             final_max_redeem
         );
 
-        let alice_balance = asset.balanceOf(alice.address()).call().await?._0;
-        let bob_balance = asset.balanceOf(bob.address()).call().await?._0;
+        let alice_balance = asset.balanceOf(alice.address()).call().await?;
+        let bob_balance = asset.balanceOf(bob.address()).call().await?;
         assert_eq!(assets_to_withdraw, alice_balance);
         assert_eq!(assets_to_withdraw, bob_balance);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_for_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_for_invalid_asset() -> Result<()> {
+        let alice = Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -1913,12 +1979,12 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn succeeds_with_multiple_holders_no_initial_assets(
-        alice: Account,
-        bob: Account,
-        charlie: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn succeeds_with_multiple_holders_no_initial_assets() -> Result<()> {
+        let alice = Account::new().await?;
+        let bob = Account::new().await?;
+        let charlie = Account::new().await?;
+
         let (contract_addr, asset_addr) = deploy(&alice, U256::ZERO).await?;
         let contract_alice = Erc4626::new(contract_addr, &alice.wallet);
         let contract_bob = Erc4626::new(contract_addr, &bob.wallet);
@@ -1960,34 +2026,27 @@ mod withdraw {
         // Verify final balances
         assert_eq!(
             uint!(50_U256),
-            contract_alice
-                .maxWithdraw(alice.address())
-                .call()
-                .await?
-                .maxWithdraw
+            contract_alice.maxWithdraw(alice.address()).call().await?
         );
         assert_eq!(
             uint!(100_U256),
-            contract_alice.maxWithdraw(bob.address()).call().await?.maxWithdraw
+            contract_alice.maxWithdraw(bob.address()).call().await?
         );
         assert_eq!(
             U256::ZERO,
-            contract_alice
-                .maxWithdraw(charlie.address())
-                .call()
-                .await?
-                .maxWithdraw
+            contract_alice.maxWithdraw(charlie.address()).call().await?
         );
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn succeeds_with_multiple_holders_with_initial_assets(
-        alice: Account,
-        bob: Account,
-        charlie: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn succeeds_with_multiple_holders_with_initial_assets() -> Result<()>
+    {
+        let alice = Account::new().await?;
+        let bob = Account::new().await?;
+        let charlie = Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let (contract_addr, asset_addr) =
             deploy(&alice, initial_assets).await?;
@@ -1997,8 +2056,7 @@ mod withdraw {
         let asset = ERC20Mock::new(asset_addr, &alice.wallet);
 
         // Record initial total assets
-        let initial_total =
-            contract_alice.totalAssets().call().await?.totalAssets;
+        let initial_total = contract_alice.totalAssets().call().await?;
 
         // Mint and approve for all users
         for user in [&alice, &bob, &charlie] {
@@ -2016,18 +2074,12 @@ mod withdraw {
         watch!(contract_charlie.mint(uint!(30_U256), charlie.address()))?;
 
         // Verify share distribution considers initial assets
-        let alice_assets_before = contract_alice
-            .maxWithdraw(alice.address())
-            .call()
-            .await?
-            .maxWithdraw;
+        let alice_assets_before =
+            contract_alice.maxWithdraw(alice.address()).call().await?;
         let bob_assets_before =
-            contract_alice.maxWithdraw(bob.address()).call().await?.maxWithdraw;
-        let charlie_assets_before = contract_alice
-            .maxWithdraw(charlie.address())
-            .call()
-            .await?
-            .maxWithdraw;
+            contract_alice.maxWithdraw(bob.address()).call().await?;
+        let charlie_assets_before =
+            contract_alice.maxWithdraw(charlie.address()).call().await?;
 
         // Each user withdraws
         watch!(contract_alice.withdraw(
@@ -2048,12 +2100,11 @@ mod withdraw {
 
         // Verify proportional distribution of initial assets was maintained
         let remaining_bob =
-            contract_alice.maxWithdraw(bob.address()).call().await?.maxWithdraw;
+            contract_alice.maxWithdraw(bob.address()).call().await?;
         assert_eq!(bob_assets_before - uint!(1010_U256), remaining_bob);
 
         // Verify total assets consistency
-        let final_total =
-            contract_alice.totalAssets().call().await?.totalAssets;
+        let final_total = contract_alice.totalAssets().call().await?;
         let expected_remaining = initial_total + uint!(6060_U256)
             - alice_assets_before
             - uint!(1010_U256)
@@ -2063,8 +2114,10 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn maintains_share_price_ratio(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn maintains_share_price_ratio() -> Result<()> {
+        let alice = Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let (contract_addr, asset_addr) =
             deploy(&alice, initial_assets).await?;
@@ -2081,7 +2134,7 @@ mod withdraw {
 
         // Record initial conversion rate
         let initial_rate =
-            contract.convertToAssets(uint!(1_U256)).call().await?.assets;
+            contract.convertToAssets(uint!(1_U256)).call().await?;
 
         // Perform partial withdrawal
         watch!(contract.withdraw(
@@ -2091,17 +2144,17 @@ mod withdraw {
         ))?;
 
         // Verify conversion rate remains the same
-        let final_rate =
-            contract.convertToAssets(uint!(1_U256)).call().await?.assets;
+        let final_rate = contract.convertToAssets(uint!(1_U256)).call().await?;
         assert_eq!(initial_rate, final_rate);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn maintains_state_consistency_after_failed_withdrawal(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn maintains_state_consistency_after_failed_withdrawal() -> Result<()>
+    {
+        let alice = Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let shares_to_mint = uint!(10_U256);
         let assets_to_deposit = uint!(1010_U256);
@@ -2122,11 +2175,10 @@ mod withdraw {
         watch!(contract.mint(shares_to_mint, alice.address()))?;
 
         // Record state before failed withdrawal
-        let pre_total_assets = contract.totalAssets().call().await?.totalAssets;
+        let pre_total_assets = contract.totalAssets().call().await?;
         let pre_max_withdraw =
-            contract.maxWithdraw(alice.address()).call().await?.maxWithdraw;
-        let pre_max_redeem =
-            contract.maxRedeem(alice.address()).call().await?.maxRedeem;
+            contract.maxWithdraw(alice.address()).call().await?;
+        let pre_max_redeem = contract.maxRedeem(alice.address()).call().await?;
 
         // Attempt excessive withdrawal
         send!(contract.withdraw(
@@ -2137,12 +2189,11 @@ mod withdraw {
         .expect_err("should fail due to exceeding max withdraw");
 
         // Verify state remains unchanged
-        let post_total_assets =
-            contract.totalAssets().call().await?.totalAssets;
+        let post_total_assets = contract.totalAssets().call().await?;
         let post_max_withdraw =
-            contract.maxWithdraw(alice.address()).call().await?.maxWithdraw;
+            contract.maxWithdraw(alice.address()).call().await?;
         let post_max_redeem =
-            contract.maxRedeem(alice.address()).call().await?.maxRedeem;
+            contract.maxRedeem(alice.address()).call().await?;
 
         assert_eq!(pre_total_assets, post_total_assets);
         assert_eq!(pre_max_withdraw, post_max_withdraw);
@@ -2151,10 +2202,11 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -2180,35 +2232,37 @@ mod withdraw {
 mod max_redeem {
     use super::*;
 
-    #[e2e::test]
-    async fn returns_zero_for_vault_with_no_shares(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_zero_for_vault_with_no_shares() -> Result<()> {
+        let alice = Account::new().await?;
+
         let initial_assets = uint!(1000_U256);
         let (contract_addr, _) = deploy(&alice, initial_assets).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let max = contract.maxRedeem(alice.address()).call().await?.maxRedeem;
+        let max = contract.maxRedeem(alice.address()).call().await?;
         assert_eq!(U256::ZERO, max);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_zero_when_vault_is_empty(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn returns_zero_when_vault_is_empty() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let max = contract.maxRedeem(alice.address()).call().await?.maxRedeem;
+        let max = contract.maxRedeem(alice.address()).call().await?;
         assert_eq!(U256::ZERO, max);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_full_share_balance_for_owner(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_full_share_balance_for_owner() -> Result<()> {
+        let alice = Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let (contract_addr, asset_addr) =
             deploy(&alice, initial_assets).await?;
@@ -2227,17 +2281,17 @@ mod max_redeem {
         ))?;
         watch!(contract.mint(shares_to_mint, alice.address()))?;
 
-        let max = contract.maxRedeem(alice.address()).call().await?.maxRedeem;
+        let max = contract.maxRedeem(alice.address()).call().await?;
         assert_eq!(shares_to_mint, max);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_balance_after_partial_transfer(
-        alice: Account,
-        bob: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_balance_after_partial_transfer() -> Result<()> {
+        let alice = Account::new().await?;
+        let bob = Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let (contract_addr, asset_addr) =
             deploy(&alice, initial_assets).await?;
@@ -2260,9 +2314,8 @@ mod max_redeem {
         // Transfer some shares to bob
         watch!(contract.transfer(bob.address(), transfer_amount))?;
 
-        let alice_max =
-            contract.maxRedeem(alice.address()).call().await?.maxRedeem;
-        let bob_max = contract.maxRedeem(bob.address()).call().await?.maxRedeem;
+        let alice_max = contract.maxRedeem(alice.address()).call().await?;
+        let bob_max = contract.maxRedeem(bob.address()).call().await?;
 
         assert_eq!(shares_to_mint - transfer_amount, alice_max);
         assert_eq!(transfer_amount, bob_max);
@@ -2270,8 +2323,10 @@ mod max_redeem {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_updated_balance_after_mint(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn returns_updated_balance_after_mint() -> Result<()> {
+        let alice = Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let (contract_addr, asset_addr) =
             deploy(&alice, initial_assets).await?;
@@ -2293,7 +2348,7 @@ mod max_redeem {
         watch!(contract.mint(first_mint, alice.address()))?;
 
         let max_after_first =
-            contract.maxRedeem(alice.address()).call().await?.maxRedeem;
+            contract.maxRedeem(alice.address()).call().await?;
         assert_eq!(first_mint, max_after_first);
 
         // Second mint
@@ -2306,7 +2361,7 @@ mod max_redeem {
         watch!(contract.mint(second_mint, alice.address()))?;
 
         let max_after_second =
-            contract.maxRedeem(alice.address()).call().await?.maxRedeem;
+            contract.maxRedeem(alice.address()).call().await?;
         assert_eq!(first_mint + second_mint, max_after_second);
 
         Ok(())
@@ -2316,8 +2371,10 @@ mod max_redeem {
 mod preview_redeem {
     use super::*;
 
-    #[e2e::test]
-    async fn reverts_when_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_invalid_asset() -> Result<()> {
+        let alice = Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -2341,21 +2398,24 @@ mod preview_redeem {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_zero_shares_to_zero_assets(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn returns_zero_shares_to_zero_assets() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
-        let assets = contract.previewRedeem(U256::ZERO).call().await?.assets;
+        let assets = contract.previewRedeem(U256::ZERO).call().await?;
         assert_eq!(U256::ZERO, assets);
 
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_more_assets_than_expected_when_no_shares_were_ever_minted(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let tokens = uint!(100_U256);
 
         let (contract_addr, _) = deploy(&alice, tokens).await?;
@@ -2364,15 +2424,17 @@ mod preview_redeem {
         let shares = uint!(69_U256);
         let expected_assets = uint!(6969_U256);
 
-        let assets = contract.previewRedeem(shares).call().await?.assets;
+        let assets = contract.previewRedeem(shares).call().await?;
 
         assert_eq!(assets, expected_assets);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_overflows(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_overflows() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::from(1)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -2386,10 +2448,11 @@ mod preview_redeem {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let alice = Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -2415,11 +2478,11 @@ mod preview_redeem {
 mod redeem {
     use super::*;
 
-    #[e2e::test]
-    async fn reverts_when_exceeded_max_redeem_zero_balance(
-        alice: Account,
-        bob: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_exceeded_max_redeem_zero_balance() -> Result<()> {
+        let alice = Account::new().await?;
+        let bob = Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -2436,8 +2499,10 @@ mod redeem {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn zero_shares_for_zero_assets(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn zero_shares_for_zero_assets() -> Result<()> {
+        let alice = Account::new().await?;
+
         let (contract_addr, asset_addr) =
             deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
@@ -2445,9 +2510,9 @@ mod redeem {
         let alice_address = alice.address();
 
         let initial_alice_assets =
-            asset.balanceOf(alice_address).call().await?._0;
+            asset.balanceOf(alice_address).call().await?;
         let initial_alice_shares =
-            contract.balanceOf(alice_address).call().await?.balance;
+            contract.balanceOf(alice_address).call().await?;
 
         let receipt = receipt!(contract.redeem(
             U256::ZERO,
@@ -2463,18 +2528,19 @@ mod redeem {
             shares: U256::ZERO,
         }));
 
-        let alice_shares =
-            contract.balanceOf(alice_address).call().await?.balance;
+        let alice_shares = contract.balanceOf(alice_address).call().await?;
         assert_eq!(initial_alice_shares, alice_shares);
 
-        let alice_assets = asset.balanceOf(alice_address).call().await?._0;
+        let alice_assets = asset.balanceOf(alice_address).call().await?;
         assert_eq!(initial_alice_assets, alice_assets);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn full_share_balance_for_owner(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn full_share_balance_for_owner() -> Result<()> {
+        let alice = Account::new().await?;
+
         let tokens = uint!(100_U256);
 
         let (contract_addr, asset_addr) = deploy(&alice, tokens).await?;
@@ -2491,9 +2557,9 @@ mod redeem {
         watch!(contract.mint(shares, alice.address()))?;
 
         let initial_alice_assets =
-            asset.balanceOf(alice_address).call().await?._0;
+            asset.balanceOf(alice_address).call().await?;
         let initial_alice_shares =
-            contract.balanceOf(alice_address).call().await?.balance;
+            contract.balanceOf(alice_address).call().await?;
 
         let receipt =
             receipt!(contract.redeem(shares, alice_address, alice_address))?;
@@ -2506,21 +2572,20 @@ mod redeem {
             shares
         }));
 
-        let alice_shares =
-            contract.balanceOf(alice_address).call().await?.balance;
+        let alice_shares = contract.balanceOf(alice_address).call().await?;
         assert_eq!(initial_alice_shares - shares, alice_shares);
 
-        let alice_assets = asset.balanceOf(alice_address).call().await?._0;
+        let alice_assets = asset.balanceOf(alice_address).call().await?;
         assert_eq!(initial_alice_assets + assets, alice_assets);
 
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_insufficient_allowance(
-        alice: Account,
-        bob: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_insufficient_allowance() -> Result<()> {
+        let alice = Account::new().await?;
+        let bob = Account::new().await?;
+
         let tokens = uint!(100_U256);
 
         let (contract_addr, asset_addr) = deploy(&alice, tokens).await?;
@@ -2550,8 +2615,10 @@ mod redeem {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_exceeded_max_redeem(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_exceeded_max_redeem() -> Result<()> {
+        let alice = Account::new().await?;
+
         let tokens = uint!(100_U256);
 
         let (contract_addr, asset_addr) = deploy(&alice, tokens).await?;

@@ -3,7 +3,6 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
-
 use openzeppelin_crypto::{
     arithmetic::uint::U256,
     curve::sw::instance::starknet::StarknetCurveConfig,

@@ -13,12 +13,12 @@ stylus-sdk.workspace = true
 
 [dev-dependencies]
 alloy.workspace = true
-e2e.workspace = true
+stylus-test-support = { path = "../../lib/stylus-test-support" }
 tokio.workspace = true
 eyre.workspace = true
 
 [features]
-e2e = []
+devnet = []
 export-abi = ["openzeppelin-stylus/export-abi"]
 
 [lib]
@@ -27,3 +27,5 @@ crate-type = ["lib", "cdylib"]
 [[bin]]
 name = "erc1155-example"
 path = "src/main.rs"
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("contract-client-gen"))'] }

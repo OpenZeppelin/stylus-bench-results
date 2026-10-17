@@ -1,0 +1,7 @@
+[workspace]
+
+[workspace.networks]
+
+[wasm-opt]
+version = "116"
+flags = ["--enable-bulk-memory", "-O3"]

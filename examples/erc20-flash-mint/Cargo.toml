@@ -7,7 +7,7 @@ publish = false
 version.workspace = true
 
 [dependencies]
-openzeppelin-stylus = { workspace = true, features = ["reentrant"] }
+openzeppelin-stylus.workspace = true
 alloy-primitives.workspace = true
 stylus-sdk.workspace = true
 
@@ -15,11 +15,13 @@ stylus-sdk.workspace = true
 alloy.workspace = true
 eyre.workspace = true
 tokio.workspace = true
-e2e.workspace = true
+stylus-test-support = { path = "../../lib/stylus-test-support" }
 
 [features]
-e2e = []
+default = ["reentrant"]
+devnet = []
 export-abi = ["openzeppelin-stylus/export-abi"]
+reentrant = ["openzeppelin-stylus/reentrant"]
 
 [lib]
 crate-type = ["lib", "cdylib"]
@@ -27,3 +29,5 @@ crate-type = ["lib", "cdylib"]
 [[bin]]
 name = "erc20-flash-mint-example"
 path = "src/main.rs"
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("contract-client-gen"))'] }

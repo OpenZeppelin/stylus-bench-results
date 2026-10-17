@@ -17,17 +17,13 @@ use alloy_primitives::{aliases::B32, Address, U256};
 use openzeppelin_stylus_proc::interface_id;
 use stylus_sdk::{
     abi::Bytes,
-    msg,
     prelude::*,
     storage::{StorageMap, StorageU256},
 };
 
 use crate::{
     token::erc1155::{self, Erc1155, Error, IErc1155},
-    utils::{
-        introspection::erc165::IErc165,
-        math::storage::{AddAssignChecked, SubAssignUnchecked},
-    },
+    utils::introspection::erc165::IErc165,
 };
 
 /// State of an [`Erc1155Supply`] contract.
@@ -43,6 +39,7 @@ pub struct Erc1155Supply {
 
 /// Required interface of a [`Erc1155Supply`] contract.
 #[interface_id]
+#[public]
 pub trait IErc1155Supply: IErc165 {
     /// Total value of tokens in with a given id.
     ///
@@ -249,17 +246,16 @@ impl Erc1155Supply {
 
         if from.is_zero() {
             for (&token_id, &value) in token_ids.iter().zip(values.iter()) {
-                self.total_supply.setter(token_id).add_assign_checked(
-                    value,
-                    "should not exceed `U256::MAX` for `total_supply`",
-                );
+                self.total_supply
+                    .setter(token_id)
+                    .update_check_add(value)
+                    .expect("should not exceed U256::MAX for total_supply");
             }
 
             let total_mint_value = values.iter().sum();
-            self.total_supply_all.add_assign_checked(
-                total_mint_value,
-                "should not exceed `U256::MAX` for `total_supply_all`",
-            );
+            self.total_supply_all
+                .update_check_add(total_mint_value)
+                .expect("should not exceed U256::MAX for total_supply_all");
         }
 
         if to.is_zero() {
@@ -269,7 +265,7 @@ impl Erc1155Supply {
                  * values[i] <= balance_of(from, token_ids[i]) <=
                  * total_supply(token_ids[i])
                  */
-                self.total_supply.setter(token_id).sub_assign_unchecked(value);
+                self.total_supply.setter(token_id).update_wrap_sub(value);
             }
 
             let total_burn_value: U256 = values.into_iter().sum();
@@ -278,7 +274,7 @@ impl Erc1155Supply {
              * total_burn_value = sum_i(values[i]) <=
              * sum_i(total_supply(ids[i])) <= total_supply_all
              */
-            self.total_supply_all.sub_assign_unchecked(total_burn_value);
+            self.total_supply_all.update_wrap_sub(total_burn_value);
         }
         Ok(())
     }
@@ -295,7 +291,7 @@ impl Erc1155Supply {
 
         if !to.is_zero() {
             self.erc1155._check_on_erc1155_received(
-                msg::sender(),
+                self.vm().msg_sender(),
                 from,
                 to,
                 erc1155::Erc1155ReceiverData::new(ids, values),
@@ -373,7 +369,7 @@ impl Erc1155Supply {
 
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::Contract;
+    use stylus_sdk::testing::TestVM;
     use stylus_sdk::{
         alloy_primitives::{Address, U256},
         prelude::*,
@@ -407,62 +403,149 @@ mod tests {
         }
     }
 
-    #[motsu::test]
-    fn before_mint(contract: Contract<Erc1155Supply>, alice: Address) {
+    #[test]
+    fn before_mint() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc1155Supply::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
         let token_id = random_token_ids(1)[0];
-        assert_eq!(U256::ZERO, contract.sender(alice).total_supply(token_id));
-        assert_eq!(U256::ZERO, contract.sender(alice).total_supply_all());
-        assert!(!contract.sender(alice).exists(token_id));
+        assert_eq!(
+            U256::ZERO,
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .total_supply(token_id)
+        );
+        assert_eq!(
+            U256::ZERO,
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .total_supply_all()
+        );
+        assert!(!({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .exists(token_id));
     }
 
-    #[motsu::test]
-    fn after_mint_single(
-        contract: Contract<Erc1155Supply>,
-        alice: Address,
-        bob: Address,
-    ) {
-        let (token_ids, values) = contract.sender(alice).init(bob, 1);
+    #[test]
+    fn after_mint_single() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc1155Supply::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+        let bob = Address::from([2u8; 20]);
+
+        let (token_ids, values) = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .init(bob, 1);
         assert_eq!(
             values[0],
-            contract.sender(alice).balance_of(bob, token_ids[0])
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .balance_of(bob, token_ids[0])
         );
         assert_eq!(
             values[0],
-            contract.sender(alice).total_supply(token_ids[0])
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .total_supply(token_ids[0])
         );
-        assert_eq!(values[0], contract.sender(alice).total_supply_all());
-        assert!(contract.sender(alice).exists(token_ids[0]));
+        assert_eq!(
+            values[0],
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .total_supply_all()
+        );
+        assert!(({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .exists(token_ids[0]));
     }
 
-    #[motsu::test]
-    fn after_mint_batch(
-        contract: Contract<Erc1155Supply>,
-        alice: Address,
-        bob: Address,
-    ) {
-        let (token_ids, values) = contract.sender(alice).init(bob, 4);
+    #[test]
+    fn after_mint_batch() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc1155Supply::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+        let bob = Address::from([2u8; 20]);
+
+        let (token_ids, values) = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .init(bob, 4);
         for (&token_id, &value) in token_ids.iter().zip(values.iter()) {
-            assert_eq!(value, contract.sender(alice).balance_of(bob, token_id));
-            assert_eq!(value, contract.sender(alice).total_supply(token_id));
-            assert!(contract.sender(alice).exists(token_id));
+            assert_eq!(
+                value,
+                ({
+                    contract_vm.set_sender(alice);
+                    &mut contract
+                })
+                .balance_of(bob, token_id)
+            );
+            assert_eq!(
+                value,
+                ({
+                    contract_vm.set_sender(alice);
+                    &mut contract
+                })
+                .total_supply(token_id)
+            );
+            assert!(({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .exists(token_id));
         }
         let total_supply_all: U256 = values.iter().sum();
-        assert_eq!(total_supply_all, contract.sender(alice).total_supply_all());
+        assert_eq!(
+            total_supply_all,
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .total_supply_all()
+        );
     }
 
-    #[motsu::test]
-    fn mint_reverts_on_invalid_receiver(
-        contract: Contract<Erc1155Supply>,
-        alice: Address,
-    ) {
+    #[test]
+    fn mint_reverts_on_invalid_receiver() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc1155Supply::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
         let token_id = random_token_ids(1)[0];
         let two = U256::from(2);
         let invalid_receiver = Address::ZERO;
 
-        let err = contract
-            .sender(alice)
-            ._mint(invalid_receiver, token_id, two, &vec![].into())
-            .expect_err("should revert with `InvalidReceiver`");
+        let err = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        ._mint(invalid_receiver, token_id, two, &vec![].into())
+        .expect_err("should revert with `InvalidReceiver`");
 
         assert!(matches!(
             err,
@@ -472,109 +555,185 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    #[should_panic = "should not exceed `U256::MAX` for `total_supply`"]
-    fn mint_panics_on_total_supply_overflow(
-        contract: Contract<Erc1155Supply>,
-        alice: Address,
-        bob: Address,
-        dave: Address,
-    ) {
+    #[test]
+    #[should_panic = "should not exceed U256::MAX for total_supply"]
+    fn mint_panics_on_total_supply_overflow() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc1155Supply::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+        let bob = Address::from([2u8; 20]);
+        let dave = Address::from([3u8; 20]);
+
         let token_id = random_token_ids(1)[0];
         let two = U256::from(2);
         let three = U256::from(3);
-        contract
-            .sender(alice)
-            ._mint(bob, token_id, U256::MAX / two, &vec![].into())
-            .expect("should mint to bob");
-        contract
-            .sender(alice)
-            ._mint(dave, token_id, U256::MAX / two, &vec![].into())
-            .expect("should mint to dave");
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        ._mint(bob, token_id, U256::MAX / two, &vec![].into())
+        .expect("should mint to bob");
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        ._mint(dave, token_id, U256::MAX / two, &vec![].into())
+        .expect("should mint to dave");
         // This should panic.
-        _ = contract.sender(alice)._mint(bob, token_id, three, &vec![].into());
+        _ = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        ._mint(bob, token_id, three, &vec![].into());
     }
 
-    #[motsu::test]
-    #[should_panic = "should not exceed `U256::MAX` for `total_supply_all`"]
-    fn mint_panics_on_total_supply_all_overflow(
-        contract: Contract<Erc1155Supply>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    #[should_panic = "should not exceed U256::MAX for total_supply_all"]
+    fn mint_panics_on_total_supply_all_overflow() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc1155Supply::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+        let bob = Address::from([2u8; 20]);
+
         let token_ids = random_token_ids(2);
-        contract
-            .sender(alice)
-            ._mint(bob, token_ids[0], U256::MAX, &vec![].into())
-            .expect("should mint");
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        ._mint(bob, token_ids[0], U256::MAX, &vec![].into())
+        .expect("should mint");
         // This should panic.
-        _ = contract.sender(alice)._mint(
-            bob,
-            token_ids[1],
-            U256::from(1),
-            &vec![].into(),
-        );
+        _ = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        ._mint(bob, token_ids[1], U256::from(1), &vec![].into());
     }
 
-    #[motsu::test]
-    fn after_burn_single(
-        contract: Contract<Erc1155Supply>,
-        alice: Address,
-        bob: Address,
-    ) {
-        let (token_ids, values) = contract.sender(alice).init(bob, 1);
-        contract
-            .sender(alice)
-            ._burn(bob, token_ids[0], values[0])
-            .expect("should burn");
+    #[test]
+    fn after_burn_single() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc1155Supply::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+        let bob = Address::from([2u8; 20]);
+
+        let (token_ids, values) = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .init(bob, 1);
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        ._burn(bob, token_ids[0], values[0])
+        .expect("should burn");
 
         assert_eq!(
             U256::ZERO,
-            contract.sender(alice).total_supply(token_ids[0])
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .total_supply(token_ids[0])
         );
-        assert_eq!(U256::ZERO, contract.sender(alice).total_supply_all());
-        assert!(!contract.sender(alice).exists(token_ids[0]));
+        assert_eq!(
+            U256::ZERO,
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .total_supply_all()
+        );
+        assert!(!({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .exists(token_ids[0]));
     }
 
-    #[motsu::test]
-    fn after_burn_batch(
-        contract: Contract<Erc1155Supply>,
-        alice: Address,
-        bob: Address,
-    ) {
-        let (token_ids, values) = contract.sender(alice).init(bob, 4);
-        contract
-            .sender(alice)
-            ._burn_batch(bob, token_ids.clone(), values.clone())
-            .expect("should burn batch");
+    #[test]
+    fn after_burn_batch() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc1155Supply::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+        let bob = Address::from([2u8; 20]);
+
+        let (token_ids, values) = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .init(bob, 4);
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        ._burn_batch(bob, token_ids.clone(), values.clone())
+        .expect("should burn batch");
 
         for &token_id in &token_ids {
             assert_eq!(
                 U256::ZERO,
-                contract.sender(alice).balance_of(bob, token_id)
+                ({
+                    contract_vm.set_sender(alice);
+                    &mut contract
+                })
+                .balance_of(bob, token_id)
             );
-            assert!(!contract.sender(alice).exists(token_id));
+            assert!(!({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .exists(token_id));
             assert_eq!(
                 U256::ZERO,
-                contract.sender(alice).total_supply(token_id)
+                ({
+                    contract_vm.set_sender(alice);
+                    &mut contract
+                })
+                .total_supply(token_id)
             );
         }
-        assert_eq!(U256::ZERO, contract.sender(alice).total_supply_all());
+        assert_eq!(
+            U256::ZERO,
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .total_supply_all()
+        );
     }
 
-    #[motsu::test]
-    fn burn_reverts_when_invalid_sender(
-        contract: Contract<Erc1155Supply>,
-        alice: Address,
-        bob: Address,
-    ) {
-        let (token_ids, values) = contract.sender(alice).init(bob, 1);
+    #[test]
+    fn burn_reverts_when_invalid_sender() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc1155Supply::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+        let bob = Address::from([2u8; 20]);
+
+        let (token_ids, values) = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .init(bob, 1);
         let invalid_sender = Address::ZERO;
 
-        let err = contract
-            .sender(alice)
-            ._burn(invalid_sender, token_ids[0], values[0])
-            .expect_err("should not burn token for invalid sender");
+        let err = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        ._burn(invalid_sender, token_ids[0], values[0])
+        .expect_err("should not burn token for invalid sender");
 
         assert!(matches!(
             err,
@@ -584,46 +743,82 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn supply_unaffected_by_no_op(
-        contract: Contract<Erc1155Supply>,
-        alice: Address,
-    ) {
+    #[test]
+    fn supply_unaffected_by_no_op() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc1155Supply::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
         let token_ids = random_token_ids(1);
         let values = random_values(1);
 
-        contract
-            .sender(alice)
-            ._update(Address::ZERO, Address::ZERO, token_ids.clone(), values)
-            .expect("should supply");
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        ._update(Address::ZERO, Address::ZERO, token_ids.clone(), values)
+        .expect("should supply");
         assert_eq!(
             U256::ZERO,
-            contract.sender(alice).total_supply(token_ids[0])
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .total_supply(token_ids[0])
         );
-        assert_eq!(U256::ZERO, contract.sender(alice).total_supply_all());
-        assert!(!contract.sender(alice).exists(token_ids[0]));
+        assert_eq!(
+            U256::ZERO,
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .total_supply_all()
+        );
+        assert!(!({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .exists(token_ids[0]));
     }
 
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual = <Erc1155Supply as IErc1155Supply>::interface_id();
         let expected: B32 = 0xeac6339d_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
-    fn supports_interface(contract: Contract<Erc1155Supply>, alice: Address) {
-        assert!(contract.sender(alice).supports_interface(
-            <Erc1155Supply as IErc1155Supply>::interface_id()
-        ));
-        assert!(contract
-            .sender(alice)
-            .supports_interface(<Erc1155Supply as IErc165>::interface_id()));
-        assert!(contract
-            .sender(alice)
-            .supports_interface(<Erc1155Supply as IErc1155>::interface_id()));
+    #[test]
+    fn supports_interface() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc1155Supply::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
+        assert!(({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .supports_interface(<Erc1155Supply as IErc1155Supply>::interface_id()));
+        assert!(({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .supports_interface(<Erc1155Supply as IErc165>::interface_id()));
+        assert!(({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .supports_interface(<Erc1155Supply as IErc1155>::interface_id()));
 
         let fake_interface_id: B32 = 0x12345678_u32.into();
-        assert!(!contract.sender(alice).supports_interface(fake_interface_id));
+        assert!(!({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .supports_interface(fake_interface_id));
     }
 }

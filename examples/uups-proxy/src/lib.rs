@@ -108,12 +108,24 @@ impl UUPSProxyErc20Example {
 
     /// Initializes the contract.
     fn initialize(&mut self, owner: Address) -> Result<(), Error> {
+        // A nonzero owner identifies proxies initialized before the
+        // namespaced marker was introduced. Keep those proxies from being
+        // reinitialized when they upgrade to this implementation.
+        if self.ownable.owner() != Address::ZERO
+            || self.uups.version.get() != U32::ZERO
+        {
+            return Err(Error::InvalidInitialization(
+                uups_upgradeable::InvalidInitialization {},
+            ));
+        }
+        uups_upgradeable::initializer(self)?;
         self.uups.set_version()?;
         self.ownable.constructor(owner)?;
         Ok(())
     }
 
     fn set_version(&mut self) -> Result<(), Error> {
+        self.ownable.only_owner()?;
         Ok(self.uups.set_version()?)
     }
 
@@ -208,5 +220,27 @@ impl IErc1822Proxiable for UUPSProxyErc20Example {
     #[selector(name = "proxiableUUID")]
     fn proxiable_uuid(&self) -> Result<B256, Vec<u8>> {
         self.uups.proxiable_uuid()
+    }
+}
+
+#[cfg(test)]
+mod legacy_initializer_tests {
+    use alloy_primitives::Address;
+    use stylus_sdk::testing::TestVM;
+
+    use super::{uups_upgradeable, Error, UUPSProxyErc20Example};
+
+    #[test]
+    fn legacy_renounced_owner_state_cannot_be_reinitialized() {
+        let vm = TestVM::default();
+        let mut contract = UUPSProxyErc20Example::from(&vm);
+
+        // v0.3 wrote its UUPS version while initializing, but had no
+        // namespaced initialization marker. A zero owner is possible after
+        // the owner renounced ownership.
+        contract.uups.version.set(uups_upgradeable::VERSION_NUMBER);
+
+        let result = contract.initialize(Address::from([2; 20]));
+        assert!(matches!(result, Err(Error::InvalidInitialization(_))));
     }
 }

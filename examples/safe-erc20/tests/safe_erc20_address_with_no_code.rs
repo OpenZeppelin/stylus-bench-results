@@ -1,18 +1,18 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "devnet")]
 
 use abi::SafeErc20;
 use alloy::primitives::{uint, U256};
-use e2e::{receipt, send, Account, EventExt, Revert};
+use stylus_test_support::{receipt, send, Account, EventExt, Revert};
 
 mod abi;
 mod mock;
 
-#[e2e::test]
-async fn reverts_on_transfer(
-    alice: Account,
-    bob: Account,
-    has_no_code: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn reverts_on_transfer() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+    let has_no_code = Account::new().await?;
+
     let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
     let bob_addr = bob.address();
@@ -30,12 +30,12 @@ async fn reverts_on_transfer(
     Ok(())
 }
 
-#[e2e::test]
-async fn returns_false_on_try_safe_transfer(
-    alice: Account,
-    bob: Account,
-    has_no_code: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn returns_false_on_try_safe_transfer() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+    let has_no_code = Account::new().await?;
+
     let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
     let bob_addr = bob.address();
@@ -54,12 +54,12 @@ async fn returns_false_on_try_safe_transfer(
     Ok(())
 }
 
-#[e2e::test]
-async fn reverts_on_transfer_from(
-    alice: Account,
-    bob: Account,
-    has_no_code: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn reverts_on_transfer_from() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+    let has_no_code = Account::new().await?;
+
     let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
     let alice_addr = alice.address();
@@ -82,12 +82,12 @@ async fn reverts_on_transfer_from(
     Ok(())
 }
 
-#[e2e::test]
-async fn returns_false_on_try_safe_transfer_from(
-    alice: Account,
-    bob: Account,
-    has_no_code: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn returns_false_on_try_safe_transfer_from() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+    let has_no_code = Account::new().await?;
+
     let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
     let alice_addr = alice.address();
@@ -108,12 +108,12 @@ async fn returns_false_on_try_safe_transfer_from(
     Ok(())
 }
 
-#[e2e::test]
-async fn reverts_on_increase_allowance(
-    alice: Account,
-    bob: Account,
-    has_no_code: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn reverts_on_increase_allowance() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+    let has_no_code = Account::new().await?;
+
     let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
     let bob_addr = bob.address();
@@ -134,12 +134,12 @@ async fn reverts_on_increase_allowance(
     Ok(())
 }
 
-#[e2e::test]
-async fn reverts_on_decrease_allowance(
-    alice: Account,
-    bob: Account,
-    has_no_code: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn reverts_on_decrease_allowance() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+    let has_no_code = Account::new().await?;
+
     let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
     let bob_addr = bob.address();
@@ -160,12 +160,12 @@ async fn reverts_on_decrease_allowance(
     Ok(())
 }
 
-#[e2e::test]
-async fn reverts_on_force_approve(
-    alice: Account,
-    bob: Account,
-    has_no_code: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn reverts_on_force_approve() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+    let has_no_code = Account::new().await?;
+
     let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
     let bob_addr = bob.address();

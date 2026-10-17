@@ -13,7 +13,7 @@ Stylus enables high-performance smart contracts in Rust, compiled to WebAssembly
 
 [`openzeppelin-contracts`]: https://github.com/OpenZeppelin/openzeppelin-contracts
 [unit]: https://github.com/OpenZeppelin/stylus-test-helpers
-[integration]: ./lib/e2e/README.md
+[integration]: ./docs/modules/ROOT/pages/testing.adoc
 
 ## 🚀 Usage
 
@@ -22,7 +22,7 @@ Add the crate to your Cargo.toml:
 ```toml
 [dependencies]
 # We recommend pinning to a specific version.
-openzeppelin-stylus = "=0.3.0"
+openzeppelin-stylus = "=0.4.0"
 ```
 
 If you want to use the latest features before they are fully stabilized or audited, try the most recent alpha. We release a new alpha version every ~3 weeks.
@@ -47,25 +47,23 @@ Ensure your dependencies also avoid the standard library:
 
 > ```toml
 > [dependencies]
-> alloy-primitives = { version = "=0.8.20", default-features = false }
-> stylus-sdk = "=0.9.0"
+> alloy-primitives = { version = "=1.7.3", default-features = false }
+> stylus-sdk = "=0.10.10"
 > ```
 
-## 🦀 Rust Nightly & WASM Builds
+## 🦀 Stable Rust & WASM Builds
 
-This library requires the **Rust nightly toolchain**, due to unstable flags used during compilation to reduce the Wasm size of Stylus contracts.
+This library supports stable Rust 1.91.0 and Stylus SDK 0.10.10.
 
-> ⚠️ Note: While nightly is pinned in this repository via [`rust-toolchain.toml`](./rust-toolchain.toml), this only affects local development **within this repo**.
-> We also include a [`config.toml`](./.cargo/config.toml) to define platform-specific compiler flags.
+The repository pins Rust 1.91.0 in [`rust-toolchain.toml`](./rust-toolchain.toml) and includes a [Cargo configuration](./.cargo/config.toml) for target-specific linker flags.
 
-End-users of the crate must **set their own nightly toolchain** when compiling projects that use `openzeppelin-stylus`.
+Consumers should use the same stable toolchain to build Stylus contracts with this release.
 
 To compile contracts for Arbitrum Stylus, run:
 
 ```sh
 cargo build --release --target wasm32-unknown-unknown \
-  -Z build-std=std,panic_abort \
-  -Z build-std-features=panic_immediate_abort
+  --lib
 ```
 
 ## 🧪 Example: ERC20 Token

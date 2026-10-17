@@ -22,7 +22,10 @@ pub mod params;
 
 use alloc::{boxed::Box, vec, vec::Vec};
 
-use crate::{field::prime::PrimeField, poseidon2::params::PoseidonParams};
+use crate::{
+    bits::BitIteratorBE, field::prime::PrimeField,
+    poseidon2::params::PoseidonParams,
+};
 
 /// Determines whether poseidon sponge in absorbing or squeezing state.
 /// In squeezing state, sponge can only squeeze elements.
@@ -58,9 +61,27 @@ impl<P: PoseidonParams<F>, F: PrimeField> Default for Poseidon2<P, F> {
 
 impl<P: PoseidonParams<F>, F: PrimeField> Poseidon2<P, F> {
     /// Create a new Poseidon sponge.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the parameter set has fewer than eight full rounds, an odd
+    /// number of full rounds, or an S-box exponent that is not greater than
+    /// one or coprime to the field order. Custom parameter sets must also use
+    /// a cryptographically reviewed number of partial rounds for their field
+    /// and state width.
     #[must_use]
     #[inline]
     pub fn new() -> Self {
+        assert!(P::ROUNDS_F >= 8, "Poseidon2 requires at least 8 full rounds");
+        assert!(
+            P::ROUNDS_F % 2 == 0,
+            "Poseidon2 full round count must be even"
+        );
+        assert!(
+            Self::sbox_exponent_is_permutation(),
+            "Poseidon S-box exponent must be greater than one and coprime to the field order"
+        );
+
         Self {
             phantom: core::marker::PhantomData,
             state: vec![F::zero(); P::T].into_boxed_slice(),
@@ -68,6 +89,29 @@ impl<P: PoseidonParams<F>, F: PrimeField> Poseidon2<P, F> {
             // Begin index from `CAPACITY`. Skip capacity elements.
             index: P::CAPACITY,
         }
+    }
+
+    /// Check whether raising to `P::D` is a permutation of the field.
+    #[inline]
+    fn sbox_exponent_is_permutation() -> bool {
+        let degree = u16::from(P::D);
+        if degree <= 1 {
+            return false;
+        }
+
+        // x -> x^D is a permutation of F_p exactly when gcd(D, p - 1) = 1.
+        // Reduce p modulo D while iterating over its bits, avoiding conversion
+        // of the field modulus to a machine-sized integer.
+        let modulus_mod_degree =
+            F::MODULUS.bit_be_trimmed_iter().fold(0u16, |remainder, bit| {
+                (remainder * 2 + u16::from(bit)) % degree
+            });
+        let mut left = degree;
+        let mut right = (modulus_mod_degree + degree - 1) % degree;
+        while right != 0 {
+            (left, right) = (right, left % right);
+        }
+        left == 1
     }
 
     /// Size of poseidon sponge's state.
@@ -367,5 +411,110 @@ impl<P: PoseidonParams<F>, F: PrimeField> Poseidon2<P, F> {
     #[inline]
     fn add_rc_internal(&mut self, round: usize) {
         self.state[0] += P::ROUND_CONSTANTS[round][0];
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        field::instance::FpPallas, poseidon2::instance::pallas::PallasParams,
+    };
+
+    struct SquaringPallasParams;
+
+    impl PoseidonParams<FpPallas> for SquaringPallasParams {
+        const T: usize = <PallasParams as PoseidonParams<FpPallas>>::T;
+        const D: u8 = 2;
+        const CAPACITY: usize =
+            <PallasParams as PoseidonParams<FpPallas>>::CAPACITY;
+        const ROUNDS_F: usize =
+            <PallasParams as PoseidonParams<FpPallas>>::ROUNDS_F;
+        const ROUNDS_P: usize =
+            <PallasParams as PoseidonParams<FpPallas>>::ROUNDS_P;
+        const MAT_INTERNAL_DIAG_M_1: &'static [FpPallas] =
+            <PallasParams as PoseidonParams<FpPallas>>::MAT_INTERNAL_DIAG_M_1;
+        const ROUND_CONSTANTS: &'static [&'static [FpPallas]] =
+            <PallasParams as PoseidonParams<FpPallas>>::ROUND_CONSTANTS;
+    }
+
+    struct CustomFullRoundsPallasParams<const ROUNDS_F: usize>;
+
+    impl<const ROUNDS_F: usize> PoseidonParams<FpPallas>
+        for CustomFullRoundsPallasParams<ROUNDS_F>
+    {
+        const T: usize = <PallasParams as PoseidonParams<FpPallas>>::T;
+        const D: u8 = <PallasParams as PoseidonParams<FpPallas>>::D;
+        const CAPACITY: usize =
+            <PallasParams as PoseidonParams<FpPallas>>::CAPACITY;
+        const ROUNDS_F: usize = ROUNDS_F;
+        const ROUNDS_P: usize =
+            <PallasParams as PoseidonParams<FpPallas>>::ROUNDS_P;
+        const MAT_INTERNAL_DIAG_M_1: &'static [FpPallas] =
+            <PallasParams as PoseidonParams<FpPallas>>::MAT_INTERNAL_DIAG_M_1;
+        const ROUND_CONSTANTS: &'static [&'static [FpPallas]] =
+            <PallasParams as PoseidonParams<FpPallas>>::ROUND_CONSTANTS;
+    }
+
+    fn unchecked_sponge() -> Poseidon2<SquaringPallasParams, FpPallas> {
+        // Recreate the pre-guard constructor for the collision regression.
+        Poseidon2 {
+            phantom: core::marker::PhantomData,
+            state: alloc::vec![FpPallas::from(0u8); SquaringPallasParams::T]
+                .into_boxed_slice(),
+            mode: Mode::Absorbing,
+            index: SquaringPallasParams::CAPACITY,
+        }
+    }
+
+    #[test]
+    fn invalid_sbox_makes_the_sponge_hash_collide() {
+        // For one Poseidon round, choose two rate inputs so the first
+        // post-constant state vectors differ by signs in two coordinates.
+        // Squaring erases those signs; all remaining rounds therefore match.
+        let rc =
+            <SquaringPallasParams as PoseidonParams<FpPallas>>::ROUND_CONSTANTS
+                [0];
+        let zero = FpPallas::from(0u8);
+        let two = FpPallas::from(2u8);
+        let three = FpPallas::from(3u8);
+        let four = FpPallas::from(4u8);
+        let five = FpPallas::from(5u8);
+        let x = rc[1] - three * rc[0];
+        let y = zero;
+        let x_collision = five * rc[0] - three * rc[1];
+        let y_collision = two * rc[1] - four * rc[0];
+
+        assert_ne!((x, y), (x_collision, y_collision));
+
+        let mut a = unchecked_sponge();
+        let mut b = unchecked_sponge();
+        a.absorb(&x);
+        a.absorb(&y);
+        b.absorb(&x_collision);
+        b.absorb(&y_collision);
+
+        assert_eq!(a.squeeze(), b.squeeze());
+    }
+
+    #[test]
+    fn custom_non_permutation_sbox_must_be_rejected() {
+        assert!(!Poseidon2::<SquaringPallasParams, FpPallas>::sbox_exponent_is_permutation());
+        assert!(std::panic::catch_unwind(
+            Poseidon2::<SquaringPallasParams, FpPallas>::new
+        )
+        .is_err());
+    }
+
+    #[test]
+    #[should_panic(expected = "Poseidon2 full round count must be even")]
+    fn custom_odd_full_round_count_must_be_rejected() {
+        let _ = Poseidon2::<CustomFullRoundsPallasParams<9>, FpPallas>::new();
+    }
+
+    #[test]
+    #[should_panic(expected = "Poseidon2 requires at least 8 full rounds")]
+    fn custom_full_round_count_below_security_minimum_must_be_rejected() {
+        let _ = Poseidon2::<CustomFullRoundsPallasParams<6>, FpPallas>::new();
     }
 }

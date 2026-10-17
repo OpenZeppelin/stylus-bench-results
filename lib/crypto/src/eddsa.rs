@@ -8,6 +8,7 @@
 //! [curve25519-dalek]: https://github.com/dalek-cryptography/curve25519-dalek
 
 #![allow(non_snake_case)]
+use num_traits::Zero;
 use sha2::{digest::Digest, Sha512};
 use static_assertions::const_assert;
 use zeroize::ZeroizeOnDrop;
@@ -206,9 +207,8 @@ impl SigningKey {
         h.update(self.signing_key.hash_prefix);
         h.update(message);
 
-        let r = WideScalar::from_bigint(U512::from_bytes_le(
-            h.finalize().as_slice(),
-        ));
+        let digest = h.finalize();
+        let r = WideScalar::from_bigint(U512::from_bytes_le(&digest[..]));
         let r = Scalar::from_fp(r);
 
         let R = ProjectivePoint::generator() * r;
@@ -220,9 +220,8 @@ impl SigningKey {
         ));
         h.update(message);
 
-        let k = WideScalar::from_bigint(U512::from_bytes_le(
-            h.finalize().as_slice(),
-        ));
+        let digest = h.finalize();
+        let k = WideScalar::from_bigint(U512::from_bytes_le(&digest[..]));
         let k = Scalar::from_fp(k);
         let s: Scalar = (k * self.signing_key.scalar) + r;
 
@@ -332,19 +331,43 @@ impl Signature {
 #[derive(Copy, Clone, Default, PartialEq)]
 pub struct VerifyingKey {
     /// Edwards point used for curve arithmetic operations.
-    pub point: ProjectivePoint,
+    point: ProjectivePoint,
+    is_valid: bool,
 }
 
 impl VerifyingKey {
     /// Construct verifying key from affine point.
+    ///
+    /// Points outside the non-identity prime-order subgroup create an invalid
+    /// key. [`Self::is_valid`] returns `false` for signatures checked with an
+    /// invalid key.
     #[must_use]
     pub fn from_affine(point: AffinePoint) -> Self {
-        VerifyingKey { point: point.into() }
+        let is_valid = !point.is_zero()
+            && point.is_on_curve()
+            && point.is_in_prime_order_subgroup();
+        VerifyingKey { point: point.into(), is_valid }
+    }
+
+    /// Returns whether this key is a non-identity point in the prime-order
+    /// subgroup.
+    #[must_use]
+    pub const fn is_valid_key(&self) -> bool {
+        self.is_valid
+    }
+
+    /// Returns the Edwards point for this key.
+    pub const fn point(&self) -> ProjectivePoint {
+        self.point
     }
 
     /// Verify a signature on a message with this keypair's public key.
     #[must_use]
     pub fn is_valid(&self, message: &[u8], signature: &Signature) -> bool {
+        if !self.is_valid {
+            return false;
+        }
+
         let expected_r = self.compute_R(signature, message);
         expected_r == signature.R
     }
@@ -366,9 +389,8 @@ impl VerifyingKey {
         h.update(CompressedPointY::from(A.into_affine()));
         h.update(message);
 
-        let k = WideScalar::from_bigint(U512::from_bytes_le(
-            h.finalize().as_slice(),
-        ));
+        let digest = h.finalize();
+        let k = WideScalar::from_bigint(U512::from_bytes_le(&digest[..]));
         let k = Scalar::from_fp(k);
 
         // Compute R: `-[k]A + [s]B = R`.
@@ -385,14 +407,21 @@ impl VerifyingKey {
 
 impl From<ProjectivePoint> for VerifyingKey {
     fn from(point: ProjectivePoint) -> Self {
-        VerifyingKey { point }
+        let is_valid_projective = !point.is_zero()
+            && !point.z.is_zero()
+            && point.t * point.z == point.x * point.y;
+        if !is_valid_projective {
+            return VerifyingKey::default();
+        }
+
+        VerifyingKey::from_affine(point.into_affine())
     }
 }
 
 impl From<ExpandedSecretKey> for VerifyingKey {
     fn from(value: ExpandedSecretKey) -> Self {
         let point = ProjectivePoint::generator() * value.scalar;
-        point.into()
+        VerifyingKey { point, is_valid: !point.is_zero() }
     }
 }
 
@@ -400,6 +429,7 @@ impl From<ExpandedSecretKey> for VerifyingKey {
 mod test {
     use alloc::string::String;
 
+    use crate::curve::te::instance::curve25519::Curve25519FqParam;
     use hex_literal::hex;
     use proptest::prelude::*;
 
@@ -417,6 +447,43 @@ mod test {
         // Verify with a different message
         let invalid_message = b"I'm not signed!";
         assert!(!signing_key.is_valid_signature(invalid_message, &signature));
+    }
+
+    #[test]
+    fn rejects_identity_verifying_key() {
+        let verifying_key = VerifyingKey::from_affine(AffinePoint::zero());
+        let signature = Signature {
+            R: ProjectivePoint::generator(),
+            s: Scalar::from_bigint(U256::from(1u64)),
+        };
+
+        assert!(!verifying_key.is_valid(b"any message", &signature));
+    }
+
+    #[test]
+    fn rejects_non_prime_order_verifying_key() {
+        let x = Fp256::<Curve25519FqParam>::from_bigint(U256::ZERO);
+        let y = -Fp256::<Curve25519FqParam>::from_bigint(U256::from(1u64));
+        let verifying_key =
+            VerifyingKey::from_affine(AffinePoint::new_unchecked(x, y));
+
+        assert!(!verifying_key.is_valid_key());
+        assert!(!verifying_key.is_valid(
+            b"any message",
+            &Signature {
+                R: ProjectivePoint::generator(),
+                s: Scalar::from_bigint(U256::from(1u64)),
+            },
+        ));
+    }
+
+    #[test]
+    fn rejects_malformed_projective_verifying_key_without_panicking() {
+        let zero = Fp256::<Curve25519FqParam>::from_bigint(U256::ZERO);
+        let malformed = ProjectivePoint::new_unchecked(zero, zero, zero, zero);
+        let verifying_key = VerifyingKey::from(malformed);
+
+        assert!(!verifying_key.is_valid_key());
     }
 
     #[test]

@@ -1,15 +1,17 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "devnet")]
 
 use abi::Erc721HolderExample;
 use alloy::primitives::{Bytes, U256};
-use e2e::Account;
 use eyre::Result;
 use openzeppelin_stylus::token::erc721::RECEIVER_FN_SELECTOR;
+use stylus_test_support::Account;
 
 mod abi;
 
-#[e2e::test]
-async fn returns_correct_selector(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn returns_correct_selector() -> Result<()> {
+    let alice = Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
 
     let contract = Erc721HolderExample::new(contract_addr, &alice.wallet);
@@ -21,8 +23,7 @@ async fn returns_correct_selector(alice: Account) -> Result<()> {
     let interface_selector = contract
         .onERC721Received(operator, from, token_id, data)
         .call()
-        .await?
-        ._0;
+        .await?;
 
     assert_eq!(RECEIVER_FN_SELECTOR, interface_selector);
 

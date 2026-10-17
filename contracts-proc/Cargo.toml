@@ -7,13 +7,20 @@ license.workspace = true
 repository.workspace = true
 keywords = ["arbitrum", "ethereum", "stylus", "smart-contracts", "standards"]
 categories = ["cryptography::cryptocurrencies", "no-std", "wasm"]
-version = "0.3.0"
+version = "0.4.0"
 
 [dependencies]
 proc-macro2.workspace = true
 quote.workspace = true
 syn.workspace = true
 convert_case = "0.6.0"
+
+[dev-dependencies]
+alloy-primitives.workspace = true
+stylus-sdk.workspace = true
+
+[features]
+conditional-selector = []
 
 [lints]
 workspace = true

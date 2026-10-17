@@ -6,6 +6,7 @@ sol!(
    contract BeaconProxyExample {
         function implementation() public view returns (address implementation);
         function getBeacon() public view returns (address beacon);
+        function testUpgradeBeaconToAndCall(address beacon, bytes data) external;
 
         // ERC20 functions that we want to delegate to the implementation.
         function name() external view returns (string name);
@@ -26,6 +27,9 @@ sol!(
         error ERC20InvalidReceiver(address receiver);
         error ERC20InsufficientAllowance(address spender, uint256 allowance, uint256 needed);
         error ERC20InvalidSpender(address spender);
+        error ERC1967InvalidImplementation(address implementation);
+        error FailedCall();
+        error FailedCallWithReason(bytes reason);
 
         #[derive(Debug, PartialEq)]
         event Transfer(address indexed from, address indexed to, uint256 value);

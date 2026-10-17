@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.4.0] - Unreleased
+
+### Added
+
+- SDK-managed devnet integration tests and shared `stylus-test` VM test helpers.
+- Reproducible contract optimizer settings in `Stylus.toml` files, pinned to `wasm-opt` 116.
+- Compile-time checks for 4-byte selector collisions within a `#[public]` interface.
+- `Capped::check_increase` to share cap validation from composed token contracts.
+
+### Changed
+
+- Migrate the workspace to Stylus SDK 0.10.10, Alloy 1.7.3, and stable Rust 1.91.0.
+- Replace global host accessors with VM accessors and pass VM and call context to interface calls.
+- Replace Motsu and the local E2E crates with SDK `TestVM` and `stylus-tools` devnet support.
+- `StorageSlot::get_slot` now takes a VM-accessible context before the slot.
+- Keep the `reentrant` feature as a compatibility alias; SDK 0.10.5 deprecated its guard because typed calls flush storage before yielding control.
+
+### Fixed
+
+- Reject Poseidon2 round exponents that do not define a field permutation.
+- Reject no-code ERC-721 wrapper assets on deposit, withdrawal, and receiver callback paths.
+- Report the configured underlying token from `ERC20Wrapper::_recover` when `balanceOf` fails.
+- Validate SafeERC20 return data and flush storage before its raw external calls.
+
+### Upgrade notes
+
+- This release changes Rust APIs and is versioned as 0.4.0. See the [upgrade guide](docs/modules/ROOT/pages/upgrade.adoc) for the full migration steps and behavior changes.
+
 ## [v0.3.0] - 2025-09-10
 
 > **Heads-up:** this is the production release after one alpha and one release candidate

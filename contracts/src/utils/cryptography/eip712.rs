@@ -14,7 +14,6 @@ use alloc::{borrow::ToOwned, string::String, vec::Vec};
 
 use alloy_primitives::{keccak256, Address, B256, U256};
 use alloy_sol_types::{sol, SolType};
-use stylus_sdk::{block, contract};
 
 /// Keccak-256 hash of the EIP-712 domain separator type string.
 const TYPE_HASH: [u8; 32] =
@@ -74,15 +73,11 @@ pub trait IEip712 {
 
     /// Returns chain id.
     #[must_use]
-    fn chain_id() -> U256 {
-        U256::from(block::chainid())
-    }
+    fn chain_id(&self) -> U256;
 
     /// Returns the contract's address.
     #[must_use]
-    fn contract_address() -> Address {
-        contract::address()
-    }
+    fn contract_address(&self) -> Address;
 
     /// Returns the fields and values that describe the domain separator used by
     /// this contract for EIP-712 signature.
@@ -97,8 +92,8 @@ pub trait IEip712 {
             FIELDS,
             Self::NAME.to_owned(),
             Self::VERSION.to_owned(),
-            Self::chain_id(),
-            Self::contract_address(),
+            self.chain_id(),
+            self.contract_address(),
             SALT,
             Vec::new(),
         )
@@ -114,8 +109,8 @@ pub trait IEip712 {
             TYPE_HASH,
             Self::HASHED_NAME,
             Self::HASHED_VERSION,
-            Self::chain_id(),
-            Self::contract_address(),
+            self.chain_id(),
+            self.contract_address(),
         ));
 
         keccak256(encoded)
@@ -153,11 +148,11 @@ mod tests {
         const NAME: &'static str = "A Name";
         const VERSION: &'static str = "1";
 
-        fn chain_id() -> U256 {
+        fn chain_id(&self) -> U256 {
             CHAIN_ID
         }
 
-        fn contract_address() -> Address {
+        fn contract_address(&self) -> Address {
             CONTRACT_ADDRESS
         }
     }
