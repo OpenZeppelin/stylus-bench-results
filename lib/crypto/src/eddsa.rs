@@ -566,6 +566,17 @@ mod test {
     }
 
     #[test]
+    fn rejects_identity_public_key_forgery() {
+        let verifying_key = VerifyingKey::from_affine(AffinePoint::zero());
+        let signature = Signature::from_affine_R_s(
+            ProjectivePoint::generator().into_affine(),
+            Scalar::from_bigint(U256::from(1u8)),
+        );
+
+        assert!(!verifying_key.is_valid(b"any message", &signature));
+    }
+
+    #[test]
     fn zeroize_signing_key() {
         let ptr = {
             let secret = SigningKey::from_bytes(&[4u8; 32]);
