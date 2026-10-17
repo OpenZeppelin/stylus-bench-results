@@ -1,10 +1,9 @@
 //! This contract implements a proxy that gets the implementation address for
 //! each call from an [`UpgradeableBeacon`][UpgradeableBeacon].
 //!
-//! The beacon address can only be set once during construction, and cannot be
-//! changed afterwards. It is stored in an immutable variable to avoid
-//! unnecessary storage reads, and also in the beacon storage slot specified by
-//! [ERC-1967] so that it can be accessed externally.
+//! The beacon address is stored in the beacon storage slot specified by
+//! [ERC-1967], so it can be accessed externally and is not vulnerable to
+//! collisions with implementation storage.
 //!
 //! CAUTION: Since the beacon address can never be changed, you must ensure that
 //! you either control the beacon, or trust the beacon to not upgrade the
@@ -31,6 +30,7 @@ use crate::proxy::{
 /// State of an [`BeaconProxy`] contract.
 #[storage]
 pub struct BeaconProxy {
+    /// Reserved to preserve the storage layout of v0.3.0.
     beacon: StorageAddress,
 }
 
@@ -69,7 +69,6 @@ impl BeaconProxy {
         data: &Bytes,
     ) -> Result<(), Error> {
         Erc1967Utils::upgrade_beacon_to_and_call(self, beacon, data)?;
-        self.beacon.set(beacon);
         Ok(())
     }
 
@@ -80,7 +79,7 @@ impl BeaconProxy {
     /// * `&self` - Read access to the contract's state.
     #[must_use]
     pub fn get_beacon(&self) -> Address {
-        self.beacon.get()
+        Erc1967Utils::get_beacon()
     }
 }
 
