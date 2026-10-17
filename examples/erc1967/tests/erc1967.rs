@@ -1,12 +1,14 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::{
+    constructor, receipt, send, watch, Account, Constructor, EventExt, Revert,
+};
 use abi::Erc1967Example;
 use alloy::{
     primitives::{Address, U256},
     sol_types::SolCall,
-};
-use e2e::{
-    constructor, receipt, send, watch, Account, Constructor, EventExt, Revert,
 };
 use eyre::Result;
 use mock::{erc20, erc20::ERC20Mock};
@@ -19,8 +21,11 @@ fn ctr(implementation: Address, data: &Bytes) -> Constructor {
     constructor!(implementation, data.clone())
 }
 
-#[e2e::test]
-async fn constructs(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn constructs() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let implementation_addr = erc20::deploy(&alice.wallet).await?;
     let contract_addr = alice
         .as_deployer()
@@ -36,8 +41,11 @@ async fn constructs(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn constructs_with_data(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn constructs_with_data() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let implementation_addr = erc20::deploy(&alice.wallet).await?;
 
     // mint 1000 tokens.
@@ -67,8 +75,12 @@ async fn constructs_with_data(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn fallback(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn fallback() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let implementation_addr = erc20::deploy(&alice.wallet).await?;
     let contract_addr = alice
         .as_deployer()
@@ -117,8 +129,12 @@ async fn fallback(alice: Account, bob: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn fallback_returns_error(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn fallback_returns_error() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let implementation_addr = erc20::deploy(&alice.wallet).await?;
     let contract_addr = alice
         .as_deployer()

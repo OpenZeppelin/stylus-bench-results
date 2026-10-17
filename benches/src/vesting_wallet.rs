@@ -1,14 +1,17 @@
+use crate::test_support::{constructor, receipt, Account};
 use alloy::{
     network::{AnyNetwork, EthereumWallet, TransactionBuilder},
     primitives::Address,
     providers::{Provider, ProviderBuilder},
-    rpc::types::{serde_helpers::WithOtherFields, TransactionRequest},
+    rpc::types::{
+        serde_helpers::{OtherFields, WithOtherFields},
+        TransactionRequest,
+    },
     sol,
     sol_types::SolCall,
     uint,
 };
 use alloy_primitives::U256;
-use e2e::{constructor, receipt, Account};
 
 use crate::{
     report::{ContractReport, FunctionReport},
@@ -45,17 +48,26 @@ const TOKEN_NAME: &str = "Test Token";
 const TOKEN_SYMBOL: &str = "TTK";
 const CAP: U256 = uint!(1_000_000_U256);
 
+/// Run this contract benchmark in each cache and optimization mode.
+///
+/// # Errors
+///
+/// Returns an error if deployment, an RPC call, or receipt decoding fails.
 pub async fn bench() -> eyre::Result<ContractReport> {
-    ContractReport::generate("VestingWallet", run).await
+    Box::pin(ContractReport::generate("VestingWallet", run)).await
 }
 
+/// Deploy the contract and run its benchmarked calls.
+///
+/// # Errors
+///
+/// Returns an error if account setup, deployment, an RPC call, or receipt decoding fails.
+#[allow(clippy::large_futures)]
 pub async fn run(cache_opt: Opt) -> eyre::Result<Vec<FunctionReport>> {
     let alice = Account::new().await?;
-    let alice_wallet = ProviderBuilder::new()
-        .network::<AnyNetwork>()
-        .with_recommended_fillers()
+    let alice_wallet = ProviderBuilder::new_with_network::<AnyNetwork>()
         .wallet(EthereumWallet::from(alice.signer.clone()))
-        .on_http(alice.url().parse()?);
+        .connect_http(alice.url().parse()?);
 
     let contract_addr = deploy(&alice, cache_opt.clone()).await?;
     let erc20_addr = deploy_token(&alice, cache_opt).await?;
@@ -68,32 +80,32 @@ pub async fn run(cache_opt: Opt) -> eyre::Result<Vec<FunctionReport>> {
             .with_from(alice.address())
             .with_to(contract_addr)
             .with_value(uint!(1000_U256)),
-        other: Default::default(),
+        other: OtherFields::default(),
     };
 
     alice_wallet.send_transaction(tx).await?.watch().await?;
     receipt!(erc20.mint(contract_addr, uint!(1000_U256)))?;
 
     // IMPORTANT: Order matters!
-    use VestingWallet::*;
+
     #[rustfmt::skip]
     let receipts = vec![
-        (startCall::SIGNATURE, receipt!(contract.start())?),
-        (durationCall::SIGNATURE, receipt!(contract.duration())?),
-        (endCall::SIGNATURE, receipt!(contract.end())?),
-        (released_0Call::SIGNATURE, receipt!(contract.released_0())?),
-        (released_1Call::SIGNATURE, receipt!(contract.released_1(erc20_addr))?),
-        (releasable_0Call::SIGNATURE, receipt!(contract.releasable_0())?),
-        (releasable_1Call::SIGNATURE, receipt!(contract.releasable_1(erc20_addr))?),
-        (release_0Call::SIGNATURE, receipt!(contract.release_0())?),
-        (release_1Call::SIGNATURE, receipt!(contract.release_1(erc20_addr))?),
-        (vestedAmount_0Call::SIGNATURE, receipt!(contract.vestedAmount_0(START_TIMESTAMP))?),
-        (vestedAmount_1Call::SIGNATURE, receipt!(contract.vestedAmount_1(erc20_addr, START_TIMESTAMP))?),
+        (VestingWallet::startCall::SIGNATURE, receipt!(contract.start())?),
+        (VestingWallet::durationCall::SIGNATURE, receipt!(contract.duration())?),
+        (VestingWallet::endCall::SIGNATURE, receipt!(contract.end())?),
+        (VestingWallet::released_0Call::SIGNATURE, receipt!(contract.released_0())?),
+        (VestingWallet::released_1Call::SIGNATURE, receipt!(contract.released_1(erc20_addr))?),
+        (VestingWallet::releasable_0Call::SIGNATURE, receipt!(contract.releasable_0())?),
+        (VestingWallet::releasable_1Call::SIGNATURE, receipt!(contract.releasable_1(erc20_addr))?),
+        (VestingWallet::release_0Call::SIGNATURE, receipt!(contract.release_0())?),
+        (VestingWallet::release_1Call::SIGNATURE, receipt!(contract.release_1(erc20_addr))?),
+        (VestingWallet::vestedAmount_0Call::SIGNATURE, receipt!(contract.vestedAmount_0(START_TIMESTAMP))?),
+        (VestingWallet::vestedAmount_1Call::SIGNATURE, receipt!(contract.vestedAmount_1(erc20_addr, START_TIMESTAMP))?),
     ];
 
     receipts
         .into_iter()
-        .map(FunctionReport::new)
+        .map(|(signature, receipt)| FunctionReport::new(signature, &receipt))
         .collect::<eyre::Result<Vec<_>>>()
 }
 

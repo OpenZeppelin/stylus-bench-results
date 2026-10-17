@@ -2,10 +2,11 @@
 #
 # It roughly follows these steps:
 # - Install rust
-# - Install `cargo-stylus`
-# - Spin up `nitro-testnode`
+# - Install the pinned Rust and cargo-stylus versions
+# - Run the examples' integration tests against SDK-managed Nitro devnets
 #
-# Contract deployments and account funding happen on a per-test basis.
+# stylus-tools starts and stops the Nitro container through Testcontainers.
+# The hosted Linux runner must have a working Docker daemon and Docker Hub access.
 name: e2e
 permissions:
   contents: read
@@ -28,14 +29,22 @@ jobs:
       - name: Install rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
+          toolchain: 1.91.0
+          target: wasm32-unknown-unknown
           cache-key: "e2e-tests"
           rustflags: ""
 
       - name: Install cargo-stylus
-        run: cargo install --locked --force cargo-stylus@0.6.3
+        run: cargo install --locked --force cargo-stylus@0.10.10
 
-      - name: Setup nitro node
-        run: ./scripts/nitro-testnode.sh -d -i
+      - name: Verify cargo-stylus installation
+        run: cargo stylus --version | grep -F '0.10.10'
+
+      - name: Install pinned wasm-opt
+        run: cargo install --locked --force wasm-opt@0.116.1
+
+      - name: Check Docker daemon
+        run: docker info
 
       - name: run integration tests
         run: ./scripts/e2e-tests.sh

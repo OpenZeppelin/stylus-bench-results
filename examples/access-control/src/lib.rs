@@ -14,7 +14,6 @@ use openzeppelin_stylus::{
 };
 use stylus_sdk::{
     alloy_primitives::{aliases::B32, Address, B256, U256},
-    msg,
     prelude::*,
 };
 
@@ -180,13 +179,12 @@ impl IAccessControl for AccessControlExample {
         Ok(())
     }
 
-    #[allow(deprecated)]
     fn renounce_role(
         &mut self,
         role: B256,
         confirmation: Address,
     ) -> Result<(), Self::Error> {
-        if msg::sender() != confirmation {
+        if self.vm().msg_sender() != confirmation {
             return Err(control::Error::BadConfirmation(
                 control::AccessControlBadConfirmation {},
             ));

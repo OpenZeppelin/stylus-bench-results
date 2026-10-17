@@ -108,13 +108,13 @@ The `Erc1967Utils` library provides helper functions for managing ERC-1967 stora
 use openzeppelin_stylus::proxy::erc1967::utils::Erc1967Utils;
 
 // Get the current implementation address
-let implementation = Erc1967Utils::get_implementation();
+let implementation = Erc1967Utils::get_implementation(self);
 
 // Get the current admin address
-let admin = Erc1967Utils::get_admin();
+let admin = Erc1967Utils::get_admin(self);
 
 // Get the current beacon address
-let beacon = Erc1967Utils::get_beacon();
+let beacon = Erc1967Utils::get_beacon(self);
 ----
 
 === Upgrading Implementation

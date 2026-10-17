@@ -1,8 +1,10 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::{send, watch, Account, Revert};
 use abi::SafeErc20;
 use alloy::primitives::{uint, Bytes};
-use e2e::{send, watch, Account, Revert};
 use mock::{
     erc1363_force_approve, erc1363_force_approve::ERC1363ForceApproveMock,
     erc1363_spender,
@@ -16,11 +18,13 @@ const DATA: Bytes = Bytes::from_static(b"0x12345678");
 mod without_initial_approval {
     use super::*;
 
-    #[e2e::test]
+    #[tokio::test]
     async fn approve_and_call_relaxed_works_when_recipient_is_eoa(
-        alice: Account,
-        spender: Account,
     ) -> eyre::Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+        let spender = crate::test_support::Account::new().await?;
+
         let safe_erc20_addr =
             alice.as_deployer().deploy().await?.contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
@@ -50,10 +54,12 @@ mod without_initial_approval {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn approve_and_call_relaxed_works_when_recipient_is_contract(
-        alice: Account,
     ) -> eyre::Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let safe_erc20_addr =
             alice.as_deployer().deploy().await?.contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
@@ -89,11 +95,13 @@ mod without_initial_approval {
 mod with_initial_approval {
     use super::*;
 
-    #[e2e::test]
+    #[tokio::test]
     async fn approve_and_call_relaxed_works_when_recipient_is_eoa(
-        alice: Account,
-        bob: Account,
     ) -> eyre::Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+        let bob = crate::test_support::Account::new().await?;
+
         let safe_erc20_addr =
             alice.as_deployer().deploy().await?.contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
@@ -128,10 +136,12 @@ mod with_initial_approval {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn approve_and_call_relaxed_reverts_when_recipient_is_contract(
-        alice: Account,
     ) -> eyre::Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let safe_erc20_addr =
             alice.as_deployer().deploy().await?.contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);

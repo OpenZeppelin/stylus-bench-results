@@ -1,3 +1,4 @@
+use crate::test_support::{receipt, Account};
 use alloy::{
     network::{AnyNetwork, EthereumWallet},
     primitives::Address,
@@ -6,7 +7,6 @@ use alloy::{
     sol_types::SolCall,
 };
 use alloy_primitives::uint;
-use e2e::{receipt, Account};
 
 use crate::report::{ContractReport, FunctionReport};
 
@@ -18,22 +18,31 @@ sol!(
     }
 );
 
+/// Run this contract benchmark in each cache and optimization mode.
+///
+/// # Errors
+///
+/// Returns an error if deployment, an RPC call, or receipt decoding fails.
 pub async fn bench() -> eyre::Result<ContractReport> {
     let reports = run().await?;
-    let report = reports
-        .into_iter()
-        .try_fold(ContractReport::new("Sol:Poseidon"), ContractReport::add)?;
+    let report = reports.into_iter().fold(
+        ContractReport::new("Sol:Poseidon"),
+        ContractReport::add_function,
+    );
 
     Ok(report)
 }
 
+/// Deploy the contract and run its benchmarked calls.
+///
+/// # Errors
+///
+/// Returns an error if account setup, deployment, an RPC call, or receipt decoding fails.
 pub async fn run() -> eyre::Result<Vec<FunctionReport>> {
     let alice = Account::new().await?;
-    let alice_wallet = ProviderBuilder::new()
-        .network::<AnyNetwork>()
-        .with_recommended_fillers()
+    let alice_wallet = ProviderBuilder::new_with_network::<AnyNetwork>()
         .wallet(EthereumWallet::from(alice.signer.clone()))
-        .on_http(alice.url().parse()?);
+        .connect_http(alice.url().parse()?);
 
     let contract_addr = deploy(&alice).await?;
 
@@ -46,10 +55,15 @@ pub async fn run() -> eyre::Result<Vec<FunctionReport>> {
 
     receipts
         .into_iter()
-        .map(FunctionReport::new)
+        .map(|(signature, receipt)| FunctionReport::new(signature, &receipt))
         .collect::<eyre::Result<Vec<_>>>()
 }
 
+/// Deploy the Solidity reference contract used by this benchmark.
+///
+/// # Errors
+///
+/// Returns an error if contract deployment fails.
 pub async fn deploy(account: &Account) -> eyre::Result<Address> {
     let contract = PoseidonT3::deploy(&account.wallet).await?;
     Ok(*contract.address())

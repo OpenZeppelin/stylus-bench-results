@@ -2,7 +2,8 @@ use alloy::{
     network::EthereumWallet, primitives::Address, providers::ProviderBuilder,
     signers::local::PrivateKeySigner, sol,
 };
-use e2e::{Account, Constructor};
+use std::path::PathBuf;
+use stylus_tools::{Activator, Deployer};
 
 sol!(
     #[sol(rpc)]
@@ -29,13 +30,9 @@ async fn main() {
         .expect("should parse the private key");
     let wallet = EthereumWallet::from(signer.clone());
     let rpc_url = RPC_URL.parse().expect("should parse rpc url");
-    let provider = ProviderBuilder::new()
-        .with_recommended_fillers()
-        .wallet(wallet)
-        .on_http(rpc_url);
-    let account = Account { signer, wallet: provider.clone() };
+    let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
 
-    let contract_address = deploy(&account).await;
+    let contract_address = deploy(&signer);
 
     let contract = BasicToken::new(contract_address, &provider);
 
@@ -47,31 +44,28 @@ async fn main() {
 }
 
 /// Deploy a `BasicToken` contract to `RPC_URL` using `cargo-stylus`.
-async fn deploy(account: &Account) -> Address {
-    let manifest_dir =
-        std::env::current_dir().expect("should get current dir from env");
+fn deploy(signer: &PrivateKeySigner) -> Address {
+    let contract_dir =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../token");
+    let private_key = format!("0x{}", alloy::hex::encode(signer.to_bytes()));
 
-    // NOTE: It's expected that you compiled your contract beforehand.
-    //
-    // You should run `cargo build --release --target wasm32-unknown-unknown` to
-    // get a wasm binary at `target/wasm32-unknown-unknown/release/{name}.wasm`.
-    let wasm_path = manifest_dir
-        .join("target")
-        .join("wasm32-unknown-unknown")
-        .join("release")
-        .join("basic_example.wasm");
+    let (address, _, _) = Deployer::builder()
+        .rpc(RPC_URL)
+        .private_key(private_key.clone())
+        .dir(contract_dir.to_string_lossy().into_owned())
+        .constructor_args(vec![TOKEN_NAME.to_owned(), TOKEN_SYMBOL.to_owned()])
+        .build()
+        .deploy()
+        .expect("contract should be deployed");
 
-    let constructor = Constructor {
-        signature: "constructor(string,string)".to_string(),
-        args: vec![TOKEN_NAME.to_owned(), TOKEN_SYMBOL.to_owned()],
-    };
-
-    let deployer = account.as_deployer().with_constructor(constructor);
-    let address = deployer
-        .deploy_wasm(&wasm_path)
-        .await
-        .expect("contract should be deployed")
-        .contract_address;
+    Activator::builder()
+        .rpc(RPC_URL)
+        .private_key(private_key)
+        .contract_address(address.to_string())
+        .dir(contract_dir.to_string_lossy().into_owned())
+        .build()
+        .activate()
+        .expect("contract should be activated");
 
     address
 }

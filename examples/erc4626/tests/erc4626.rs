@@ -1,11 +1,13 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 
-use abi::Erc4626;
-use alloy::primitives::{uint, Address, U256};
-use e2e::{
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::{
     constructor, receipt, send, watch, Account, Constructor, EventExt, Panic,
     PanicCode, Revert,
 };
+use abi::Erc4626;
+use alloy::primitives::{uint, Address, U256};
 use eyre::Result;
 use mock::{
     erc20, erc20::ERC20Mock, erc20_failing_transfer,
@@ -63,8 +65,11 @@ async fn deploy(
 
 mod constructor {
     use super::*;
-    #[e2e::test]
-    async fn success(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn success() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let asset_address = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -88,10 +93,11 @@ mod constructor {
 mod total_assets {
     use super::*;
 
-    #[e2e::test]
-    async fn reports_zero_total_assets_when_empty(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn reports_zero_total_assets_when_empty() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -101,10 +107,11 @@ mod total_assets {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reports_correct_total_assets_after_deposit(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn reports_correct_total_assets_after_deposit() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let initial_deposit = uint!(1000_U256);
         let (contract_addr, _) = deploy(&alice, initial_deposit).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
@@ -115,8 +122,11 @@ mod total_assets {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn updates_after_external_transfer(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn updates_after_external_transfer() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let initial_deposit = uint!(1000_U256);
         let additional_amount = uint!(500_U256);
         let (contract_addr, asset_addr) =
@@ -134,8 +144,11 @@ mod total_assets {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn handles_max_uint256_balance(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn handles_max_uint256_balance() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::MAX).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -145,8 +158,11 @@ mod total_assets {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_for_zero_address_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_for_zero_address_asset() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         // Deploy with zero address as asset
         let contract_addr = alice
             .as_deployer()
@@ -169,8 +185,11 @@ mod total_assets {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_for_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_for_invalid_asset() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         // Deploy with zero address as asset
         let contract_addr = alice
             .as_deployer()
@@ -193,8 +212,11 @@ mod total_assets {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reflects_balance_after_withdrawal(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reflects_balance_after_withdrawal() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let initial_deposit = uint!(1000_U256);
         let withdrawal = uint!(400_U256);
         let (contract_addr, asset_addr) =
@@ -219,8 +241,11 @@ mod total_assets {
 mod convert_to_shares {
     use super::*;
 
-    #[e2e::test]
-    async fn converts_zero_assets_to_zero_shares(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn converts_zero_assets_to_zero_shares() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -230,10 +255,12 @@ mod convert_to_shares {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_zero_shares_for_asset_amount_less_then_vault_assets(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(1000_U256);
         let assets_to_convert = uint!(100_U256);
         let (contract_addr, _) = deploy(&alice, initial_assets).await?;
@@ -247,10 +274,12 @@ mod convert_to_shares {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_shares_equal_to_deposit_when_vault_is_empty(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_shares_equal_to_deposit_when_vault_is_empty() -> Result<()>
+    {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let assets_to_convert = uint!(101_U256);
         let (contract_addr, _) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
@@ -263,10 +292,12 @@ mod convert_to_shares {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_shares_proportional_to_deposit_when_vault_has_assets(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let assets_to_convert = uint!(101_U256);
         let (contract_addr, _) = deploy(&alice, initial_assets).await?;
@@ -281,8 +312,11 @@ mod convert_to_shares {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_invalid_asset() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -306,8 +340,11 @@ mod convert_to_shares {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_result_overflows(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_result_overflows() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::MAX).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -321,10 +358,12 @@ mod convert_to_shares {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -350,8 +389,11 @@ mod convert_to_shares {
 mod convert_to_assets {
     use super::*;
 
-    #[e2e::test]
-    async fn converts_zero_shares_to_zero_assets(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn converts_zero_shares_to_zero_assets() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -361,10 +403,12 @@ mod convert_to_assets {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_more_assets_than_expected_when_no_shares_were_ever_minted(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let tokens = uint!(100_U256);
 
         let (contract_addr, _) = deploy(&alice, tokens).await?;
@@ -380,10 +424,11 @@ mod convert_to_assets {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_assets_proportional_to_shares(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_assets_proportional_to_shares() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, asset_addr) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
         let asset = ERC20Mock::new(asset_addr, &alice.wallet);
@@ -408,8 +453,11 @@ mod convert_to_assets {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_invalid_asset() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -433,10 +481,12 @@ mod convert_to_assets {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -462,8 +512,11 @@ mod convert_to_assets {
 mod max_deposit {
     use super::*;
 
-    #[e2e::test]
-    async fn returns_max_uint256_for_any_address(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn returns_max_uint256_for_any_address() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -480,8 +533,11 @@ mod max_deposit {
 mod preview_deposit {
     use super::*;
 
-    #[e2e::test]
-    async fn returns_zero_assets_for_zero_shares(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn returns_zero_assets_for_zero_shares() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -491,10 +547,12 @@ mod preview_deposit {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_zero_shares_for_asset_amount_less_then_vault_assets(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(1000_U256);
         let assets_to_convert = uint!(100_U256);
         let (contract_addr, _) = deploy(&alice, initial_assets).await?;
@@ -508,10 +566,12 @@ mod preview_deposit {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_shares_equal_to_deposit_when_vault_is_empty(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_shares_equal_to_deposit_when_vault_is_empty() -> Result<()>
+    {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let assets_to_convert = uint!(101_U256);
         let (contract_addr, _) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
@@ -524,10 +584,12 @@ mod preview_deposit {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_shares_proportional_to_deposit_when_vault_has_assets(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let assets_to_convert = uint!(101_U256);
         let (contract_addr, _) = deploy(&alice, initial_assets).await?;
@@ -542,8 +604,11 @@ mod preview_deposit {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_invalid_asset() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -567,8 +632,11 @@ mod preview_deposit {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_result_overflows(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_result_overflows() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::MAX).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -582,10 +650,12 @@ mod preview_deposit {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -611,8 +681,11 @@ mod preview_deposit {
 mod deposit {
     use super::*;
 
-    #[e2e::test]
-    async fn reverts_when_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_invalid_asset() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -631,8 +704,11 @@ mod deposit {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn mints_zero_shares_for_zero_assets(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn mints_zero_shares_for_zero_assets() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, asset_addr) =
             deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
@@ -665,10 +741,12 @@ mod deposit {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn mints_zero_shares_for_asset_amount_less_then_vault_assets(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(1000_U256);
         let assets_to_convert = uint!(100_U256);
         let (contract_addr, asset_addr) =
@@ -711,10 +789,11 @@ mod deposit {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn mints_shares_equal_to_deposit_when_vault_is_empty(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn mints_shares_equal_to_deposit_when_vault_is_empty() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let assets_to_convert = uint!(101_U256);
         let (contract_addr, asset_addr) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
@@ -755,10 +834,12 @@ mod deposit {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn mints_shares_proportional_to_deposit_when_vault_has_assets(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let assets_to_convert = uint!(101_U256);
         let (contract_addr, asset_addr) =
@@ -802,8 +883,11 @@ mod deposit {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_no_approval_on_assets(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_no_approval_on_assets() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let assets_to_convert = uint!(101_U256);
         let (contract_addr, asset_addr) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
@@ -822,11 +906,12 @@ mod deposit {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_result_overflows(
-        alice: Account,
-        bob: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_result_overflows() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+        let bob = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::MAX).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -837,10 +922,12 @@ mod deposit {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -867,8 +954,11 @@ mod deposit {
 mod max_mint {
     use super::*;
 
-    #[e2e::test]
-    async fn returns_max_uint256_for_any_address(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn returns_max_uint256_for_any_address() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -885,8 +975,11 @@ mod max_mint {
 mod preview_mint {
     use super::*;
 
-    #[e2e::test]
-    async fn returns_zero_shares_to_zero_assets(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn returns_zero_shares_to_zero_assets() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -896,10 +989,12 @@ mod preview_mint {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_more_assets_than_expected_when_no_shares_were_ever_minted(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let tokens = uint!(100_U256);
 
         let (contract_addr, _) = deploy(&alice, tokens).await?;
@@ -915,8 +1010,11 @@ mod preview_mint {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_invalid_asset() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -940,8 +1038,11 @@ mod preview_mint {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_overflows(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_overflows() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::from(1)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -955,10 +1056,12 @@ mod preview_mint {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -984,8 +1087,11 @@ mod preview_mint {
 mod mint {
     use super::*;
 
-    #[e2e::test]
-    async fn reverts_when_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_invalid_asset() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -1004,8 +1110,11 @@ mod mint {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn creates_zero_shares_for_zero_assets(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn creates_zero_shares_for_zero_assets() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, asset_addr) =
             deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
@@ -1034,10 +1143,12 @@ mod mint {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn requires_more_assets_than_expected_when_no_shares_were_ever_minted(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let tokens = uint!(100_U256);
 
         let (contract_addr, asset_addr) = deploy(&alice, tokens).await?;
@@ -1075,8 +1186,11 @@ mod mint {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_no_approval_on_assets(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_no_approval_on_assets() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let tokens = uint!(100_U256);
 
         let (contract_addr, asset_addr) = deploy(&alice, tokens).await?;
@@ -1099,8 +1213,11 @@ mod mint {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_overflows(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_overflows() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::from(1)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -1111,10 +1228,12 @@ mod mint {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -1143,10 +1262,11 @@ mod mint {
 mod max_withdraw {
     use super::*;
 
-    #[e2e::test]
-    async fn returns_zero_for_vault_with_no_shares(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_zero_for_vault_with_no_shares() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(1000_U256);
         let (contract_addr, _) = deploy(&alice, initial_assets).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
@@ -1158,8 +1278,11 @@ mod max_withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_zero_when_vault_is_empty(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn returns_zero_when_vault_is_empty() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -1170,11 +1293,12 @@ mod max_withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_convertible_assets_for_sole_share_owner(
-        alice: Account,
-        bob: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_convertible_assets_for_sole_share_owner() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+        let bob = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let (contract_addr, asset_addr) =
             deploy(&alice, initial_assets).await?;
@@ -1203,11 +1327,13 @@ mod max_withdraw {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_convertible_assets_for_sole_share_owner_when_vault_was_empty(
-        alice: Account,
-        bob: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+        let bob = crate::test_support::Account::new().await?;
+
         let (contract_addr, asset_addr) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
         let asset = ERC20Mock::new(asset_addr, &alice.wallet);
@@ -1235,11 +1361,13 @@ mod max_withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_convertible_assets_to_multiple_share_owners(
-        alice: Account,
-        bob: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_convertible_assets_to_multiple_share_owners() -> Result<()>
+    {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+        let bob = crate::test_support::Account::new().await?;
+
         let (contract_addr, asset_addr) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
         let contract_bob = Erc4626::new(contract_addr, &bob.wallet);
@@ -1278,8 +1406,11 @@ mod max_withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_for_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_for_invalid_asset() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -1304,10 +1435,12 @@ mod max_withdraw {
 
     // Cannot test when denominator overflows, as amount of shares is always >=
     // amount of assets
-    #[e2e::test]
-    async fn reverts_when_multiplier_overflows_during_conversion(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_multiplier_overflows_during_conversion() -> Result<()>
+    {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::MAX).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -1322,10 +1455,12 @@ mod max_withdraw {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -1351,8 +1486,11 @@ mod max_withdraw {
 mod preview_withdraw {
     use super::*;
 
-    #[e2e::test]
-    async fn reverts_when_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_invalid_asset() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -1376,8 +1514,11 @@ mod preview_withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_zero_assets_for_zero_shares(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn returns_zero_assets_for_zero_shares() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -1387,10 +1528,12 @@ mod preview_withdraw {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_one_share_for_asset_amount_less_then_vault_assets(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(1000_U256);
         let assets_to_convert = uint!(100_U256);
         let (contract_addr, _) = deploy(&alice, initial_assets).await?;
@@ -1404,10 +1547,12 @@ mod preview_withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_shares_equal_to_deposit_when_vault_is_empty(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_shares_equal_to_deposit_when_vault_is_empty() -> Result<()>
+    {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let assets_to_convert = uint!(101_U256);
         let (contract_addr, _) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
@@ -1420,10 +1565,12 @@ mod preview_withdraw {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_shares_proportional_to_deposit_when_vault_has_assets(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let assets_to_convert = uint!(101_U256);
         let (contract_addr, _) = deploy(&alice, initial_assets).await?;
@@ -1438,8 +1585,11 @@ mod preview_withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_result_overflows(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_result_overflows() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::MAX).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -1453,10 +1603,12 @@ mod preview_withdraw {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -1482,8 +1634,11 @@ mod preview_withdraw {
 mod withdraw {
     use super::*;
 
-    #[e2e::test]
-    async fn reverts_when_exceeds_max_withdraw(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_exceeds_max_withdraw() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let shares_to_mint = uint!(10_U256);
         let assets_to_deposit = uint!(1010_U256);
@@ -1523,10 +1678,11 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_withdrawing_from_empty_vault(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_withdrawing_from_empty_vault() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -1546,11 +1702,12 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_caller_lacks_allowance(
-        alice: Account,
-        bob: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_caller_lacks_allowance() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+        let bob = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let shares_to_mint = uint!(10_U256);
         let assets_to_deposit = uint!(1010_U256);
@@ -1589,10 +1746,11 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_withdrawing_from_zero_address(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_withdrawing_from_zero_address() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -1623,8 +1781,11 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_transfer_fails(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_transfer_fails() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let shares_to_mint = uint!(10_U256);
         let assets_to_deposit = shares_to_mint;
         let assets_to_withdraw = uint!(1_U256);
@@ -1665,8 +1826,11 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_calculation_overflows(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_calculation_overflows() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, asset_addr) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
         let asset = ERC20Mock::new(asset_addr, &alice.wallet);
@@ -1692,11 +1856,12 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn succeeds_with_no_initial_assets(
-        alice: Account,
-        bob: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn succeeds_with_no_initial_assets() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+        let bob = crate::test_support::Account::new().await?;
+
         let shares_to_mint = uint!(10_U256);
         let assets_to_deposit = shares_to_mint;
         let assets_to_withdraw = uint!(5_U256);
@@ -1780,11 +1945,12 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn succeeds_with_initial_assets(
-        alice: Account,
-        bob: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn succeeds_with_initial_assets() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+        let bob = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let shares_to_mint = uint!(10_U256);
         let assets_to_deposit = uint!(1010_U256);
@@ -1888,8 +2054,11 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_for_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_for_invalid_asset() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -1913,12 +2082,13 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn succeeds_with_multiple_holders_no_initial_assets(
-        alice: Account,
-        bob: Account,
-        charlie: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn succeeds_with_multiple_holders_no_initial_assets() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+        let bob = crate::test_support::Account::new().await?;
+        let charlie = crate::test_support::Account::new().await?;
+
         let (contract_addr, asset_addr) = deploy(&alice, U256::ZERO).await?;
         let contract_alice = Erc4626::new(contract_addr, &alice.wallet);
         let contract_bob = Erc4626::new(contract_addr, &bob.wallet);
@@ -1982,12 +2152,14 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn succeeds_with_multiple_holders_with_initial_assets(
-        alice: Account,
-        bob: Account,
-        charlie: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn succeeds_with_multiple_holders_with_initial_assets() -> Result<()>
+    {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+        let bob = crate::test_support::Account::new().await?;
+        let charlie = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let (contract_addr, asset_addr) =
             deploy(&alice, initial_assets).await?;
@@ -2063,8 +2235,11 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn maintains_share_price_ratio(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn maintains_share_price_ratio() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let (contract_addr, asset_addr) =
             deploy(&alice, initial_assets).await?;
@@ -2098,10 +2273,12 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn maintains_state_consistency_after_failed_withdrawal(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn maintains_state_consistency_after_failed_withdrawal() -> Result<()>
+    {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let shares_to_mint = uint!(10_U256);
         let assets_to_deposit = uint!(1010_U256);
@@ -2151,10 +2328,12 @@ mod withdraw {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -2180,10 +2359,11 @@ mod withdraw {
 mod max_redeem {
     use super::*;
 
-    #[e2e::test]
-    async fn returns_zero_for_vault_with_no_shares(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_zero_for_vault_with_no_shares() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(1000_U256);
         let (contract_addr, _) = deploy(&alice, initial_assets).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
@@ -2194,8 +2374,11 @@ mod max_redeem {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_zero_when_vault_is_empty(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn returns_zero_when_vault_is_empty() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -2205,10 +2388,11 @@ mod max_redeem {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_full_share_balance_for_owner(
-        alice: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_full_share_balance_for_owner() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let (contract_addr, asset_addr) =
             deploy(&alice, initial_assets).await?;
@@ -2233,11 +2417,12 @@ mod max_redeem {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_balance_after_partial_transfer(
-        alice: Account,
-        bob: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn returns_balance_after_partial_transfer() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+        let bob = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let (contract_addr, asset_addr) =
             deploy(&alice, initial_assets).await?;
@@ -2270,8 +2455,11 @@ mod max_redeem {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_updated_balance_after_mint(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn returns_updated_balance_after_mint() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let initial_assets = uint!(100_U256);
         let (contract_addr, asset_addr) =
             deploy(&alice, initial_assets).await?;
@@ -2316,8 +2504,11 @@ mod max_redeem {
 mod preview_redeem {
     use super::*;
 
-    #[e2e::test]
-    async fn reverts_when_invalid_asset(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_invalid_asset() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let invalid_asset = alice.address();
         let contract_addr = alice
             .as_deployer()
@@ -2341,8 +2532,11 @@ mod preview_redeem {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_zero_shares_to_zero_assets(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn returns_zero_shares_to_zero_assets() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -2352,10 +2546,12 @@ mod preview_redeem {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn returns_more_assets_than_expected_when_no_shares_were_ever_minted(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let tokens = uint!(100_U256);
 
         let (contract_addr, _) = deploy(&alice, tokens).await?;
@@ -2371,8 +2567,11 @@ mod preview_redeem {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_overflows(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_overflows() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::from(1)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -2386,10 +2585,12 @@ mod preview_redeem {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn reverts_when_decimals_offset_overflows_during_conversion(
-        alice: Account,
     ) -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let asset = erc20::deploy(&alice.wallet).await?;
         let contract_addr = alice
             .as_deployer()
@@ -2415,11 +2616,12 @@ mod preview_redeem {
 mod redeem {
     use super::*;
 
-    #[e2e::test]
-    async fn reverts_when_exceeded_max_redeem_zero_balance(
-        alice: Account,
-        bob: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_exceeded_max_redeem_zero_balance() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+        let bob = crate::test_support::Account::new().await?;
+
         let (contract_addr, _) = deploy(&alice, U256::ZERO).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
 
@@ -2436,8 +2638,11 @@ mod redeem {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn zero_shares_for_zero_assets(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn zero_shares_for_zero_assets() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let (contract_addr, asset_addr) =
             deploy(&alice, uint!(1000_U256)).await?;
         let contract = Erc4626::new(contract_addr, &alice.wallet);
@@ -2473,8 +2678,11 @@ mod redeem {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn full_share_balance_for_owner(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn full_share_balance_for_owner() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let tokens = uint!(100_U256);
 
         let (contract_addr, asset_addr) = deploy(&alice, tokens).await?;
@@ -2516,11 +2724,12 @@ mod redeem {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_insufficient_allowance(
-        alice: Account,
-        bob: Account,
-    ) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_insufficient_allowance() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+        let bob = crate::test_support::Account::new().await?;
+
         let tokens = uint!(100_U256);
 
         let (contract_addr, asset_addr) = deploy(&alice, tokens).await?;
@@ -2550,8 +2759,11 @@ mod redeem {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_when_exceeded_max_redeem(alice: Account) -> Result<()> {
+    #[tokio::test]
+    async fn reverts_when_exceeded_max_redeem() -> Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let tokens = uint!(100_U256);
 
         let (contract_addr, asset_addr) = deploy(&alice, tokens).await?;

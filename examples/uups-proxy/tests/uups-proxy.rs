@@ -1,5 +1,10 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::{
+    constructor, receipt, send, watch, Account, EventExt, Receipt, Revert,
+};
 use abi::{Erc1967Example, UUPSProxyErc20Example};
 use alloy::{
     primitives::{uint, Address, B256, U256},
@@ -7,9 +12,6 @@ use alloy::{
 };
 use alloy_primitives::U32;
 use alloy_sol_types::SolError;
-use e2e::{
-    constructor, receipt, send, watch, Account, EventExt, Receipt, Revert,
-};
 use eyre::Result;
 use openzeppelin_stylus::proxy::{
     erc1967::utils::IMPLEMENTATION_SLOT,
@@ -61,8 +63,11 @@ impl Deploy for Account {
     }
 }
 
-#[e2e::test]
-async fn upgrade_through_valid_proxy_succeeds(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn upgrade_through_valid_proxy_succeeds() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let logic_addr = alice.deploy_uups().await?.contract_address;
 
     let proxy_addr =
@@ -128,8 +133,11 @@ async fn upgrade_through_valid_proxy_succeeds(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn upgrading_directly_on_uups_reverts(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn upgrading_directly_on_uups_reverts() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let logic_addr = alice.deploy_uups().await?.contract_address;
     let logic = UUPSProxyErc20Example::new(logic_addr, &alice.wallet);
 
@@ -144,10 +152,11 @@ async fn upgrading_directly_on_uups_reverts(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn upgrading_via_invalid_erc1967_proxy_reverts(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn upgrading_via_invalid_erc1967_proxy_reverts() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let logic_addr = alice.deploy_uups().await?.contract_address;
 
     let data: Bytes =
@@ -177,11 +186,12 @@ async fn upgrading_via_invalid_erc1967_proxy_reverts(
     Ok(())
 }
 
-#[e2e::test]
-async fn set_version_doesnt_revert_if_called_more_than_once(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn set_version_doesnt_revert_if_called_more_than_once() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let logic_addr = alice.deploy_uups().await?.contract_address;
 
     let proxy_addr =
@@ -198,8 +208,12 @@ async fn set_version_doesnt_revert_if_called_more_than_once(
     Ok(())
 }
 
-#[e2e::test]
-async fn fallback_works(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn fallback_works() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let alice_addr = alice.address();
     let bob_addr = bob.address();
 
@@ -244,8 +258,11 @@ async fn fallback_works(alice: Account, bob: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn upgrade_to_non_erc1822_reverts(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn upgrade_to_non_erc1822_reverts() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     // deploy a valid UUPS-compatible logic contract (v1).
     let logic_addr = alice.deploy_uups().await?.contract_address;
 
@@ -276,10 +293,11 @@ async fn upgrade_to_non_erc1822_reverts(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn upgrade_to_invalid_proxiable_uuid_reverts(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn upgrade_to_invalid_proxiable_uuid_reverts() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let alice_addr = alice.address();
 
     // deploy a valid UUPS-compatible logic contract (v1).
@@ -312,8 +330,11 @@ async fn upgrade_to_invalid_proxiable_uuid_reverts(
     Ok(())
 }
 
-#[e2e::test]
-async fn upgrade_preserves_storage(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn upgrade_preserves_storage() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let alice_addr = alice.address();
 
     let logic_v1_addr = alice.deploy_uups().await?.contract_address;
@@ -351,8 +372,11 @@ async fn upgrade_preserves_storage(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn upgrade_to_same_implementation_succeeds(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn upgrade_to_same_implementation_succeeds() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let alice_addr = alice.address();
 
     let logic_addr = alice.deploy_uups().await?.contract_address;
@@ -380,10 +404,11 @@ async fn upgrade_to_same_implementation_succeeds(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn upgrade_to_implementation_with_same_version_succeeds(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn upgrade_to_implementation_with_same_version_succeeds() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let alice_addr = alice.address();
 
     let logic_addr = alice.deploy_uups().await?.contract_address;
@@ -430,10 +455,11 @@ async fn upgrade_to_implementation_with_same_version_succeeds(
     Ok(())
 }
 
-#[e2e::test]
-async fn upgrade_reverts_on_underlying_erc1967_upgrade_failure(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn upgrade_reverts_on_underlying_erc1967_upgrade_failure() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let logic_addr = alice.deploy_uups().await?.contract_address;
     let proxy_addr =
         alice.deploy_proxy(logic_addr, alice.address()).await?.contract_address;
@@ -454,10 +480,11 @@ async fn upgrade_reverts_on_underlying_erc1967_upgrade_failure(
     Ok(())
 }
 
-#[e2e::test]
-async fn proxiable_uuid_can_only_be_called_directly_on_uups(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn proxiable_uuid_can_only_be_called_directly_on_uups() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let logic_addr = alice.deploy_uups().await?.contract_address;
 
     let logic = UUPSProxyErc20Example::new(logic_addr, &alice.wallet);
@@ -477,8 +504,11 @@ async fn proxiable_uuid_can_only_be_called_directly_on_uups(
     Ok(())
 }
 
-#[e2e::test]
-async fn set_version_can_only_be_delegate_called(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn set_version_can_only_be_delegate_called() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let logic_addr = alice.deploy_uups().await?.contract_address;
 
     let logic = UUPSProxyErc20Example::new(logic_addr, &alice.wallet);
@@ -491,8 +521,11 @@ async fn set_version_can_only_be_delegate_called(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn version_cannot_be_decreased(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn version_cannot_be_decreased() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let logic_addr = alice.deploy_uups_new_version().await?.contract_address;
 
     let proxy_addr =

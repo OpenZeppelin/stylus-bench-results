@@ -1,5 +1,8 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::{receipt, send, watch, Account, EventExt, Revert};
 use abi::Erc20Permit;
 use alloy::{
     primitives::{keccak256, Address, B256, U256},
@@ -7,7 +10,6 @@ use alloy::{
     sol_types::SolType,
 };
 use alloy_primitives::uint;
-use e2e::{receipt, send, watch, Account, EventExt, Revert};
 use eyre::Result;
 mod abi;
 
@@ -76,11 +78,12 @@ fn to_non_eip155_v(v: bool) -> u8 {
 // Integration Tests: ERC-20 Permit Extension
 // ============================================================================
 
-#[e2e::test]
-async fn error_when_expired_deadline_for_permit(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn error_when_expired_deadline_for_permit() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract_alice = Erc20Permit::new(contract_addr, &alice.wallet);
     let alice_addr = alice.address();
@@ -122,8 +125,12 @@ async fn error_when_expired_deadline_for_permit(
     Ok(())
 }
 
-#[e2e::test]
-async fn permit_works(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn permit_works() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract_alice = Erc20Permit::new(contract_addr, &alice.wallet);
     let alice_addr = alice.address();
@@ -210,11 +217,12 @@ async fn permit_works(alice: Account, bob: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn permit_rejects_reused_signature(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn permit_rejects_reused_signature() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract_alice = Erc20Permit::new(contract_addr, &alice.wallet);
     let alice_addr = alice.address();
@@ -285,11 +293,12 @@ async fn permit_rejects_reused_signature(
     Ok(())
 }
 
-#[e2e::test]
-async fn permit_rejects_invalid_signature(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn permit_rejects_invalid_signature() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract_alice = Erc20Permit::new(contract_addr, &alice.wallet);
     let alice_addr = alice.address();

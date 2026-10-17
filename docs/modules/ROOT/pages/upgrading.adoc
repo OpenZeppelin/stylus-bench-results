@@ -1,0 +1,162 @@
+= Upgrading from 0.3.0
+
+This guide covers the source and storage changes needed to move a Stylus contract
+from OpenZeppelin Contracts for Stylus 0.3.0 to the SDK 0.10.10 based API.
+Keep the old implementation available while deploying and validating an upgrade.
+
+== Toolchain and dependencies
+
+Use stable Rust 1.91.0 and pin the SDK and command line tools to 0.10.10:
+
+[source,toml]
+----
+[dependencies]
+stylus-sdk = "=0.10.10"
+
+[dev-dependencies]
+stylus-tools = { version = "=0.10.10", features = ["integration-tests"] }
+----
+
+The workspace now uses Cargo-aware `stylus-tools` projects. Each deployable
+example has its own `Stylus.toml`; add one to a consumer contract and use it for
+local activation and deployment. Binaryen optimization is pinned per project
+with `[wasm-opt]` so builds and verification use the same optimizer version and
+flags. If you copy an example configuration, keep the configured Binaryen
+version available in your build environment.
+
+== VM accessors
+
+Host values and logs now come from the contract's VM. Replace global accessors
+with the corresponding method on `self.vm()`:
+
+[cols="1,1"]
+|===
+|Old |New
+
+|`msg::sender()` |`self.vm().msg_sender()`
+|`msg::value()` |`self.vm().msg_value()`
+|`evm::log(event)` |`self.vm().log(event)`
+|`Address::has_code()` |`self.vm().code_size(address) > 0`
+|===
+
+This makes the host dependency explicit and allows the same contract logic to
+run against the SDK `TestVM`.
+
+== Typed contract calls
+
+SDK 0.10 passes the VM host and call context separately to generated interface
+methods. For a view call, pass `self.vm()` and `Call::new()`; for a state
+changing call, pass `self.vm()` and `Call::new_mutating(self)`:
+
+[source,rust]
+----
+let balance = erc20
+    .balance_of(self.vm(), Call::new(), account)?;
+
+erc20.transfer_from(
+    self.vm(),
+    Call::new_mutating(self),
+    owner,
+    recipient,
+    amount,
+)?;
+----
+
+`Call` is available from `stylus_sdk::prelude::*`. Prefer generated typed
+interfaces for known contracts. Low level calls remain available for raw ABI
+use cases. The SDK flushes storage caches around high level external calls;
+this maintains coherent storage state across calls and does not replace
+application level authorization or reentrancy protections.
+
+== ERC-1967 utilities and custom storage slots
+
+`Erc1967Utils::get_implementation`, `get_admin`, and `get_beacon` now take a
+contract context so they can access the VM. Pass `self` from contract code:
+
+[source,rust]
+----
+let implementation = Erc1967Utils::get_implementation(self);
+let admin = Erc1967Utils::get_admin(self);
+let beacon = Erc1967Utils::get_beacon(self);
+----
+
+`StorageSlot::get_slot` also takes an explicit VM. Pass a clone of the VM
+handle returned by `self.vm()`:
+
+[source,rust]
+----
+let implementation = StorageSlot::get_slot::<StorageAddress>(
+    IMPLEMENTATION_SLOT,
+    (*self.vm()).clone(),
+);
+----
+
+The `BeaconProxy` keeps its old ordinary storage field reserved so the proxy's
+storage layout does not move. Its public `get_beacon()` now reads the canonical
+ERC-1967 beacon slot. Existing proxies initialized by the old constructor have
+that slot populated and keep their ABI and upgrade behavior.
+
+== Public interface traits
+
+SDK 0.10 requires every interface trait in a `#[public]` implementation,
+including inherited traits, to carry `#[public]`. Add the attribute to those
+traits before compiling. The SDK also checks for selector collisions in public
+implementations. Resolve collisions before deployment while preserving the
+selectors expected by existing clients; use an explicit selector rename only
+when the ABI change is intended.
+
+The SDK's ABI decoder rejects malformed encodings that older versions could
+accept. Return canonical ABI data from external contracts and update mocks that
+returned truncated or otherwise noncanonical values.
+
+== Unit and integration tests
+
+The library's unit tests now use `stylus_sdk::testing::TestVM` and its explicit
+storage, host, call, and log controls. Replace `motsu::prelude::*` fixtures with
+`TestVM` fixtures. Mock calls to external contracts with the matching calldata
+and return data; TestVM does not execute a second Rust fixture as if it were an
+on-chain contract.
+
+The old `lib/e2e` and `lib/e2e-proc` harnesses have been removed. Integration
+tests use the SDK's `stylus-tools` devnet runner. Run the repository E2E script
+to build, activate, and exercise the scenarios against the local devnet. When
+porting a consumer's own E2E tests, preserve both success and revert cases and
+deploy all participating contracts to the same devnet.
+
+SDK 0.10.5 deprecated the `reentrant` and `deny_reentrant` features. Remove
+those feature flags from Cargo manifests. Review any use of those macros
+individually: cache flushing preserves storage coherence, but it is not a
+reentrancy guard. Keep explicit checks-effects-interactions ordering and
+authorization for callbacks.
+
+== Storage layout changes
+
+The ERC-721 enumerable extension appends an `owned_tokens_count` mapping to
+track owner enumeration length. Its existing fields stay in the same order, and
+the fallback read preserves the old zero-value behavior for entries written by
+0.3.0. The extension's storage footprint grows by one slot. If a proxy
+implementation stores other fields after `Erc721Enumerable`, those fields move
+by one slot when compiled against the new type. Before upgrading, compare the
+old and new layouts. Keep the extension at the end of the containing storage
+struct, or reserve and consume a storage gap using the same slot order as your
+existing deployment. Do not reorder or remove existing fields.
+
+`BeaconProxy` keeps its ordinary beacon field in place as reserved storage, so
+that field does not shift subsequent proxy storage. ERC-1967 implementation,
+admin, and beacon values remain in their standard hashed slots.
+
+The ERC-721 consecutive extension now rejects `_mint_consecutive` after
+deployment with `ERC721ForbiddenBatchMint`, as required for constructor-only
+consecutive minting. Move batch mint calls into the constructor. This changes
+the error behavior for contracts that previously exposed this internal helper
+after deployment; it does not change the ABI of the standard ERC-721 functions.
+
+== ABI and behavior
+
+The migration keeps the token and proxy public selectors and event layouts,
+except where consumers intentionally adopt SDK selector changes. New error
+selectors are added for post-deployment consecutive mint rejection. The
+enumerable length tracking is internal storage and does not change ERC-721 ABI.
+Test wrapper and proxy integrations against the deployed implementation before
+upgrading, especially if application contracts override public methods or rely
+on malformed external ABI responses.

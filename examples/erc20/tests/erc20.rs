@@ -1,12 +1,14 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 #![allow(clippy::unreadable_literal)]
 
-use abi::Erc20;
-use alloy::primitives::{aliases::B32, uint, Address, U256};
-use e2e::{
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::{
     constructor, receipt, send, watch, Account, Constructor,
     ContractInitializationError, EventExt, Panic, PanicCode, Revert,
 };
+use abi::Erc20;
+use alloy::primitives::{aliases::B32, uint, Address, U256};
 use eyre::Result;
 
 mod abi;
@@ -27,8 +29,11 @@ fn default_ctr() -> Constructor {
 // Integration Tests: ERC-20 Token + Metadata Extension
 // ============================================================================
 
-#[e2e::test]
-async fn constructs(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn constructs() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -54,8 +59,11 @@ async fn constructs(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn mints(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn mints() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -91,8 +99,11 @@ async fn mints(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn mints_rejects_invalid_receiver(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn mints_rejects_invalid_receiver() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -124,8 +135,11 @@ async fn mints_rejects_invalid_receiver(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn mints_rejects_overflow(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn mints_rejects_overflow() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let max_cap = U256::MAX;
 
     let contract_addr = alice
@@ -164,8 +178,12 @@ async fn mints_rejects_overflow(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn transfers(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn transfers() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -210,11 +228,12 @@ async fn transfers(alice: Account, bob: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn transfer_rejects_insufficient_balance(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn transfer_rejects_insufficient_balance() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -259,8 +278,11 @@ async fn transfer_rejects_insufficient_balance(
     Ok(())
 }
 
-#[e2e::test]
-async fn transfer_rejects_invalid_receiver(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn transfer_rejects_invalid_receiver() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -303,8 +325,12 @@ async fn transfer_rejects_invalid_receiver(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn approves(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn approves() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -375,8 +401,11 @@ async fn approves(alice: Account, bob: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn approve_rejects_invalid_spender(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn approve_rejects_invalid_spender() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -430,8 +459,12 @@ async fn approve_rejects_invalid_spender(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn transfers_from(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn transfers_from() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -487,11 +520,12 @@ async fn transfers_from(alice: Account, bob: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn transfer_from_reverts_insufficient_balance(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn transfer_from_reverts_insufficient_balance() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -547,11 +581,12 @@ async fn transfer_from_reverts_insufficient_balance(
     Ok(())
 }
 
-#[e2e::test]
-async fn transfer_from_rejects_insufficient_allowance(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn transfer_from_rejects_insufficient_allowance() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -607,11 +642,12 @@ async fn transfer_from_rejects_insufficient_allowance(
     Ok(())
 }
 
-#[e2e::test]
-async fn transfer_from_rejects_invalid_receiver(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn transfer_from_rejects_invalid_receiver() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -671,8 +707,11 @@ async fn transfer_from_rejects_invalid_receiver(
 // Integration Tests: ERC-20 Burnable Extension
 // ============================================================================
 
-#[e2e::test]
-async fn burns(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn burns() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -711,8 +750,11 @@ async fn burns(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn burn_rejects_insufficient_balance(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn burn_rejects_insufficient_balance() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -751,8 +793,12 @@ async fn burn_rejects_insufficient_balance(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn burns_from(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn burns_from() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -807,11 +853,12 @@ async fn burns_from(alice: Account, bob: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn burn_from_reverts_insufficient_balance(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn burn_from_reverts_insufficient_balance() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -867,11 +914,12 @@ async fn burn_from_reverts_insufficient_balance(
     Ok(())
 }
 
-#[e2e::test]
-async fn burn_from_rejects_insufficient_allowance(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn burn_from_rejects_insufficient_allowance() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -931,8 +979,11 @@ async fn burn_from_rejects_insufficient_allowance(
 // Integration Tests: ERC-20 Capped Extension
 // ============================================================================
 
-#[e2e::test]
-async fn mint_rejects_exceeding_cap(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn mint_rejects_exceeding_cap() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -972,8 +1023,11 @@ async fn mint_rejects_exceeding_cap(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn mint_rejects_when_cap_reached(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn mint_rejects_when_cap_reached() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -1012,10 +1066,11 @@ async fn mint_rejects_when_cap_reached(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn should_not_deploy_capped_with_invalid_cap(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn should_not_deploy_capped_with_invalid_cap() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let invalid_cap = U256::ZERO;
     let err = alice
         .as_deployer()
@@ -1038,8 +1093,11 @@ async fn should_not_deploy_capped_with_invalid_cap(
 // Integration Tests: ERC-20 Pausable Extension
 // ============================================================================
 
-#[e2e::test]
-async fn pauses(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn pauses() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -1059,8 +1117,11 @@ async fn pauses(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn pause_reverts_in_paused_state(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn pause_reverts_in_paused_state() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -1080,8 +1141,11 @@ async fn pause_reverts_in_paused_state(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn unpauses(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn unpauses() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -1103,8 +1167,11 @@ async fn unpauses(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn unpause_reverts_in_unpaused_state(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn unpause_reverts_in_unpaused_state() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -1126,8 +1193,11 @@ async fn unpause_reverts_in_unpaused_state(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_burn_in_paused_state(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn error_when_burn_in_paused_state() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -1164,11 +1234,12 @@ async fn error_when_burn_in_paused_state(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_burn_from_in_paused_state(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn error_when_burn_from_in_paused_state() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -1221,8 +1292,11 @@ async fn error_when_burn_from_in_paused_state(
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_mint_in_paused_state(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn error_when_mint_in_paused_state() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -1256,11 +1330,12 @@ async fn error_when_mint_in_paused_state(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_transfer_in_paused_state(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn error_when_transfer_in_paused_state() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -1302,8 +1377,12 @@ async fn error_when_transfer_in_paused_state(
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_transfer_from(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn error_when_transfer_from() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())
@@ -1360,8 +1439,11 @@ async fn error_when_transfer_from(alice: Account, bob: Account) -> Result<()> {
 // Integration Tests: ERC-165 Support Interface
 // ============================================================================
 
-#[e2e::test]
-async fn supports_interface(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn supports_interface() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(default_ctr())

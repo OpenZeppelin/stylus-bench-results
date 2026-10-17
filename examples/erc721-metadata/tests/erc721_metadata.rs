@@ -1,11 +1,13 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 #![allow(clippy::unreadable_literal)]
 
-use abi::Erc721;
-use alloy::primitives::{aliases::B32, Address, U256};
-use e2e::{
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::{
     constructor, receipt, watch, Account, Constructor, EventExt, Revert,
 };
+use abi::Erc721;
+use alloy::primitives::{aliases::B32, Address, U256};
 
 mod abi;
 
@@ -29,8 +31,11 @@ fn ctr(base_uri: &str) -> Constructor {
 // Integration Tests: ERC-721 Metadata Extension
 // ============================================================================
 
-#[e2e::test]
-async fn constructs(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn constructs() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(
@@ -54,10 +59,12 @@ async fn constructs(alice: Account) -> eyre::Result<()> {
 // Integration Tests: ERC-721 URI Storage Extension
 // ============================================================================
 
-#[e2e::test]
+#[tokio::test]
 async fn error_when_checking_token_uri_for_nonexistent_token(
-    alice: Account,
 ) -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(""))
@@ -81,10 +88,12 @@ async fn error_when_checking_token_uri_for_nonexistent_token(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn return_empty_token_uri_when_without_base_uri_and_token_uri(
-    alice: Account,
 ) -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(""))
@@ -106,10 +115,12 @@ async fn return_empty_token_uri_when_without_base_uri_and_token_uri(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn return_token_uri_with_base_uri_and_without_token_uri(
-    alice: Account,
 ) -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let base_uri = "https://github.com/OpenZeppelin/rust-contracts-stylus/";
 
     let contract_addr = alice
@@ -132,10 +143,11 @@ async fn return_token_uri_with_base_uri_and_without_token_uri(
     Ok(())
 }
 
-#[e2e::test]
-async fn return_token_uri_with_base_uri_and_token_uri(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn return_token_uri_with_base_uri_and_token_uri() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let base_uri = "https://github.com/OpenZeppelin/rust-contracts-stylus/";
 
     let contract_addr = alice
@@ -167,8 +179,11 @@ async fn return_token_uri_with_base_uri_and_token_uri(
     Ok(())
 }
 
-#[e2e::test]
-async fn set_token_uri_before_mint(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn set_token_uri_before_mint() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let base_uri = "https://github.com/OpenZeppelin/rust-contracts-stylus/";
 
     let contract_addr = alice
@@ -210,10 +225,11 @@ async fn set_token_uri_before_mint(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn return_token_uri_after_burn_and_remint(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn return_token_uri_after_burn_and_remint() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let base_uri = "https://github.com/OpenZeppelin/rust-contracts-stylus/";
 
     let alice_addr = alice.address();
@@ -272,8 +288,11 @@ async fn return_token_uri_after_burn_and_remint(
 // Integration Tests: ERC-165 Support Interface
 // ============================================================================
 
-#[e2e::test]
-async fn supports_interface(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn supports_interface() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(

@@ -1,9 +1,11 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 #![allow(clippy::unreadable_literal)]
 
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::Account;
 use abi::Erc1155HolderExample;
 use alloy::primitives::{aliases::B32, Bytes, U256};
-use e2e::Account;
 use eyre::Result;
 use openzeppelin_stylus::token::erc1155::receiver::{
     BATCH_TRANSFER_FN_SELECTOR, SINGLE_TRANSFER_FN_SELECTOR,
@@ -11,10 +13,11 @@ use openzeppelin_stylus::token::erc1155::receiver::{
 
 mod abi;
 
-#[e2e::test]
-async fn returns_correct_selector_for_single_transfer(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn returns_correct_selector_for_single_transfer() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
 
     let contract = Erc1155HolderExample::new(contract_addr, &alice.wallet);
@@ -35,10 +38,11 @@ async fn returns_correct_selector_for_single_transfer(
     Ok(())
 }
 
-#[e2e::test]
-async fn returns_correct_selector_for_batch_transfer(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn returns_correct_selector_for_batch_transfer() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
 
     let contract = Erc1155HolderExample::new(contract_addr, &alice.wallet);
@@ -59,8 +63,11 @@ async fn returns_correct_selector_for_batch_transfer(
     Ok(())
 }
 
-#[e2e::test]
-async fn supports_interface(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn supports_interface() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155HolderExample::new(contract_addr, &alice.wallet);
 

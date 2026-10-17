@@ -1,3 +1,4 @@
+use crate::test_support::{receipt, Account};
 use alloy::{
     network::{AnyNetwork, EthereumWallet},
     primitives::Address,
@@ -6,7 +7,6 @@ use alloy::{
     sol_types::SolCall,
     uint,
 };
-use e2e::{receipt, Account};
 
 use crate::{
     report::{ContractReport, FunctionReport},
@@ -30,18 +30,27 @@ sol!(
     }
 );
 
+/// Run this contract benchmark in each cache and optimization mode.
+///
+/// # Errors
+///
+/// Returns an error if deployment, an RPC call, or receipt decoding fails.
 pub async fn bench() -> eyre::Result<ContractReport> {
-    ContractReport::generate("Erc721", run).await
+    Box::pin(ContractReport::generate("Erc721", run)).await
 }
 
+/// Deploy the contract and run its benchmarked calls.
+///
+/// # Errors
+///
+/// Returns an error if account setup, deployment, an RPC call, or receipt decoding fails.
+#[allow(clippy::large_futures)]
 pub async fn run(cache_opt: Opt) -> eyre::Result<Vec<FunctionReport>> {
     let alice = Account::new().await?;
     let alice_addr = alice.address();
-    let alice_wallet = ProviderBuilder::new()
-        .network::<AnyNetwork>()
-        .with_recommended_fillers()
+    let alice_wallet = ProviderBuilder::new_with_network::<AnyNetwork>()
         .wallet(EthereumWallet::from(alice.signer.clone()))
-        .on_http(alice.url().parse()?);
+        .connect_http(alice.url().parse()?);
 
     let bob = Account::new().await?;
     let bob_addr = bob.address();
@@ -60,25 +69,25 @@ pub async fn run(cache_opt: Opt) -> eyre::Result<Vec<FunctionReport>> {
     receipt!(contract.mint(alice_addr, token_4))?;
 
     // IMPORTANT: Order matters!
-    use Erc721::*;
+
     #[rustfmt::skip]
     let receipts = vec![
-        (balanceOfCall::SIGNATURE, receipt!(contract.balanceOf(alice_addr))?),
-        (approveCall::SIGNATURE, receipt!(contract.approve(bob_addr, token_2))?),
-        (getApprovedCall::SIGNATURE, receipt!(contract.getApproved(token_2))?),
-        (isApprovedForAllCall::SIGNATURE, receipt!(contract.isApprovedForAll(alice_addr, bob_addr))?),
-        (ownerOfCall::SIGNATURE, receipt!(contract.ownerOf(token_2))?),
-        (safeTransferFromCall::SIGNATURE, receipt!(contract.safeTransferFrom(alice_addr, bob_addr, token_3))?),
-        (setApprovalForAllCall::SIGNATURE, receipt!(contract.setApprovalForAll(bob_addr, true))?),
-        (totalSupplyCall::SIGNATURE, receipt!(contract.totalSupply())?),
-        (transferFromCall::SIGNATURE, receipt!(contract.transferFrom(alice_addr, bob_addr, token_4))?),
-        (mintCall::SIGNATURE, receipt!(contract.mint(alice_addr, token_1))?),
-        (burnCall::SIGNATURE, receipt!(contract.burn(token_1))?),
+        (Erc721::balanceOfCall::SIGNATURE, receipt!(contract.balanceOf(alice_addr))?),
+        (Erc721::approveCall::SIGNATURE, receipt!(contract.approve(bob_addr, token_2))?),
+        (Erc721::getApprovedCall::SIGNATURE, receipt!(contract.getApproved(token_2))?),
+        (Erc721::isApprovedForAllCall::SIGNATURE, receipt!(contract.isApprovedForAll(alice_addr, bob_addr))?),
+        (Erc721::ownerOfCall::SIGNATURE, receipt!(contract.ownerOf(token_2))?),
+        (Erc721::safeTransferFromCall::SIGNATURE, receipt!(contract.safeTransferFrom(alice_addr, bob_addr, token_3))?),
+        (Erc721::setApprovalForAllCall::SIGNATURE, receipt!(contract.setApprovalForAll(bob_addr, true))?),
+        (Erc721::totalSupplyCall::SIGNATURE, receipt!(contract.totalSupply())?),
+        (Erc721::transferFromCall::SIGNATURE, receipt!(contract.transferFrom(alice_addr, bob_addr, token_4))?),
+        (Erc721::mintCall::SIGNATURE, receipt!(contract.mint(alice_addr, token_1))?),
+        (Erc721::burnCall::SIGNATURE, receipt!(contract.burn(token_1))?),
     ];
 
     receipts
         .into_iter()
-        .map(FunctionReport::new)
+        .map(|(signature, receipt)| FunctionReport::new(signature, &receipt))
         .collect::<eyre::Result<Vec<_>>>()
 }
 

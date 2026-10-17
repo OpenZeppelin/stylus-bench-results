@@ -1,3 +1,4 @@
+use crate::test_support::{receipt, Account};
 use alloy::{
     network::{AnyNetwork, EthereumWallet},
     primitives::Address,
@@ -6,7 +7,6 @@ use alloy::{
     sol_types::SolCall,
 };
 use alloy_primitives::uint;
-use e2e::{receipt, Account};
 
 use crate::{
     report::{ContractReport, FunctionReport},
@@ -21,17 +21,25 @@ sol!(
     }
 );
 
+/// Run this contract benchmark in each cache and optimization mode.
+///
+/// # Errors
+///
+/// Returns an error if deployment, an RPC call, or receipt decoding fails.
 pub async fn bench() -> eyre::Result<ContractReport> {
     ContractReport::generate("Poseidon", run).await
 }
 
+/// Deploy the contract and run its benchmarked calls.
+///
+/// # Errors
+///
+/// Returns an error if account setup, deployment, an RPC call, or receipt decoding fails.
 pub async fn run(cache_opt: Opt) -> eyre::Result<Vec<FunctionReport>> {
     let alice = Account::new().await?;
-    let alice_wallet = ProviderBuilder::new()
-        .network::<AnyNetwork>()
-        .with_recommended_fillers()
+    let alice_wallet = ProviderBuilder::new_with_network::<AnyNetwork>()
         .wallet(EthereumWallet::from(alice.signer.clone()))
-        .on_http(alice.url().parse()?);
+        .connect_http(alice.url().parse()?);
 
     let contract_addr = deploy(&alice, cache_opt).await?;
 
@@ -44,7 +52,7 @@ pub async fn run(cache_opt: Opt) -> eyre::Result<Vec<FunctionReport>> {
 
     receipts
         .into_iter()
-        .map(FunctionReport::new)
+        .map(|(signature, receipt)| FunctionReport::new(signature, &receipt))
         .collect::<eyre::Result<Vec<_>>>()
 }
 

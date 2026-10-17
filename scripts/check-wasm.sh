@@ -1,32 +1,37 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-mydir=$(dirname "$0")
-cd "$mydir" || exit
-cd ..
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+cd "$ROOT_DIR"
 
-# Check contract wasm binary by crate name
-check_wasm() {
-  local CONTRACT_CRATE_NAME=$1
-  local CONTRACT_BIN_NAME="${CONTRACT_CRATE_NAME//-/_}.wasm"
+source "$SCRIPT_DIR/stylus-tools.sh"
+require_cargo_stylus
+require_wasm_opt_116
 
+# `cargo stylus check` builds each cdylib with the pinned SDK toolchain, applies
+# its Stylus.toml wasm-opt recipe, checks the size limit, and estimates the
+# activation data fee against the configured RPC. This needs outbound access
+# to Arbitrum Sepolia unless RPC_URL is set to another compatible endpoint. The
+# integration-test job separately deploys and activates examples on devnet.
+RPC_URL="${RPC_URL:-https://sepolia-rollup.arbitrum.io/rpc}"
+contract_configs=()
+while IFS= read -r config; do
+  contract_configs+=("$config")
+done < <(find examples -type f -name Stylus.toml -print | sort)
+if [[ ${#contract_configs[@]} -eq 0 ]]; then
+  echo "No example Stylus.toml files were found." >&2
+  exit 1
+fi
+
+for config in "${contract_configs[@]}"; do
+  contract_dir="$(dirname "$config")"
   echo
-  echo "Checking contract $CONTRACT_CRATE_NAME"
-  cargo stylus check -e https://sepolia-rollup.arbitrum.io/rpc --wasm-file ./target/wasm32-unknown-unknown/release/"$CONTRACT_BIN_NAME"
-}
-
-# Retrieve all alphanumeric contract's crate names in `./examples` directory.
-get_example_crate_names() {
-  # shellcheck disable=SC2038
-  # NOTE: optimistically relying on the 'name = ' string at Cargo.toml file
-  find ./examples -maxdepth 2 -type f -name "Cargo.toml" | xargs grep -m 1 'name = ' | grep -oE '".*"' | tr -d "'\""
-}
-
-cargo build --release --target wasm32-unknown-unknown \
-  -Z build-std=std,panic_abort \
-  -Z build-std-features=panic_immediate_abort
-
-for CRATE_NAME in $(get_example_crate_names); do
-  check_wasm "$CRATE_NAME"
+  echo "Checking $(basename "$contract_dir")"
+  (
+    cd "$contract_dir"
+    cargo stylus check --endpoint "$RPC_URL"
+  )
+  # Keep requests below the public Arbitrum Sepolia RPC rate limit.
   sleep 2
 done

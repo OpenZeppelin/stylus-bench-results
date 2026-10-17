@@ -4,8 +4,6 @@ members = [
   "contracts",
   "contracts-proc",
   "lib/crypto",
-  "lib/e2e",
-  "lib/e2e-proc",
   "examples/access-control",
   "examples/precompiles",
   "examples/erc1967",
@@ -45,7 +43,6 @@ default-members = [
   "contracts",
   "contracts-proc",
   "lib/crypto",
-  "lib/e2e-proc",
   "examples/access-control",
   "examples/precompiles",
   "examples/erc1967",
@@ -143,10 +140,6 @@ educe = "0.6.0"
 hex-literal = "0.4.1"
 sha2 = "0.10.9"
 static_assertions = "1.1.0"
-
-# Temporary E2E compatibility while example integration tests are migrated.
-e2e = { path = "lib/e2e" }
-e2e-proc = { path = "lib/e2e-proc" }
 
 # procedural macros
 syn = { version = "2.0.58", features = ["full"] }

@@ -1,5 +1,11 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::{
+    constructor, receipt, send, watch, Account, Constructor,
+    ContractInitializationError, EventExt, Panic, PanicCode, Revert,
+};
 use abi::VestingWallet;
 use alloy::{
     eips::BlockId,
@@ -7,10 +13,6 @@ use alloy::{
     primitives::{Address, U256},
     providers::Provider,
     rpc::types::{BlockTransactionsKind, TransactionRequest},
-};
-use e2e::{
-    constructor, receipt, send, watch, Account, Constructor,
-    ContractInitializationError, EventExt, Panic, PanicCode, Revert,
 };
 use mock::{erc20, erc20::ERC20Mock};
 
@@ -53,8 +55,11 @@ fn assert_in_delta(expected: U256, actual: U256) {
     assert!(diff <= delta, "Your result of {actual} should be within {delta} of the expected result {expected}");
 }
 
-#[e2e::test]
-async fn constructs(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn constructs() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let start_timestamp = block_timestamp(&alice).await?;
     let contract_addr = alice
         .as_deployer()
@@ -77,10 +82,11 @@ async fn constructs(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn rejects_zero_address_for_beneficiary(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn rejects_zero_address_for_beneficiary() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let start = block_timestamp(&alice).await?;
     let err = alice
         .as_deployer()
@@ -171,35 +177,52 @@ mod ether_vesting {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn check_release_0_percent(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_0_percent() -> eyre::Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         run_check_release(alice, 0).await
     }
 
-    #[e2e::test]
-    async fn check_release_25_percent(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_25_percent() -> eyre::Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         run_check_release(alice, DURATION / 4).await
     }
 
-    #[e2e::test]
-    async fn check_release_50_percent(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_50_percent() -> eyre::Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         run_check_release(alice, DURATION / 2).await
     }
 
-    #[e2e::test]
-    async fn check_release_100_percent(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_100_percent() -> eyre::Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         run_check_release(alice, DURATION).await
     }
 
-    #[e2e::test]
-    async fn check_release_100_percent_vesting_in_the_past(
-        alice: Account,
-    ) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_100_percent_vesting_in_the_past() -> eyre::Result<()>
+    {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         run_check_release(alice, DURATION * 4 / 3).await
     }
 
-    #[e2e::test]
-    async fn check_vested_amount(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_vested_amount() -> eyre::Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let start = block_timestamp(&alice).await?;
         let contract_addr = deploy(&alice, start, DURATION, BALANCE).await?;
 
@@ -319,35 +342,52 @@ mod erc20_vesting {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn check_release_0_percent(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_0_percent() -> eyre::Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         run_check_release(alice, 0).await
     }
 
-    #[e2e::test]
-    async fn check_release_25_percent(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_25_percent() -> eyre::Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         run_check_release(alice, DURATION / 4).await
     }
 
-    #[e2e::test]
-    async fn check_release_50_percent(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_50_percent() -> eyre::Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         run_check_release(alice, DURATION / 2).await
     }
 
-    #[e2e::test]
-    async fn check_release_100_percent(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_100_percent() -> eyre::Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         run_check_release(alice, DURATION).await
     }
 
-    #[e2e::test]
-    async fn check_release_100_percent_vesting_in_the_past(
-        alice: Account,
-    ) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_100_percent_vesting_in_the_past() -> eyre::Result<()>
+    {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         run_check_release(alice, DURATION * 4 / 3).await
     }
 
-    #[e2e::test]
-    async fn check_vested_amount(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_vested_amount() -> eyre::Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let start = block_timestamp(&alice).await?;
         let contract_addr = deploy(&alice, start, DURATION).await?;
         let erc20_address =
@@ -376,10 +416,11 @@ mod erc20_vesting {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn releasable_erc20_reverts_on_invalid_token(
-        alice: Account,
-    ) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn releasable_erc20_reverts_on_invalid_token() -> eyre::Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let start = block_timestamp(&alice).await?;
         let contract_addr = deploy(&alice, start, DURATION).await?;
 
@@ -395,10 +436,11 @@ mod erc20_vesting {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn release_erc20_reverts_on_invalid_token(
-        alice: Account,
-    ) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn release_erc20_reverts_on_invalid_token() -> eyre::Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let start = block_timestamp(&alice).await?;
         let contract_addr = deploy(&alice, start, DURATION).await?;
 
@@ -414,10 +456,11 @@ mod erc20_vesting {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn release_erc20_reverts_on_failed_transfer(
-        alice: Account,
-    ) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn release_erc20_reverts_on_failed_transfer() -> eyre::Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let start = block_timestamp(&alice).await?;
         let contract_addr = deploy(&alice, start, DURATION).await?;
         let erc20_address =
@@ -435,10 +478,12 @@ mod erc20_vesting {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn vested_amount_erc20_reverts_on_invalid_token(
-        alice: Account,
-    ) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn vested_amount_erc20_reverts_on_invalid_token() -> eyre::Result<()>
+    {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let start = block_timestamp(&alice).await?;
         let contract_addr = deploy(&alice, start, DURATION).await?;
 
@@ -454,10 +499,12 @@ mod erc20_vesting {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn vested_amount_reverts_on_scaled_allocation_overflow(
-        alice: Account,
     ) -> eyre::Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let alice = crate::test_support::Account::new().await?;
+
         let start = block_timestamp(&alice).await?;
         let timestamp = DURATION / 2 + start;
         let contract_addr = deploy(&alice, start, DURATION).await?;

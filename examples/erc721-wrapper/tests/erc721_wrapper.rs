@@ -1,10 +1,12 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 
-use abi::{Erc721, Erc721Wrapper};
-use alloy::primitives::{uint, Address};
-use e2e::{
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::{
     constructor, receipt, watch, Account, Constructor, EventExt, Revert,
 };
+use abi::{Erc721, Erc721Wrapper};
+use alloy::primitives::{uint, Address};
 use eyre::Result;
 
 mod abi;
@@ -28,8 +30,11 @@ async fn deploy(account: &Account) -> Result<(Address, Address)> {
     Ok((asset_addr, contract_addr))
 }
 
-#[e2e::test]
-async fn constructs(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn constructs() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let asset_address = erc721::deploy(&alice.wallet).await?;
     let contract_addr = alice
         .as_deployer()
@@ -45,8 +50,11 @@ async fn constructs(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn deposit_for_success(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn deposit_for_success() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let token_id = uint!(1_U256);
     let (asset_addr, contract_addr) = deploy(&alice).await?;
     let alice_address = alice.address();
@@ -100,8 +108,11 @@ async fn deposit_for_success(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn withdraw_to_success(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn withdraw_to_success() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let token_id = uint!(1_U256);
     let (asset_addr, contract_addr) = deploy(&alice).await?;
     let alice_address = alice.address();

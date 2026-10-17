@@ -1,9 +1,13 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 #![allow(clippy::unreadable_literal)]
 
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::{
+    receipt, send, watch, Account, EventExt, Panic, PanicCode,
+};
 use abi::Erc1155Supply;
 use alloy::primitives::{aliases::B32, Address, U256};
-use e2e::{receipt, send, watch, Account, EventExt, Panic, PanicCode};
 use mock::{receiver, receiver::ERC1155ReceiverMock};
 
 mod abi;
@@ -21,8 +25,11 @@ fn random_values(size: usize) -> Vec<U256> {
 // Integration Tests: ERC-1155 Supply Extension
 // ============================================================================
 
-#[e2e::test]
-async fn constructs(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn constructs() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
@@ -39,8 +46,11 @@ async fn constructs(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn mint(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn mint() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
@@ -73,8 +83,11 @@ async fn mint(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn mint_to_receiver_contract(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn mint_to_receiver_contract() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
@@ -122,8 +135,12 @@ async fn mint_to_receiver_contract(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn mint_batch(alice: Account, bob: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn mint_batch() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
@@ -175,10 +192,11 @@ async fn mint_batch(alice: Account, bob: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn mint_batch_transfer_to_receiver_contract(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn mint_batch_transfer_to_receiver_contract() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
@@ -245,11 +263,12 @@ async fn mint_batch_transfer_to_receiver_contract(
     Ok(())
 }
 
-#[e2e::test]
-async fn mint_panics_on_total_supply_overflow(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn mint_panics_on_total_supply_overflow() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
@@ -275,10 +294,11 @@ async fn mint_panics_on_total_supply_overflow(
     Ok(())
 }
 
-#[e2e::test]
-async fn mint_panics_on_total_supply_all_overflow(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn mint_panics_on_total_supply_all_overflow() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
@@ -300,8 +320,11 @@ async fn mint_panics_on_total_supply_all_overflow(
     Ok(())
 }
 
-#[e2e::test]
-async fn burn(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn burn() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
@@ -335,8 +358,12 @@ async fn burn(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn burn_with_approval(alice: Account, bob: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn burn_with_approval() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
     let contract_bob = Erc1155Supply::new(contract_addr, &bob.wallet);
@@ -373,8 +400,11 @@ async fn burn_with_approval(alice: Account, bob: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn burn_batch(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn burn_batch() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
@@ -420,11 +450,12 @@ async fn burn_batch(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn burn_batch_with_approval(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn burn_batch_with_approval() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
     let contract_bob = Erc1155Supply::new(contract_addr, &bob.wallet);
@@ -474,11 +505,12 @@ async fn burn_batch_with_approval(
     Ok(())
 }
 
-#[e2e::test]
-async fn supply_unaffected_by_safe_transfer_from(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn supply_unaffected_by_safe_transfer_from() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
@@ -540,11 +572,12 @@ async fn supply_unaffected_by_safe_transfer_from(
     Ok(())
 }
 
-#[e2e::test]
-async fn supply_unaffected_by_safe_transfer_from_batch(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn supply_unaffected_by_safe_transfer_from_batch() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
@@ -627,8 +660,11 @@ async fn supply_unaffected_by_safe_transfer_from_batch(
 // Integration Tests: Happy Paths of Re-exported functions from ERC-1155
 // =====================================================================
 
-#[e2e::test]
-async fn balance_of_zero_balance(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn balance_of_zero_balance() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
     let token_ids = random_token_ids(1);
@@ -640,13 +676,14 @@ async fn balance_of_zero_balance(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn balance_of_batch_zero_balance(
-    alice: Account,
-    bob: Account,
-    dave: Account,
-    charlie: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn balance_of_batch_zero_balance() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+    let dave = crate::test_support::Account::new().await?;
+    let charlie = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
     let accounts =
@@ -660,11 +697,12 @@ async fn balance_of_batch_zero_balance(
     Ok(())
 }
 
-#[e2e::test]
-async fn set_approval_for_all(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn set_approval_for_all() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
@@ -702,8 +740,11 @@ async fn set_approval_for_all(
     Ok(())
 }
 
-#[e2e::test]
-async fn is_approved_for_all_zero_address(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn is_approved_for_all_zero_address() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
@@ -719,8 +760,12 @@ async fn is_approved_for_all_zero_address(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn safe_transfer_from(alice: Account, bob: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn safe_transfer_from() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
@@ -767,11 +812,12 @@ async fn safe_transfer_from(alice: Account, bob: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn safe_transfer_from_with_approval(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn safe_transfer_from_with_approval() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract_alice = Erc1155Supply::new(contract_addr, &alice.wallet);
     let contract_bob = Erc1155Supply::new(contract_addr, &bob.wallet);
@@ -822,10 +868,11 @@ async fn safe_transfer_from_with_approval(
     Ok(())
 }
 
-#[e2e::test]
-async fn safe_transfer_to_receiver_contract(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn safe_transfer_to_receiver_contract() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
@@ -884,11 +931,12 @@ async fn safe_transfer_to_receiver_contract(
     Ok(())
 }
 
-#[e2e::test]
-async fn safe_batch_transfer_from(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn safe_batch_transfer_from() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract_alice = Erc1155Supply::new(contract_addr, &alice.wallet);
 
@@ -953,10 +1001,11 @@ async fn safe_batch_transfer_from(
     Ok(())
 }
 
-#[e2e::test]
-async fn safe_batch_transfer_to_receiver_contract(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn safe_batch_transfer_to_receiver_contract() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
@@ -1039,12 +1088,13 @@ async fn safe_batch_transfer_to_receiver_contract(
     Ok(())
 }
 
-#[e2e::test]
-async fn safe_batch_transfer_from_with_approval(
-    alice: Account,
-    bob: Account,
-    dave: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn safe_batch_transfer_from_with_approval() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+    let dave = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract_alice = Erc1155Supply::new(contract_addr, &alice.wallet);
     let contract_bob = Erc1155Supply::new(contract_addr, &bob.wallet);
@@ -1116,8 +1166,11 @@ async fn safe_batch_transfer_from_with_approval(
 // Integration Tests: ERC-165 Support Interface
 // ============================================================================
 
-#[e2e::test]
-async fn supports_interface(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn supports_interface() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
     let invalid_interface_id: B32 = 0xffffffff_u32.into();

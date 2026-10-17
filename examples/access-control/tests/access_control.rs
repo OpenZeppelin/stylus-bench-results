@@ -1,14 +1,16 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::{
+    constructor, receipt, send, watch, Account, Constructor, EventExt, Revert,
+    DEPLOYER_ADDRESS,
+};
 use abi::AccessControl::{
     self, AccessControlBadConfirmation, AccessControlUnauthorizedAccount,
     RoleAdminChanged, RoleGranted, RoleRevoked,
 };
 use alloy::hex;
-use e2e::{
-    constructor, receipt, send, watch, Account, Constructor, EventExt, Revert,
-    DEPLOYER_ADDRESS,
-};
 use eyre::Result;
 use stylus_sdk::alloy_primitives::{Address, U256};
 
@@ -28,8 +30,11 @@ fn ctr(admin: Address) -> Constructor {
 // Integration Tests: AccessControl
 // ============================================================================
 
-#[e2e::test]
-async fn constructs(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn constructs() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let alice_addr = alice.address();
     let receipt = alice
         .as_deployer()
@@ -69,10 +74,11 @@ async fn constructs(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn other_roles_admin_is_the_default_admin_role(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn other_roles_admin_is_the_default_admin_role() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -88,8 +94,11 @@ async fn other_roles_admin_is_the_default_admin_role(
     Ok(())
 }
 
-#[e2e::test]
-async fn default_role_is_default_admin(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn default_role_is_default_admin() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -109,11 +118,12 @@ async fn default_role_is_default_admin(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_non_admin_grants_role(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn error_when_non_admin_grants_role() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -134,11 +144,12 @@ async fn error_when_non_admin_grants_role(
     Ok(())
 }
 
-#[e2e::test]
-async fn accounts_can_be_granted_roles_multiple_times(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn accounts_can_be_granted_roles_multiple_times() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -178,8 +189,11 @@ async fn accounts_can_be_granted_roles_multiple_times(
     Ok(())
 }
 
-#[e2e::test]
-async fn not_granted_roles_can_be_revoked(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn not_granted_roles_can_be_revoked() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let alice_addr = alice.address();
     let contract_addr = alice
         .as_deployer()
@@ -203,8 +217,12 @@ async fn not_granted_roles_can_be_revoked(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn admin_can_revoke_role(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn admin_can_revoke_role() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -236,11 +254,12 @@ async fn admin_can_revoke_role(alice: Account, bob: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_non_admin_revokes_role(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn error_when_non_admin_revokes_role() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -265,11 +284,12 @@ async fn error_when_non_admin_revokes_role(
     Ok(())
 }
 
-#[e2e::test]
-async fn roles_can_be_revoked_multiple_times(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn roles_can_be_revoked_multiple_times() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -300,8 +320,11 @@ async fn roles_can_be_revoked_multiple_times(
     Ok(())
 }
 
-#[e2e::test]
-async fn not_granted_roles_can_be_renounced(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn not_granted_roles_can_be_renounced() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let alice_addr = alice.address();
     let contract_addr = alice
         .as_deployer()
@@ -321,8 +344,12 @@ async fn not_granted_roles_can_be_renounced(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn bearer_can_renounce_role(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn bearer_can_renounce_role() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let bob_addr = bob.address();
     let contract_addr = alice
         .as_deployer()
@@ -352,11 +379,12 @@ async fn bearer_can_renounce_role(alice: Account, bob: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_the_one_renouncing_is_not_the_sender(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn error_when_the_one_renouncing_is_not_the_sender() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -378,8 +406,11 @@ async fn error_when_the_one_renouncing_is_not_the_sender(
     Ok(())
 }
 
-#[e2e::test]
-async fn roles_can_be_renounced_multiple_times(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn roles_can_be_renounced_multiple_times() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let alice_addr = alice.address();
     let contract_addr = alice
         .as_deployer()
@@ -400,8 +431,11 @@ async fn roles_can_be_renounced_multiple_times(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn a_roles_admin_role_can_change(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn a_roles_admin_role_can_change() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -425,11 +459,12 @@ async fn a_roles_admin_role_can_change(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn the_new_admin_can_grant_roles(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn the_new_admin_can_grant_roles() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -474,11 +509,12 @@ async fn the_new_admin_can_grant_roles(
     Ok(())
 }
 
-#[e2e::test]
-async fn the_new_admin_can_revoke_roles(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn the_new_admin_can_revoke_roles() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -520,11 +556,12 @@ async fn the_new_admin_can_revoke_roles(
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_previous_admin_grants_roles(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn error_when_previous_admin_grants_roles() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -554,11 +591,12 @@ async fn error_when_previous_admin_grants_roles(
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_previous_admin_revokes_roles(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn error_when_previous_admin_revokes_roles() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))

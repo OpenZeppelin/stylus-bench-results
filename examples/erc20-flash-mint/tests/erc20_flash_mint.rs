@@ -1,8 +1,12 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::{
+    receipt, send, watch, Account, EventExt, Panic, PanicCode, Revert,
+};
 use abi::Erc20FlashMint;
 use alloy::primitives::{address, uint, Address, U256};
-use e2e::{receipt, send, watch, Account, EventExt, Panic, PanicCode, Revert};
 use eyre::Result;
 use mock::{borrower, borrower::ERC3156FlashBorrowerMock};
 use stylus_sdk::alloy_sol_types::SolCall;
@@ -14,8 +18,11 @@ const FEE_RECEIVER: Address =
     address!("F4EaCDAbEf3c8f1EdE91b6f2A6840bc2E4DD3526");
 const FLASH_FEE_VALUE: U256 = uint!(100_U256);
 
-#[e2e::test]
-async fn constructs(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn constructs() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc20FlashMint::new(contract_addr, &alice.wallet);
     watch!(contract.setFlashFeeReceiver(FEE_RECEIVER))?;
@@ -30,8 +37,11 @@ async fn constructs(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn max_flash_loan(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn max_flash_loan() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc20FlashMint::new(contract_addr, &alice.wallet);
     watch!(contract.setFlashFeeReceiver(FEE_RECEIVER))?;
@@ -47,10 +57,11 @@ async fn max_flash_loan(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn max_flash_loan_return_zero_if_no_more_tokens_to_mint(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn max_flash_loan_return_zero_if_no_more_tokens_to_mint() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc20FlashMint::new(contract_addr, &alice.wallet);
     watch!(contract.setFlashFeeReceiver(FEE_RECEIVER))?;
@@ -65,10 +76,11 @@ async fn max_flash_loan_return_zero_if_no_more_tokens_to_mint(
     Ok(())
 }
 
-#[e2e::test]
-async fn max_flash_loan_returns_zero_on_invalid_address(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn max_flash_loan_returns_zero_on_invalid_address() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc20FlashMint::new(contract_addr, &alice.wallet);
     watch!(contract.setFlashFeeReceiver(FEE_RECEIVER))?;
@@ -92,10 +104,11 @@ async fn max_flash_loan_returns_zero_on_invalid_address(
 // NOTE: this behavior is assumed for our implementation, but other
 // implementations may have different behavior (e.g. return fee as a percentage
 // of the passed amount).
-#[e2e::test]
-async fn flash_fee_returns_same_value_regardless_of_amount(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn flash_fee_returns_same_value_regardless_of_amount() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc20FlashMint::new(contract_addr, &alice.wallet);
     watch!(contract.setFlashFeeReceiver(FEE_RECEIVER))?;
@@ -110,8 +123,11 @@ async fn flash_fee_returns_same_value_regardless_of_amount(
     Ok(())
 }
 
-#[e2e::test]
-async fn flash_fee_reverts_on_unsupported_token(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn flash_fee_reverts_on_unsupported_token() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc20FlashMint::new(contract_addr, &alice.wallet);
     watch!(contract.setFlashFeeReceiver(FEE_RECEIVER))?;
@@ -142,8 +158,11 @@ async fn flash_fee_reverts_on_unsupported_token(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn flash_loan_with_fee(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn flash_loan_with_fee() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(Address::ZERO))?;
@@ -195,8 +214,11 @@ async fn flash_loan_with_fee(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn flash_loan_with_fee_receiver(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn flash_loan_with_fee_receiver() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
@@ -253,8 +275,11 @@ async fn flash_loan_with_fee_receiver(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn flash_loan_with_fee_and_fee_receiver(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn flash_loan_with_fee_and_fee_receiver() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
@@ -317,10 +342,12 @@ async fn flash_loan_with_fee_and_fee_receiver(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn flash_loan_reverts_when_loan_amount_greater_than_max_loan(
-    alice: Account,
 ) -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
@@ -347,10 +374,12 @@ async fn flash_loan_reverts_when_loan_amount_greater_than_max_loan(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn flash_loan_reverts_with_exceeded_max_with_unsupported_token(
-    alice: Account,
 ) -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
@@ -375,10 +404,12 @@ async fn flash_loan_reverts_with_exceeded_max_with_unsupported_token(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn flash_loan_reverts_with_unsupported_token_with_zero_loan_amount_and_unsupported_token(
-    alice: Account,
 ) -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
@@ -403,10 +434,11 @@ async fn flash_loan_reverts_with_unsupported_token_with_zero_loan_amount_and_uns
     Ok(())
 }
 
-#[e2e::test]
-async fn flash_loan_reverts_when_invalid_receiver(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn flash_loan_reverts_when_invalid_receiver() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
@@ -435,10 +467,11 @@ async fn flash_loan_reverts_when_invalid_receiver(
     Ok(())
 }
 
-#[e2e::test]
-async fn flash_loan_reverts_when_receiver_callback_reverts(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn flash_loan_reverts_when_receiver_callback_reverts() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
@@ -463,10 +496,12 @@ async fn flash_loan_reverts_when_receiver_callback_reverts(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn flash_loan_reverts_when_receiver_returns_invalid_callback_value(
-    alice: Account,
 ) -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
@@ -491,10 +526,12 @@ async fn flash_loan_reverts_when_receiver_returns_invalid_callback_value(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn flash_loan_reverts_when_receiver_doesnt_approve_allowance(
-    alice: Account,
 ) -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
@@ -521,10 +558,11 @@ async fn flash_loan_reverts_when_receiver_doesnt_approve_allowance(
     Ok(())
 }
 
-#[e2e::test]
-async fn flash_loan_reverts_when_allowance_overflows(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn flash_loan_reverts_when_allowance_overflows() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
@@ -546,10 +584,12 @@ async fn flash_loan_reverts_when_allowance_overflows(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn flash_loan_reverts_when_receiver_doesnt_have_enough_tokens(
-    alice: Account,
 ) -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
@@ -596,10 +636,12 @@ async fn flash_loan_reverts_when_receiver_doesnt_have_enough_tokens(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn flash_loan_reverts_when_receiver_doesnt_have_enough_tokens_and_fee_is_zero(
-    alice: Account,
 ) -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
@@ -630,10 +672,12 @@ async fn flash_loan_reverts_when_receiver_doesnt_have_enough_tokens_and_fee_is_z
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn flash_loan_reverts_when_receiver_doesnt_have_enough_tokens_and_fee_receiver_is_zero(
-    alice: Account,
 ) -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(Address::ZERO))?;

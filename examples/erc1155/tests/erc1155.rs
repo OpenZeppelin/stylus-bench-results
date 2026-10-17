@@ -1,11 +1,15 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::{
+    receipt, send, watch, Account, EventExt, PanicCode, Revert,
+};
 use abi::Erc1155;
 use alloy::{
     primitives::{uint, Address, U256},
     sol_types::SolError,
 };
-use e2e::{receipt, send, watch, Account, EventExt, PanicCode, Revert};
 use mock::{receiver, receiver::ERC1155ReceiverMock};
 
 mod abi;
@@ -34,11 +38,12 @@ impl<T: SolError> EncodeAsStr for T {
 // Integration Tests: ERC-1155 Token
 // ============================================================================
 
-#[e2e::test]
-async fn invalid_array_length_error_in_balance_of_batch(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn invalid_array_length_error_in_balance_of_batch() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -59,8 +64,11 @@ async fn invalid_array_length_error_in_balance_of_batch(
     Ok(())
 }
 
-#[e2e::test]
-async fn balance_of_zero_balance(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn balance_of_zero_balance() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
     let token_ids = random_token_ids(1);
@@ -72,13 +80,14 @@ async fn balance_of_zero_balance(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn balance_of_batch_zero_balance(
-    alice: Account,
-    bob: Account,
-    dave: Account,
-    charlie: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn balance_of_batch_zero_balance() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+    let dave = crate::test_support::Account::new().await?;
+    let charlie = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
     let accounts =
@@ -92,8 +101,11 @@ async fn balance_of_batch_zero_balance(
     Ok(())
 }
 
-#[e2e::test]
-async fn mints(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn mints() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -123,8 +135,11 @@ async fn mints(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn mints_to_receiver_contract(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn mints_to_receiver_contract() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -165,10 +180,12 @@ async fn mints_to_receiver_contract(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn errors_when_receiver_reverts_with_reason_in_mint(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn errors_when_receiver_reverts_with_reason_in_mint() -> eyre::Result<()>
+{
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -199,10 +216,12 @@ async fn errors_when_receiver_reverts_with_reason_in_mint(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn errors_when_receiver_reverts_without_reason_in_mint(
-    alice: Account,
 ) -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -230,10 +249,11 @@ async fn errors_when_receiver_reverts_without_reason_in_mint(
     Ok(())
 }
 
-#[e2e::test]
-async fn errors_when_receiver_panics_in_mint(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn errors_when_receiver_panics_in_mint() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -261,10 +281,11 @@ async fn errors_when_receiver_panics_in_mint(
     Ok(())
 }
 
-#[e2e::test]
-async fn errors_when_invalid_receiver_contract_in_mint(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn errors_when_invalid_receiver_contract_in_mint() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -286,8 +307,11 @@ async fn errors_when_invalid_receiver_contract_in_mint(
     Ok(())
 }
 
-#[e2e::test]
-async fn mint_batch(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn mint_batch() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -328,10 +352,11 @@ async fn mint_batch(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn mint_batch_transfer_to_receiver_contract(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn mint_batch_transfer_to_receiver_contract() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -394,10 +419,12 @@ async fn mint_batch_transfer_to_receiver_contract(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn errors_when_receiver_reverts_with_reason_in_batch_mint(
-    alice: Account,
 ) -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -428,10 +455,12 @@ async fn errors_when_receiver_reverts_with_reason_in_batch_mint(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn errors_when_receiver_reverts_without_reason_in_batch_mint(
-    alice: Account,
 ) -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -459,10 +488,11 @@ async fn errors_when_receiver_reverts_without_reason_in_batch_mint(
     Ok(())
 }
 
-#[e2e::test]
-async fn errors_when_receiver_panics_in_batch_mint(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn errors_when_receiver_panics_in_batch_mint() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -490,10 +520,12 @@ async fn errors_when_receiver_panics_in_batch_mint(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn errors_when_invalid_receiver_contract_in_batch_mint(
-    alice: Account,
 ) -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -515,11 +547,12 @@ async fn errors_when_invalid_receiver_contract_in_batch_mint(
     Ok(())
 }
 
-#[e2e::test]
-async fn error_invalid_array_length_in_batch_mint(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn error_invalid_array_length_in_batch_mint() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract_alice = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -543,11 +576,12 @@ async fn error_invalid_array_length_in_batch_mint(
     Ok(())
 }
 
-#[e2e::test]
-async fn set_approval_for_all(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn set_approval_for_all() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -585,10 +619,11 @@ async fn set_approval_for_all(
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_invalid_operator_approval_for_all(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn error_when_invalid_operator_approval_for_all() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -604,8 +639,11 @@ async fn error_when_invalid_operator_approval_for_all(
     Ok(())
 }
 
-#[e2e::test]
-async fn is_approved_for_all_zero_address(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn is_approved_for_all_zero_address() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -621,8 +659,12 @@ async fn is_approved_for_all_zero_address(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn safe_transfer_from(alice: Account, bob: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn safe_transfer_from() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -669,11 +711,12 @@ async fn safe_transfer_from(alice: Account, bob: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn safe_transfer_from_with_approval(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn safe_transfer_from_with_approval() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract_alice = Erc1155::new(contract_addr, &alice.wallet);
     let contract_bob = Erc1155::new(contract_addr, &bob.wallet);
@@ -724,10 +767,11 @@ async fn safe_transfer_from_with_approval(
     Ok(())
 }
 
-#[e2e::test]
-async fn safe_transfer_to_receiver_contract(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn safe_transfer_to_receiver_contract() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -786,10 +830,11 @@ async fn safe_transfer_to_receiver_contract(
     Ok(())
 }
 
-#[e2e::test]
-async fn errors_when_receiver_reverts_with_reason(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn errors_when_receiver_reverts_with_reason() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -829,10 +874,11 @@ async fn errors_when_receiver_reverts_with_reason(
     Ok(())
 }
 
-#[e2e::test]
-async fn errors_when_receiver_reverts_without_reason(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn errors_when_receiver_reverts_without_reason() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -869,8 +915,11 @@ async fn errors_when_receiver_reverts_without_reason(
     Ok(())
 }
 
-#[e2e::test]
-async fn errors_when_receiver_panics(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn errors_when_receiver_panics() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -907,10 +956,11 @@ async fn errors_when_receiver_panics(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn errors_when_invalid_receiver_contract(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn errors_when_invalid_receiver_contract() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -941,10 +991,11 @@ async fn errors_when_invalid_receiver_contract(
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_invalid_receiver_safe_transfer_from(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn error_when_invalid_receiver_safe_transfer_from() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -970,12 +1021,13 @@ async fn error_when_invalid_receiver_safe_transfer_from(
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_missing_approval_safe_transfer_from(
-    alice: Account,
-    bob: Account,
-    dave: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn error_when_missing_approval_safe_transfer_from() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+    let dave = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -1003,12 +1055,14 @@ async fn error_when_missing_approval_safe_transfer_from(
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_insufficient_balance_safe_transfer_from(
-    alice: Account,
-    bob: Account,
-    dave: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn error_when_insufficient_balance_safe_transfer_from() -> eyre::Result<()>
+{
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+    let dave = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract_alice = Erc1155::new(contract_addr, &alice.wallet);
     let contract_bob = Erc1155::new(contract_addr, &bob.wallet);
@@ -1041,11 +1095,12 @@ async fn error_when_insufficient_balance_safe_transfer_from(
     Ok(())
 }
 
-#[e2e::test]
-async fn safe_batch_transfer_from(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn safe_batch_transfer_from() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract_alice = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -1109,10 +1164,11 @@ async fn safe_batch_transfer_from(
     Ok(())
 }
 
-#[e2e::test]
-async fn safe_batch_transfer_to_receiver_contract(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn safe_batch_transfer_to_receiver_contract() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -1195,10 +1251,12 @@ async fn safe_batch_transfer_to_receiver_contract(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn errors_when_receiver_reverts_with_reason_in_batch_transfer(
-    alice: Account,
 ) -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -1238,10 +1296,12 @@ async fn errors_when_receiver_reverts_with_reason_in_batch_transfer(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn errors_when_receiver_reverts_without_reason_in_batch_transfer(
-    alice: Account,
 ) -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -1278,10 +1338,11 @@ async fn errors_when_receiver_reverts_without_reason_in_batch_transfer(
     Ok(())
 }
 
-#[e2e::test]
-async fn errors_when_receiver_panics_in_batch_transfer(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn errors_when_receiver_panics_in_batch_transfer() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -1318,10 +1379,12 @@ async fn errors_when_receiver_panics_in_batch_transfer(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn errors_when_invalid_receiver_contract_in_batch_transfer(
-    alice: Account,
 ) -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -1352,12 +1415,13 @@ async fn errors_when_invalid_receiver_contract_in_batch_transfer(
     Ok(())
 }
 
-#[e2e::test]
-async fn safe_batch_transfer_from_with_approval(
-    alice: Account,
-    bob: Account,
-    dave: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn safe_batch_transfer_from_with_approval() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+    let dave = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract_alice = Erc1155::new(contract_addr, &alice.wallet);
     let contract_bob = Erc1155::new(contract_addr, &bob.wallet);
@@ -1425,10 +1489,12 @@ async fn safe_batch_transfer_from_with_approval(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn error_when_invalid_receiver_safe_batch_transfer_from(
-    alice: Account,
 ) -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -1460,11 +1526,13 @@ async fn error_when_invalid_receiver_safe_batch_transfer_from(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn error_invalid_array_length_in_safe_batch_transfer_from(
-    alice: Account,
-    bob: Account,
 ) -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract_alice = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -1497,12 +1565,14 @@ async fn error_invalid_array_length_in_safe_batch_transfer_from(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn error_when_missing_approval_safe_batch_transfer_from(
-    alice: Account,
-    bob: Account,
-    dave: Account,
 ) -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+    let dave = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -1536,12 +1606,14 @@ async fn error_when_missing_approval_safe_batch_transfer_from(
     Ok(())
 }
 
-#[e2e::test]
+#[tokio::test]
 async fn error_when_insufficient_balance_safe_batch_transfer_from(
-    alice: Account,
-    bob: Account,
-    dave: Account,
 ) -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+    let dave = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract_alice = Erc1155::new(contract_addr, &alice.wallet);
     let contract_bob = Erc1155::new(contract_addr, &bob.wallet);
@@ -1583,8 +1655,11 @@ async fn error_when_insufficient_balance_safe_batch_transfer_from(
 // Integration Tests: ERC-1155 Burnable Extension
 // ============================================================================
 
-#[e2e::test]
-async fn burns(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn burns() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -1615,8 +1690,12 @@ async fn burns(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn burns_with_approval(alice: Account, bob: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn burns_with_approval() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
     let contract_bob = Erc1155::new(contract_addr, &bob.wallet);
@@ -1651,11 +1730,12 @@ async fn burns_with_approval(alice: Account, bob: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_missing_approval_burn(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn error_when_missing_approval_burn() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -1677,10 +1757,11 @@ async fn error_when_missing_approval_burn(
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_insufficient_balance_burn(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn error_when_insufficient_balance_burn() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -1704,8 +1785,11 @@ async fn error_when_insufficient_balance_burn(
     Ok(())
 }
 
-#[e2e::test]
-async fn burns_batch(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn burns_batch() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -1747,11 +1831,12 @@ async fn burns_batch(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn burns_batch_with_approval(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn burns_batch_with_approval() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
     let contract_bob = Erc1155::new(contract_addr, &bob.wallet);
@@ -1797,11 +1882,12 @@ async fn burns_batch_with_approval(
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_missing_approval_burn_batch(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn error_when_missing_approval_burn_batch() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 
@@ -1828,10 +1914,11 @@ async fn error_when_missing_approval_burn_batch(
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_insufficient_balance_burn_batch(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn error_when_insufficient_balance_burn_batch() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = Erc1155::new(contract_addr, &alice.wallet);
 

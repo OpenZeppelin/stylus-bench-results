@@ -1,7 +1,9 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::Account;
 use alloy_primitives::{hex, uint, U256};
-use e2e::Account;
 use eyre::Result;
 
 use crate::abi::PoseidonExample;
@@ -12,8 +14,11 @@ mod abi;
 // Integration Tests: Poseidon
 // ============================================================================
 
-#[e2e::test]
-async fn poseidon_works(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn poseidon_works() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = PoseidonExample::new(contract_addr, &alice.wallet);
 

@@ -1,11 +1,13 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 
-use abi::{Ownable, Ownable::OwnershipTransferred};
-use alloy::primitives::Address;
-use e2e::{
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::{
     constructor, receipt, send, Account, Constructor,
     ContractInitializationError, EventExt, Revert,
 };
+use abi::{Ownable, Ownable::OwnershipTransferred};
+use alloy::primitives::Address;
 use eyre::Result;
 
 mod abi;
@@ -18,8 +20,11 @@ fn ctr(owner: Address) -> Constructor {
 // Integration Tests: Ownable
 // ============================================================================
 
-#[e2e::test]
-async fn constructs(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn constructs() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let alice_addr = alice.address();
     let receipt =
         alice.as_deployer().with_constructor(ctr(alice_addr)).deploy().await?;
@@ -35,8 +40,11 @@ async fn constructs(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn rejects_zero_address_initial_owner(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn rejects_zero_address_initial_owner() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let err = alice
         .as_deployer()
         .with_constructor(ctr(Address::ZERO))
@@ -54,8 +62,12 @@ async fn rejects_zero_address_initial_owner(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn transfers_ownership(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn transfers_ownership() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let alice_addr = alice.address();
     let bob_addr = bob.address();
 
@@ -79,11 +91,12 @@ async fn transfers_ownership(alice: Account, bob: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn prevents_non_owners_from_transferring(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn prevents_non_owners_from_transferring() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let alice_addr = alice.address();
     let bob_addr = bob.address();
 
@@ -104,8 +117,11 @@ async fn prevents_non_owners_from_transferring(
     Ok(())
 }
 
-#[e2e::test]
-async fn guards_against_stuck_state(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn guards_against_stuck_state() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let alice_addr = alice.address();
     let contract_addr = alice
         .as_deployer()
@@ -125,8 +141,11 @@ async fn guards_against_stuck_state(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn loses_ownership_after_renouncement(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn loses_ownership_after_renouncement() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let alice_addr = alice.address();
     let contract_addr = alice
         .as_deployer()
@@ -148,11 +167,12 @@ async fn loses_ownership_after_renouncement(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn prevents_non_owners_from_renouncement(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn prevents_non_owners_from_renouncement() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let alice_addr = alice.address();
     let bob_addr = bob.address();
 

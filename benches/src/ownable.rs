@@ -1,3 +1,4 @@
+use crate::test_support::{constructor, receipt, Account};
 use alloy::{
     network::{AnyNetwork, EthereumWallet},
     primitives::Address,
@@ -5,7 +6,6 @@ use alloy::{
     sol,
     sol_types::SolCall,
 };
-use e2e::{constructor, receipt, Account};
 
 use crate::{
     report::{ContractReport, FunctionReport},
@@ -21,25 +21,31 @@ sol!(
     }
 );
 
+/// Run this contract benchmark in each cache and optimization mode.
+///
+/// # Errors
+///
+/// Returns an error if deployment, an RPC call, or receipt decoding fails.
 pub async fn bench() -> eyre::Result<ContractReport> {
     ContractReport::generate("Ownable", run).await
 }
 
+/// Deploy the contract and run its benchmarked calls.
+///
+/// # Errors
+///
+/// Returns an error if account setup, deployment, an RPC call, or receipt decoding fails.
 pub async fn run(cache_opt: Opt) -> eyre::Result<Vec<FunctionReport>> {
     let alice = Account::new().await?;
-    let alice_wallet = ProviderBuilder::new()
-        .network::<AnyNetwork>()
-        .with_recommended_fillers()
+    let alice_wallet = ProviderBuilder::new_with_network::<AnyNetwork>()
         .wallet(EthereumWallet::from(alice.signer.clone()))
-        .on_http(alice.url().parse()?);
+        .connect_http(alice.url().parse()?);
 
     let bob = Account::new().await?;
     let bob_addr = bob.address();
-    let bob_wallet = ProviderBuilder::new()
-        .network::<AnyNetwork>()
-        .with_recommended_fillers()
+    let bob_wallet = ProviderBuilder::new_with_network::<AnyNetwork>()
         .wallet(EthereumWallet::from(bob.signer.clone()))
-        .on_http(bob.url().parse()?);
+        .connect_http(bob.url().parse()?);
 
     let contract_addr = deploy(&alice, cache_opt).await?;
 
@@ -47,17 +53,17 @@ pub async fn run(cache_opt: Opt) -> eyre::Result<Vec<FunctionReport>> {
     let contract_bob = Ownable::new(contract_addr, &bob_wallet);
 
     // IMPORTANT: Order matters!
-    use Ownable::*;
+
     #[rustfmt::skip]
     let receipts = vec![
-        (ownerCall::SIGNATURE, receipt!(contract.owner())?),
-        (transferOwnershipCall::SIGNATURE, receipt!(contract.transferOwnership(bob_addr))?),
-        (renounceOwnershipCall::SIGNATURE, receipt!(contract_bob.renounceOwnership())?),
+        (Ownable::ownerCall::SIGNATURE, receipt!(contract.owner())?),
+        (Ownable::transferOwnershipCall::SIGNATURE, receipt!(contract.transferOwnership(bob_addr))?),
+        (Ownable::renounceOwnershipCall::SIGNATURE, receipt!(contract_bob.renounceOwnership())?),
     ];
 
     receipts
         .into_iter()
-        .map(FunctionReport::new)
+        .map(|(signature, receipt)| FunctionReport::new(signature, &receipt))
         .collect::<eyre::Result<Vec<_>>>()
 }
 

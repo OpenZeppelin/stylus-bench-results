@@ -13,7 +13,7 @@ stylus-sdk.workspace = true
 
 [dev-dependencies]
 alloy.workspace = true
-e2e.workspace = true
+stylus-tools.workspace = true
 tokio.workspace = true
 eyre.workspace = true
 
@@ -22,7 +22,7 @@ crate-type = ["lib", "cdylib"]
 
 [features]
 contract-client-gen = []
-e2e = []
+integration-tests = ["stylus-tools/integration-tests"]
 export-abi = ["openzeppelin-stylus/export-abi"]
 
 [[bin]]

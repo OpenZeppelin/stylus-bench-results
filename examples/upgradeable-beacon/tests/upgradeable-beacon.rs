@@ -1,16 +1,24 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::{
+    constructor, receipt, send, Account, EventExt, Revert,
+};
 use abi::UpgradeableBeaconExample;
 use alloy::primitives::Address;
-use e2e::{constructor, receipt, send, Account, EventExt, Revert};
 use eyre::Result;
 use mock::erc20;
 
 mod abi;
 mod mock;
 
-#[e2e::test]
-async fn upgrade_to(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn upgrade_to() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let implementation_addr = erc20::deploy(&alice.wallet).await?;
     let receipt = alice
         .as_deployer()
