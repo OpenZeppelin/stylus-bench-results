@@ -4,12 +4,14 @@
 //! number of "wrapped tokens". This is useful in conjunction with other
 //! modules.
 //!
-//! WARNING: Any mechanism in which the underlying token changes the
-//! [`IErc20::balance_of`] of an account without an explicit transfer may
-//! desynchronize this contract's supply and its underlying balance. Please
-//! exercise caution when wrapping tokens that may undercollateralize the
-//! wrapper (i.e. wrapper's total supply is higher than its underlying balance).
-//! See [`Erc20Wrapper::_recover`] for recovering value accrued to the wrapper.
+//! The wrapper assumes every successful underlying transfer moves exactly the
+//! requested amount. Fee-on-transfer or deflationary tokens are unsupported:
+//! deposits mint the requested number of wrapper tokens even if the wrapper
+//! receives less, and withdrawals may deliver less than requested. Rebases,
+//! reflections, and other balance changes without an explicit transfer can
+//! also desynchronize supply and backing. Use an exact-transfer underlying
+//! token. [`Erc20Wrapper::_recover`] can mint against excess backing; it cannot
+//! repair an undercollateralized wrapper.
 
 use alloc::{vec, vec::Vec};
 
@@ -172,8 +174,8 @@ pub trait IErc20Wrapper {
     ///
     /// # Errors
     ///
-    /// * [`Error::InvalidSender`] - If the `msg::sender()`'s address is the
-    ///   `contract:address()`.
+    /// * [`Error::InvalidSender`] - If the caller's address is the contract's
+    ///   address.
     /// * [`Error::InvalidReceiver`] - If the `account` address is a
     ///   `contract:address()`.
     /// * [`Error::SafeErc20FailedOperation`] - If caller lacks sufficient

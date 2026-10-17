@@ -6,6 +6,12 @@
 //! extends the ERC-20 standard. Any additional extensions included along it
 //! would affect the "shares" token represented by this contract and not the
 //! "assets" token which is an independent contract.
+//!
+//! The vault assumes every successful asset transfer moves exactly the
+//! requested amount and does not measure transfer deltas. Fee-on-transfer or
+//! deflationary assets are unsupported: deposits calculate shares from the
+//! requested amount even if the vault receives less, and withdrawals may
+//! deliver less than requested. Use an exact-transfer underlying asset.
 
 use alloc::{vec, vec::Vec};
 
