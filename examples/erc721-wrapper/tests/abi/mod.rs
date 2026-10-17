@@ -20,6 +20,7 @@ sol!(
         event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
 
         error ERC721NonexistentToken(uint256 tokenId);
+        error Erc721FailedOperation(address token);
     }
 
     contract Erc721 {
