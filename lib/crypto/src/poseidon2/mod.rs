@@ -369,3 +369,71 @@ impl<P: PoseidonParams<F>, F: PrimeField> Poseidon2<P, F> {
         self.state[0] += P::ROUND_CONSTANTS[round][0];
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        field::{instance::FpPallas, Field},
+        poseidon2::instance::pallas::PallasParams,
+    };
+
+    struct SquaringPallasParams;
+
+    impl PoseidonParams<FpPallas> for SquaringPallasParams {
+        const T: usize = <PallasParams as PoseidonParams<FpPallas>>::T;
+        const D: u8 = 2;
+        const CAPACITY: usize =
+            <PallasParams as PoseidonParams<FpPallas>>::CAPACITY;
+        const ROUNDS_F: usize =
+            <PallasParams as PoseidonParams<FpPallas>>::ROUNDS_F;
+        const ROUNDS_P: usize =
+            <PallasParams as PoseidonParams<FpPallas>>::ROUNDS_P;
+        const MAT_INTERNAL_DIAG_M_1: &'static [FpPallas] =
+            <PallasParams as PoseidonParams<FpPallas>>::MAT_INTERNAL_DIAG_M_1;
+        const ROUND_CONSTANTS: &'static [&'static [FpPallas]] =
+            <PallasParams as PoseidonParams<FpPallas>>::ROUND_CONSTANTS;
+    }
+
+    fn invert_external_3(state: [FpPallas; 3]) -> [FpPallas; 3] {
+        // For T=3, the external matrix maps each x_i to x_i + sum(x).
+        // Its inverse subtracts one quarter of the output sum from each item.
+        let quarter = FpPallas::from(4u8).inverse().unwrap();
+        let correction = state.iter().copied().sum::<FpPallas>() * quarter;
+        state.map(|element| element - correction)
+    }
+
+    #[test]
+    fn custom_non_permutation_sbox_must_be_rejected() {
+        let round_constants = <SquaringPallasParams as PoseidonParams<
+            FpPallas,
+        >>::ROUND_CONSTANTS[0];
+        let after_linear_and_constant_a =
+            [FpPallas::from(1u8), FpPallas::from(7u8), FpPallas::from(12u8)];
+        let after_linear_and_constant_b = [
+            -after_linear_and_constant_a[0],
+            after_linear_and_constant_a[1],
+            after_linear_and_constant_a[2],
+        ];
+        let before_linear_a = invert_external_3(core::array::from_fn(|i| {
+            after_linear_and_constant_a[i] - round_constants[i]
+        }));
+        let before_linear_b = invert_external_3(core::array::from_fn(|i| {
+            after_linear_and_constant_b[i] - round_constants[i]
+        }));
+
+        let mut a = Poseidon2::<SquaringPallasParams, _>::new();
+        let mut b = Poseidon2::<SquaringPallasParams, _>::new();
+        a.state.copy_from_slice(&before_linear_a);
+        b.state.copy_from_slice(&before_linear_b);
+        assert_ne!(a.state, b.state);
+
+        a.permute();
+        b.permute();
+
+        assert_ne!(
+            a.state, b.state,
+            "a custom Poseidon S-box must be a permutation"
+        );
+    }
+}
