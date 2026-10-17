@@ -15,9 +15,9 @@ use alloy_primitives::{aliases::B32, uint, Address, U256};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
 use stylus_sdk::{
-    call::MethodError,
     prelude::*,
     storage::{StorageMap, StorageU256, StorageVec},
+    stylus_core::calls::errors::MethodError,
 };
 
 use crate::{
@@ -82,6 +82,7 @@ pub struct Erc721Enumerable {
 /// This is the interface of the optional `Enumerable` extension
 /// of the ERC-721 standard.
 #[interface_id]
+#[public]
 pub trait IErc721Enumerable {
     /// The error type associated to this ERC-721 enumerable trait
     /// implementation.
@@ -349,8 +350,8 @@ impl Erc721Enumerable {
 
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::*;
     use stylus_sdk::prelude::*;
+    use stylus_sdk::testing::TestVM;
 
     use super::*;
     use crate::token::erc721::Erc721;
@@ -397,25 +398,40 @@ mod tests {
 
     unsafe impl TopLevelStorage for Erc721EnumerableTestExample {}
 
-    #[motsu::test]
-    fn total_supply_no_tokens(
-        contract: Contract<Erc721EnumerableTestExample>,
-        alice: Address,
-    ) {
-        assert_eq!(U256::ZERO, contract.sender(alice).total_supply());
+    #[test]
+    fn total_supply_no_tokens() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc721EnumerableTestExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
+        assert_eq!(
+            U256::ZERO,
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .total_supply()
+        );
     }
 
-    #[motsu::test]
-    fn reverts_when_token_by_index_is_out_of_bound(
-        contract: Contract<Erc721EnumerableTestExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn reverts_when_token_by_index_is_out_of_bound() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc721EnumerableTestExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
         let token_idx = uint!(2024_U256);
 
-        let err = contract
-            .sender(alice)
-            .token_by_index(token_idx)
-            .expect_err("should return Error::OutOfBoundsIndex");
+        let err = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .token_by_index(token_idx)
+        .expect_err("should return Error::OutOfBoundsIndex");
 
         assert!(matches!(
             err,
@@ -426,11 +442,14 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn add_token_to_all_tokens_enumeration_works(
-        contract: Contract<Erc721EnumerableTestExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn add_token_to_all_tokens_enumeration_works() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc721EnumerableTestExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
         let tokens_len = 10;
 
         let mut tokens_ids = Vec::new();
@@ -438,29 +457,39 @@ mod tests {
             let token_id = U256::from(token_id);
             // Store ids for test.
             tokens_ids.push(token_id);
-            contract
-                .sender(alice)
-                .enumerable
-                ._add_token_to_all_tokens_enumeration(token_id);
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .enumerable
+            ._add_token_to_all_tokens_enumeration(token_id);
         }
 
         assert_eq!(
             U256::from(tokens_len),
-            contract.sender(alice).total_supply()
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .total_supply()
         );
 
         tokens_ids.iter().enumerate().for_each(|(idx, expected_token_id)| {
-            let token_id = contract
-                .sender(alice)
-                .token_by_index(U256::from(idx))
-                .expect("should return token id for");
+            let token_id = ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .token_by_index(U256::from(idx))
+            .expect("should return token id for");
             assert_eq!(*expected_token_id, token_id);
         });
 
-        let err = contract
-            .sender(alice)
-            .token_by_index(U256::from(tokens_len))
-            .expect_err("should return Error::OutOfBoundsIndex");
+        let err = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .token_by_index(U256::from(tokens_len))
+        .expect_err("should return Error::OutOfBoundsIndex");
 
         assert!(matches!(
             err,
@@ -471,11 +500,14 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn remove_token_from_all_tokens_enumeration_works(
-        contract: Contract<Erc721EnumerableTestExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn remove_token_from_all_tokens_enumeration_works() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc721EnumerableTestExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
         let initial_tokens_len = 10;
 
         let mut tokens_ids = Vec::new();
@@ -484,64 +516,92 @@ mod tests {
             // Store ids for test.
             tokens_ids.push(token_id);
 
-            contract
-                .sender(alice)
-                .enumerable
-                ._add_token_to_all_tokens_enumeration(token_id);
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .enumerable
+            ._add_token_to_all_tokens_enumeration(token_id);
         }
         assert_eq!(
             U256::from(initial_tokens_len),
-            contract.sender(alice).total_supply()
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .total_supply()
         );
 
         // Remove the last token.
         let last_token_id = tokens_ids.swap_remove(initial_tokens_len - 1);
-        contract
-            .sender(alice)
-            .enumerable
-            ._remove_token_from_all_tokens_enumeration(last_token_id);
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .enumerable
+        ._remove_token_from_all_tokens_enumeration(last_token_id);
         assert_eq!(
             U256::from(initial_tokens_len - 1),
-            contract.sender(alice).total_supply()
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .total_supply()
         );
 
         // Remove the second (`idx = 1`) element
         // to check that swap_remove operation works as expected.
         let token_to_remove = tokens_ids.swap_remove(1);
-        contract
-            .sender(alice)
-            .enumerable
-            ._remove_token_from_all_tokens_enumeration(token_to_remove);
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .enumerable
+        ._remove_token_from_all_tokens_enumeration(token_to_remove);
         assert_eq!(
             U256::from(initial_tokens_len - 2),
-            contract.sender(alice).total_supply()
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .total_supply()
         );
 
         // Add a new token.
         let token_id = U256::from(initial_tokens_len);
         tokens_ids.push(token_id);
-        contract
-            .sender(alice)
-            .enumerable
-            ._add_token_to_all_tokens_enumeration(token_id);
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .enumerable
+        ._add_token_to_all_tokens_enumeration(token_id);
         assert_eq!(
             U256::from(initial_tokens_len - 1),
-            contract.sender(alice).total_supply()
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .total_supply()
         );
 
         // Check proper indices of tokens.
         tokens_ids.iter().enumerate().for_each(|(idx, expected_token_id)| {
-            let token_id = contract
-                .sender(alice)
-                .token_by_index(U256::from(idx))
-                .expect("should return token id");
+            let token_id = ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .token_by_index(U256::from(idx))
+            .expect("should return token id");
             assert_eq!(*expected_token_id, token_id);
         });
 
-        let err = contract
-            .sender(alice)
-            .token_by_index(U256::from(initial_tokens_len - 1))
-            .expect_err("should return Error::OutOfBoundsIndex");
+        let err = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .token_by_index(U256::from(initial_tokens_len - 1))
+        .expect_err("should return Error::OutOfBoundsIndex");
 
         assert!(matches!(err, Error::OutOfBoundsIndex(ERC721OutOfBoundsIndex {
                 owner,
@@ -550,7 +610,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[test]
     fn check_increase_balance() {
         assert!(Erc721Enumerable::_check_increase_balance(0).is_ok());
 
@@ -565,79 +625,126 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn token_of_owner_by_index_works(
-        contract: Contract<Erc721EnumerableTestExample>,
-        alice: Address,
-    ) {
-        let token_id = uint!(1_U256);
-        contract
-            .sender(alice)
-            .erc721
-            ._mint(alice, token_id)
-            .expect("should mint a token for {{alice}}");
+    #[test]
+    fn token_of_owner_by_index_works() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc721EnumerableTestExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
 
-        let owner = contract
-            .sender(alice)
-            .erc721
-            .owner_of(token_id)
-            .expect("should return the owner of the token");
+        let token_id = uint!(1_U256);
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .erc721
+        ._mint(alice, token_id)
+        .expect("should mint a token for {{alice}}");
+
+        let owner = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .erc721
+        .owner_of(token_id)
+        .expect("should return the owner of the token");
         assert_eq!(owner, alice);
 
+        contract_vm.set_sender(alice);
         contract
-            .sender(alice)
             .enumerable
-            ._add_token_to_owner_enumeration(
-                alice,
-                token_id,
-                &contract.sender(alice).erc721,
-            )
+            ._add_token_to_owner_enumeration(alice, token_id, &contract.erc721)
             .expect("should add token to owner enumeration");
 
-        let test_token_id = contract
-            .sender(alice)
-            .token_of_owner_by_index(alice, U256::ZERO)
-            .expect("should return `token_id`");
+        let test_token_id = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .token_of_owner_by_index(alice, U256::ZERO)
+        .expect("should return `token_id`");
 
         assert_eq!(token_id, test_token_id);
     }
 
-    #[motsu::test]
-    fn reverts_when_token_of_owner_for_index_out_of_bound(
-        contract: Contract<Erc721EnumerableTestExample>,
-        alice: Address,
-    ) {
-        let token_id = uint!(1_U256);
+    #[test]
+    fn token_id_zero_is_enumerable() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc721EnumerableTestExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .erc721
+        ._mint(alice, U256::ZERO)
+        .expect("should mint token ID zero");
+
+        contract_vm.set_sender(alice);
         contract
-            .sender(alice)
-            .erc721
-            ._mint(alice, token_id)
-            .expect("should mint a token for {{alice}}");
-
-        let owner = contract
-            .sender(alice)
-            .erc721
-            .owner_of(token_id)
-            .expect("should return the owner of the token");
-
-        assert_eq!(owner, alice);
-
-        contract
-            .sender(alice)
             .enumerable
             ._add_token_to_owner_enumeration(
                 alice,
-                token_id,
-                &contract.sender(alice).erc721,
+                U256::ZERO,
+                &contract.erc721,
             )
+            .expect("should add token ID zero to owner enumeration");
+
+        assert_eq!(
+            U256::ZERO,
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .token_of_owner_by_index(alice, U256::ZERO)
+            .expect("token ID zero is valid at owner index zero")
+        );
+    }
+
+    #[test]
+    fn reverts_when_token_of_owner_for_index_out_of_bound() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc721EnumerableTestExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
+        let token_id = uint!(1_U256);
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .erc721
+        ._mint(alice, token_id)
+        .expect("should mint a token for {{alice}}");
+
+        let owner = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .erc721
+        .owner_of(token_id)
+        .expect("should return the owner of the token");
+
+        assert_eq!(owner, alice);
+
+        contract_vm.set_sender(alice);
+        contract
+            .enumerable
+            ._add_token_to_owner_enumeration(alice, token_id, &contract.erc721)
             .expect("should add token to owner enumeration");
 
         let token_idx = uint!(1_U256);
 
-        let err = contract
-            .sender(alice)
-            .token_of_owner_by_index(alice, token_idx)
-            .expect_err("should return Error::OutOfBoundsIndex");
+        let err = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .token_of_owner_by_index(alice, token_idx)
+        .expect_err("should return Error::OutOfBoundsIndex");
 
         assert!(matches!(err, Error::OutOfBoundsIndex(ERC721OutOfBoundsIndex {
                 owner,
@@ -646,17 +753,22 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn reverts_when_token_of_owner_does_not_own_any_token(
-        contract: Contract<Erc721EnumerableTestExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn reverts_when_token_of_owner_does_not_own_any_token() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc721EnumerableTestExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
         let token_idx = U256::ZERO;
 
-        let err = contract
-            .sender(alice)
-            .token_of_owner_by_index(alice, token_idx)
-            .expect_err("should return Error::OutOfBoundsIndex");
+        let err = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .token_of_owner_by_index(alice, token_idx)
+        .expect_err("should return Error::OutOfBoundsIndex");
 
         assert!(matches!(err, Error::OutOfBoundsIndex(ERC721OutOfBoundsIndex {
                 owner,
@@ -665,70 +777,73 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn token_of_owner_by_index_after_transfer_works(
-        contract: Contract<Erc721EnumerableTestExample>,
-        alice: Address,
-        bob: Address,
-    ) {
-        let token_id = uint!(1_U256);
-        contract
-            .sender(alice)
-            .erc721
-            ._mint(alice, token_id)
-            .expect("should mint a token for {{alice}}");
+    #[test]
+    fn token_of_owner_by_index_after_transfer_works() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc721EnumerableTestExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+        let bob = Address::from([2u8; 20]);
 
+        let token_id = uint!(1_U256);
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .erc721
+        ._mint(alice, token_id)
+        .expect("should mint a token for {{alice}}");
+
+        contract_vm.set_sender(alice);
         contract
-            .sender(alice)
             .enumerable
-            ._add_token_to_owner_enumeration(
-                alice,
-                token_id,
-                &contract.sender(alice).erc721,
-            )
+            ._add_token_to_owner_enumeration(alice, token_id, &contract.erc721)
             .expect("should add token to owner enumeration");
 
         // Transfer the token from alice to bob.
-        contract
-            .sender(alice)
-            .erc721
-            .transfer_from(alice, bob, token_id)
-            .expect("should transfer the token from {{alice}} to {{bob}}");
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .erc721
+        .transfer_from(alice, bob, token_id)
+        .expect("should transfer the token from {{alice}} to {{bob}}");
 
         // Remove the token from alice's enumeration.
+        contract_vm.set_sender(alice);
         contract
-            .sender(alice)
             .enumerable
             ._remove_token_from_owner_enumeration(
                 alice,
                 token_id,
-                &contract.sender(alice).erc721,
+                &contract.erc721,
             )
             .expect("should remove token from {{alice}} enumeration");
 
+        contract_vm.set_sender(bob);
         contract
-            .sender(bob)
             .enumerable
-            ._add_token_to_owner_enumeration(
-                bob,
-                token_id,
-                &contract.sender(bob).erc721,
-            )
+            ._add_token_to_owner_enumeration(bob, token_id, &contract.erc721)
             .expect("should add token to {{bob}} enumeration");
 
         let token_idx = U256::ZERO;
 
-        let test_token_id = contract
-            .sender(bob)
-            .token_of_owner_by_index(bob, token_idx)
-            .expect("should return `token_id`");
+        let test_token_id = ({
+            contract_vm.set_sender(bob);
+            &mut contract
+        })
+        .token_of_owner_by_index(bob, token_idx)
+        .expect("should return `token_id`");
 
         assert_eq!(token_id, test_token_id);
 
-        let err = contract
-            .sender(alice)
-            .token_of_owner_by_index(alice, token_idx)
-            .expect_err("should return Error::OutOfBoundsIndex");
+        let err = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .token_of_owner_by_index(alice, token_idx)
+        .expect_err("should return Error::OutOfBoundsIndex");
 
         assert!(matches!(err, Error::OutOfBoundsIndex(ERC721OutOfBoundsIndex {
                 owner,
@@ -737,26 +852,40 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual = <Erc721Enumerable as IErc721Enumerable>::interface_id();
         let expected: B32 = 0x780e9d63_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
-    fn supports_interface(
-        contract: Contract<Erc721EnumerableTestExample>,
-        alice: Address,
-    ) {
-        assert!(contract.sender(alice).enumerable.supports_interface(
+    #[test]
+    fn supports_interface() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc721EnumerableTestExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
+        assert!(({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .enumerable
+        .supports_interface(
             <Erc721Enumerable as IErc721Enumerable>::interface_id()
         ));
-        assert!(contract
-            .sender(alice)
-            .supports_interface(<Erc721Enumerable as IErc165>::interface_id()));
+        assert!(({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .supports_interface(<Erc721Enumerable as IErc165>::interface_id()));
 
         let fake_interface_id: B32 = 0x12345678_u32.into();
-        assert!(!contract.sender(alice).supports_interface(fake_interface_id));
+        assert!(!({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .supports_interface(fake_interface_id));
     }
 }
