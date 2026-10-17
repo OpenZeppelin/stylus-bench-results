@@ -29,8 +29,7 @@ async fn main() -> eyre::Result<()> {
         vesting_wallet::bench().boxed(),
     ];
 
-    // Run benchmarks max 3 at the same time.
-    // Otherwise, nitro test node can overload and revert transaction.
+    // Run one suite at a time so Nitro's gas estimator stays reliable.
     let mut report = BenchmarkReport::default();
     for chunk in &benchmarks.into_iter().chunks(MAX_PARALLEL) {
         report = futures::future::try_join_all(chunk)
