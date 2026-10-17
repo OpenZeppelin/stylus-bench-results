@@ -76,7 +76,7 @@ default-members = [
   "examples/erc1155-holder",
   "examples/eddsa",
 ]
-exclude = ["fuzz", "templates/crypto-erc20"]
+exclude = ["fuzz", "templates/crypto-erc20", "vendor/stylus-test"]
 
 # Explicitly set the resolver to version 2, which is the default for packages
 # with edition >= 2021.
@@ -137,6 +137,7 @@ num-traits = "0.2.14"
 zeroize = { version = "1.8.1", features = ["derive"] }
 proptest = "1"
 educe = "0.6.0"
+
 hex-literal = "0.4.1"
 sha2 = "0.10.9"
 static_assertions = "1.1.0"
@@ -150,6 +151,12 @@ quote = "1.0.35"
 openzeppelin-stylus = { path = "contracts" }
 openzeppelin-stylus-proc = { path = "contracts-proc", version = "=0.3.0" }
 openzeppelin-crypto = { path = "lib/crypto" }
+
+[patch.crates-io]
+# stylus-test 0.10.10 leaves return_data at the last registered mock instead
+# of publishing each matched call's response. This local test-only patch fixes
+# that behavior; production contracts still depend on the unmodified SDK.
+stylus-test = { path = "vendor/stylus-test" }
 
 [profile.release]
 codegen-units = 1

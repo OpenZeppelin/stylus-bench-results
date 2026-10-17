@@ -5910,8 +5910,6 @@ dependencies = [
 [[package]]
 name = "stylus-test"
 version = "0.10.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88d4b027cb7c0bd0c8e65eaff5192e9d23a60adfdaa5e664bb5e96da188084bc"
 dependencies = [
  "alloy-primitives",
  "alloy-provider",
