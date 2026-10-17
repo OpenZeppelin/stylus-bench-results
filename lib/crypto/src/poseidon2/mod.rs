@@ -72,10 +72,7 @@ impl<P: PoseidonParams<F>, F: PrimeField> Poseidon2<P, F> {
     #[must_use]
     #[inline]
     pub fn new() -> Self {
-        assert!(
-            P::ROUNDS_F >= 8,
-            "Poseidon2 requires at least 8 full rounds"
-        );
+        assert!(P::ROUNDS_F >= 8, "Poseidon2 requires at least 8 full rounds");
         assert!(
             P::ROUNDS_F % 2 == 0,
             "Poseidon2 full round count must be even"
