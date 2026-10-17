@@ -22,7 +22,10 @@ pub mod params;
 
 use alloc::{boxed::Box, vec, vec::Vec};
 
-use crate::{field::prime::PrimeField, poseidon2::params::PoseidonParams};
+use crate::{
+    bits::BitIteratorBE, field::prime::PrimeField,
+    poseidon2::params::PoseidonParams,
+};
 
 /// Determines whether poseidon sponge in absorbing or squeezing state.
 /// In squeezing state, sponge can only squeeze elements.
@@ -58,9 +61,19 @@ impl<P: PoseidonParams<F>, F: PrimeField> Default for Poseidon2<P, F> {
 
 impl<P: PoseidonParams<F>, F: PrimeField> Poseidon2<P, F> {
     /// Create a new Poseidon sponge.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `P::D` is not greater than one or is not coprime to the field
+    /// order, because then the S-box is not a permutation.
     #[must_use]
     #[inline]
     pub fn new() -> Self {
+        assert!(
+            Self::sbox_exponent_is_permutation(),
+            "Poseidon S-box exponent must be greater than one and coprime to the field order"
+        );
+
         Self {
             phantom: core::marker::PhantomData,
             state: vec![F::zero(); P::T].into_boxed_slice(),
@@ -68,6 +81,29 @@ impl<P: PoseidonParams<F>, F: PrimeField> Poseidon2<P, F> {
             // Begin index from `CAPACITY`. Skip capacity elements.
             index: P::CAPACITY,
         }
+    }
+
+    /// Check whether raising to `P::D` is a permutation of the field.
+    #[inline]
+    fn sbox_exponent_is_permutation() -> bool {
+        let degree = u16::from(P::D);
+        if degree <= 1 {
+            return false;
+        }
+
+        // x -> x^D is a permutation of F_p exactly when gcd(D, p - 1) = 1.
+        // Reduce p modulo D while iterating over its bits, avoiding conversion
+        // of the field modulus to a machine-sized integer.
+        let modulus_mod_degree =
+            F::MODULUS.bit_be_trimmed_iter().fold(0u16, |remainder, bit| {
+                (remainder * 2 + u16::from(bit)) % degree
+            });
+        let mut left = degree;
+        let mut right = (modulus_mod_degree + degree - 1) % degree;
+        while right != 0 {
+            (left, right) = (right, left % right);
+        }
+        left == 1
     }
 
     /// Size of poseidon sponge's state.
@@ -374,8 +410,7 @@ impl<P: PoseidonParams<F>, F: PrimeField> Poseidon2<P, F> {
 mod tests {
     use super::*;
     use crate::{
-        field::{instance::FpPallas, Field},
-        poseidon2::instance::pallas::PallasParams,
+        field::instance::FpPallas, poseidon2::instance::pallas::PallasParams,
     };
 
     struct SquaringPallasParams;
@@ -395,45 +430,12 @@ mod tests {
             <PallasParams as PoseidonParams<FpPallas>>::ROUND_CONSTANTS;
     }
 
-    fn invert_external_3(state: [FpPallas; 3]) -> [FpPallas; 3] {
-        // For T=3, the external matrix maps each x_i to x_i + sum(x).
-        // Its inverse subtracts one quarter of the output sum from each item.
-        let quarter = FpPallas::from(4u8).inverse().unwrap();
-        let correction = state.iter().copied().sum::<FpPallas>() * quarter;
-        state.map(|element| element - correction)
-    }
-
     #[test]
     fn custom_non_permutation_sbox_must_be_rejected() {
-        let round_constants = <SquaringPallasParams as PoseidonParams<
-            FpPallas,
-        >>::ROUND_CONSTANTS[0];
-        let after_linear_and_constant_a =
-            [FpPallas::from(1u8), FpPallas::from(7u8), FpPallas::from(12u8)];
-        let after_linear_and_constant_b = [
-            -after_linear_and_constant_a[0],
-            after_linear_and_constant_a[1],
-            after_linear_and_constant_a[2],
-        ];
-        let before_linear_a = invert_external_3(core::array::from_fn(|i| {
-            after_linear_and_constant_a[i] - round_constants[i]
-        }));
-        let before_linear_b = invert_external_3(core::array::from_fn(|i| {
-            after_linear_and_constant_b[i] - round_constants[i]
-        }));
-
-        let mut a = Poseidon2::<SquaringPallasParams, _>::new();
-        let mut b = Poseidon2::<SquaringPallasParams, _>::new();
-        a.state.copy_from_slice(&before_linear_a);
-        b.state.copy_from_slice(&before_linear_b);
-        assert_ne!(a.state, b.state);
-
-        a.permute();
-        b.permute();
-
-        assert_ne!(
-            a.state, b.state,
-            "a custom Poseidon S-box must be a permutation"
-        );
+        assert!(!Poseidon2::<SquaringPallasParams, FpPallas>::sbox_exponent_is_permutation());
+        assert!(std::panic::catch_unwind(
+            Poseidon2::<SquaringPallasParams, FpPallas>::new
+        )
+        .is_err());
     }
 }

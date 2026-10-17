@@ -6,7 +6,15 @@
 
 use crate::field::prime::PrimeField;
 
-/// Poseidon hash parameters.
+/// Poseidon2 sponge parameters.
+///
+/// Implementations must use a cryptographically reviewed parameter set for the
+/// field and security level they target. In particular, [`Self::D`] must be
+/// greater than one and coprime to `p - 1`, where `p` is the field modulus, so
+/// the S-box is a permutation. [`Poseidon2::new`](crate::poseidon2::Poseidon2::new)
+/// checks this exponent condition. Matrix validity, round constants, round
+/// counts, and sponge padding or domain separation remain the implementor's
+/// responsibility.
 pub trait PoseidonParams<F: PrimeField> {
     /// State size.
     const T: usize;
