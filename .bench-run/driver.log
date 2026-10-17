@@ -1,0 +1,4 @@
+[2026-10-17T11:08:26Z] run 1: preflight
+[2026-10-17T11:09:02Z] run 1: start codex-cli 0.163.0 model=gpt-6-luna effort=max cap=43200s
+[2026-10-17T21:05:21Z] run 1: OPERATOR INTERVENTION: stopped 125 SDK devnet nodes older than 15 min (host memory exhausted). Reaper active from here for all later runs.
+[2026-10-17T22:32:40Z] run 1: codex exit=0 after 41018s
