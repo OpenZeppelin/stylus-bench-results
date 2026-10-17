@@ -603,6 +603,36 @@ mod tests {
     }
 
     #[motsu::test]
+    fn token_id_zero_is_enumerable(
+        contract: Contract<Erc721EnumerableTestExample>,
+        alice: Address,
+    ) {
+        let token_id = U256::ZERO;
+        contract
+            .sender(alice)
+            .erc721
+            ._mint(alice, token_id)
+            .expect("should mint token zero");
+
+        contract
+            .sender(alice)
+            .enumerable
+            ._add_token_to_owner_enumeration(
+                alice,
+                token_id,
+                &contract.sender(alice).erc721,
+            )
+            .expect("should add token zero to owner enumeration");
+
+        let enumerated_token = contract
+            .sender(alice)
+            .token_of_owner_by_index(alice, U256::ZERO)
+            .expect("should enumerate token zero");
+
+        assert_eq!(enumerated_token, U256::ZERO);
+    }
+
+    #[motsu::test]
     fn reverts_when_token_of_owner_for_index_out_of_bound(
         contract: Contract<Erc721EnumerableTestExample>,
         alice: Address,
