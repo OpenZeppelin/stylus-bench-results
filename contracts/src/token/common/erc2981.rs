@@ -33,6 +33,7 @@ use stylus_sdk::{
 
 use crate::utils::{
     introspection::erc165::IErc165,
+    math::alloy::{Math, Rounding},
     structs::checkpoints::{Size, S160},
 };
 
@@ -153,8 +154,8 @@ pub trait IErc2981: IErc165 {
     ///
     /// # Panics
     ///
-    /// * If `sale_price` * `royalty_fraction` overflows.
     /// * If [`Erc2981::_fee_denominator()`] is zero.
+    /// * If the final royalty amount does not fit in [`U256`].
     fn royalty_info(&self, token_id: U256, sale_price: U256)
         -> (Address, U256);
 }
@@ -186,13 +187,17 @@ impl IErc2981 for Erc2981 {
                 (&royalty_info.receiver, &royalty_info.royalty_fraction)
             };
 
-        let royalty_amount = sale_price
-            .checked_mul(U256::from(royalty_fraction.get()))
-            .expect(
-                "multiplication overflowed in `royalty_amount` calculation.",
-            )
-            .checked_div(U256::from(self._fee_denominator()))
-            .expect("division by zero in `royalty_amount` calculation.");
+        let denominator = U256::from(self._fee_denominator());
+        assert!(
+            !denominator.is_zero(),
+            "division by zero in `royalty_amount` calculation."
+        );
+
+        let royalty_amount = sale_price.mul_div(
+            U256::from(royalty_fraction.get()),
+            denominator,
+            Rounding::Floor,
+        );
 
         (royalty_receiver.get(), royalty_amount)
     }
@@ -342,6 +347,10 @@ mod tests {
     const SALE_PRICE: U256 = uint!(1000_U256);
     const DEFAULT_FEE_NUMERATOR: U96 = uint!(9000_U96);
     const DEFAULT_FEE_DENOMINATOR: U96 = uint!(10000_U96);
+
+    fn expected_max_royalty_amount() -> U256 {
+        U256::MAX - (U256::MAX / uint!(10_U256) + uint!(1_U256))
+    }
 
     // DEFAULT ROYALTY TESTS
     #[motsu::test]
@@ -756,8 +765,7 @@ mod tests {
     }
 
     #[motsu::test]
-    #[should_panic = "multiplication overflowed in `royalty_amount` calculation."]
-    fn royalty_info_reverts_on_overflow_in_default_royalty(
+    fn royalty_info_calculates_default_royalty_without_intermediate_overflow(
         contract: Contract<Erc2981>,
         bob: Address,
     ) {
@@ -767,8 +775,11 @@ mod tests {
             .sender(bob)
             ._set_default_royalty(bob, DEFAULT_FEE_NUMERATOR)
             .expect("should set default royalty");
-        // should overflow.
-        _ = contract.sender(bob).royalty_info(TOKEN_ID, U256::MAX);
+        let (receiver, amount) =
+            contract.sender(bob).royalty_info(TOKEN_ID, U256::MAX);
+
+        assert_eq!(bob, receiver);
+        assert_eq!(expected_max_royalty_amount(), amount);
     }
 
     #[motsu::test]
@@ -789,8 +800,7 @@ mod tests {
     }
 
     #[motsu::test]
-    #[should_panic = "multiplication overflowed in `royalty_amount` calculation."]
-    fn royalty_info_reverts_on_overflow_in_token_royalty(
+    fn royalty_info_calculates_token_royalty_without_intermediate_overflow(
         contract: Contract<Erc2981>,
         bob: Address,
     ) {
@@ -800,8 +810,11 @@ mod tests {
             .sender(bob)
             ._set_token_royalty(TOKEN_ID, bob, DEFAULT_FEE_NUMERATOR)
             .expect("should set token royalty");
-        // should overflow.
-        _ = contract.sender(bob).royalty_info(TOKEN_ID, U256::MAX);
+        let (receiver, amount) =
+            contract.sender(bob).royalty_info(TOKEN_ID, U256::MAX);
+
+        assert_eq!(bob, receiver);
+        assert_eq!(expected_max_royalty_amount(), amount);
     }
 
     #[motsu::test]
