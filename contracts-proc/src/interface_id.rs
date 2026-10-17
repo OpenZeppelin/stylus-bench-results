@@ -15,6 +15,7 @@ use syn::{
 struct MethodSelector {
     signature: String,
     rust_fn_name: String,
+    selector_bytes: proc_macro2::TokenStream,
     selector: proc_macro2::TokenStream,
     cfg_attrs: Vec<Attribute>,
     dynamic: bool,
@@ -86,6 +87,7 @@ pub(crate) fn interface_id(
         let method_selector = MethodSelector {
             signature: signature.clone(),
             rust_fn_name: rust_fn_name.clone(),
+            selector_bytes,
             selector,
             cfg_attrs,
             dynamic: has_trait_generics || uses_self_type,
@@ -136,8 +138,8 @@ pub(crate) fn interface_id(
                 ),
                 proc_macro2::Span::call_site(),
             );
-            let selector_bytes_a = &selector_a.selector;
-            let selector_bytes_b = &selector_b.selector;
+            let selector_bytes_a = &selector_a.selector_bytes;
+            let selector_bytes_b = &selector_b.selector_bytes;
             let cfg_attrs_a = &selector_a.cfg_attrs;
             let cfg_attrs_b = &selector_b.cfg_attrs;
             let check = if selector_a.dynamic || selector_b.dynamic {
