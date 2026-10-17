@@ -1,5 +1,6 @@
 //! Implementation of the ERC-1155 token standard.
 use alloc::{
+    collections::BTreeMap,
     string::{String, ToString},
     vec,
     vec::Vec,
@@ -454,6 +455,36 @@ impl Erc1155 {
         values: Vec<U256>,
     ) -> Result<(), Error> {
         Self::require_equal_arrays_length(&ids, &values)?;
+
+        // Validate every source balance before changing any token balance.
+        // This keeps a failed batch from leaving earlier items applied when a
+        // composing contract catches the returned error. The map tracks the
+        // simulated source balance so duplicate ids preserve sequential
+        // validation semantics.
+        if ids.len() > 1 && !from.is_zero() {
+            let mut remaining_balances = BTreeMap::new();
+
+            for (&token_id, &value) in ids.iter().zip(values.iter()) {
+                let balance = *remaining_balances
+                    .entry(token_id)
+                    .or_insert_with(|| self.balance_of(from, token_id));
+
+                if balance < value {
+                    return Err(Error::InsufficientBalance(
+                        ERC1155InsufficientBalance {
+                            sender: from,
+                            balance,
+                            needed: value,
+                            token_id,
+                        },
+                    ));
+                }
+
+                if from != to {
+                    remaining_balances.insert(token_id, balance - value);
+                }
+            }
+        }
 
         let operator = self.vm().msg_sender();
 
