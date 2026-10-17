@@ -4,12 +4,9 @@ extern crate alloc;
 
 use alloy_primitives::Address;
 use alloy_sol_types::{sol, SolCall, SolValue};
-use openzeppelin_stylus::proxy::beacon::BeaconProxy;
+use openzeppelin_stylus::proxy::{beacon::BeaconProxy, IProxy};
 use stylus_sdk::{
-    abi::Bytes,
-    prelude::*,
-    storage::StorageAddress,
-    testing::TestVM,
+    abi::Bytes, prelude::*, storage::StorageAddress, testing::TestVM,
 };
 
 sol! {
@@ -42,17 +39,29 @@ fn implementation_scalar_must_not_overwrite_beacon_address() {
     );
 
     let mut proxy = BeaconProxy::from(&vm);
+    let mut implementation_state = ScalarImplementation::from(&vm);
+    implementation_state.owner.set(owner);
+
     proxy
         .constructor(beacon, &Bytes::new())
         .expect("beacon proxy initialization should succeed");
     assert_eq!(proxy.get_beacon(), beacon);
+    assert_eq!(
+        implementation_state.owner.get(),
+        owner,
+        "beacon initialization must preserve implementation storage"
+    );
 
-    let mut implementation_state = ScalarImplementation::from(&vm);
-    implementation_state.owner.set(owner);
+    let next_owner = Address::from([0x50; 20]);
+    implementation_state.owner.set(next_owner);
 
     assert_eq!(
         proxy.get_beacon(),
         beacon,
         "implementation storage at slot zero must not change the beacon"
+    );
+    assert_eq!(
+        proxy.implementation().expect("beacon lookup should still work"),
+        implementation,
     );
 }
