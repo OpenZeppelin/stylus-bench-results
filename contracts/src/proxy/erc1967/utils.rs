@@ -170,21 +170,32 @@ impl Erc1967Utils {
         new_implementation: Address,
         data: &Bytes,
     ) -> Result<(), Error> {
+        if data.is_empty() {
+            Erc1967Utils::check_non_payable(context)?;
+        }
+
+        let previous_implementation =
+            Erc1967Utils::get_implementation(context);
         Erc1967Utils::set_implementation(context, new_implementation)?;
+
+        if !data.is_empty() {
+            if let Err(error) = AddressUtils::function_delegate_call(
+                context,
+                new_implementation,
+                data.as_ref(),
+            ) {
+                StorageSlot::get_slot::<StorageAddress>(
+                    context,
+                    IMPLEMENTATION_SLOT,
+                )
+                .set(previous_implementation);
+                return Err(error.into());
+            }
+        }
 
         context
             .vm()
             .log(erc1967::Upgraded { implementation: new_implementation });
-
-        if data.is_empty() {
-            Erc1967Utils::check_non_payable(context)?;
-        } else {
-            AddressUtils::function_delegate_call(
-                context,
-                new_implementation,
-                data.as_ref(),
-            )?;
-        }
 
         Ok(())
     }
@@ -209,12 +220,15 @@ impl Erc1967Utils {
         context: &T,
         new_admin: Address,
     ) -> Result<(), Error> {
+        let previous_admin = Erc1967Utils::get_admin(context);
+        Erc1967Utils::set_admin(context, new_admin)?;
+
         context.vm().log(erc1967::AdminChanged {
-            previous_admin: Erc1967Utils::get_admin(context),
+            previous_admin,
             new_admin,
         });
 
-        Erc1967Utils::set_admin(context, new_admin)
+        Ok(())
     }
 
     /// Returns the current beacon.
@@ -253,21 +267,27 @@ impl Erc1967Utils {
         new_beacon: Address,
         data: &Bytes,
     ) -> Result<(), Error> {
-        Erc1967Utils::set_beacon(context, new_beacon)?;
-        context.vm().log(erc1967::BeaconUpgraded { beacon: new_beacon });
-
         if data.is_empty() {
             Erc1967Utils::check_non_payable(context)?;
-        } else {
-            let beacon_implementation =
-                Erc1967Utils::get_beacon_implementation(context, new_beacon)?;
+        }
 
-            AddressUtils::function_delegate_call(
+        let previous_beacon = Erc1967Utils::get_beacon(context);
+        let beacon_implementation =
+            Erc1967Utils::set_beacon(context, new_beacon)?;
+
+        if !data.is_empty() {
+            if let Err(error) = AddressUtils::function_delegate_call(
                 context,
                 beacon_implementation,
                 data.as_ref(),
-            )?;
+            ) {
+                StorageSlot::get_slot::<StorageAddress>(context, BEACON_SLOT)
+                    .set(previous_beacon);
+                return Err(error.into());
+            }
         }
+
+        context.vm().log(erc1967::BeaconUpgraded { beacon: new_beacon });
 
         Ok(())
     }
@@ -363,13 +383,10 @@ impl Erc1967Utils {
     fn set_beacon<T: TopLevelStorage + HostAccess<Host = VM>>(
         context: &mut T,
         new_beacon: Address,
-    ) -> Result<(), Error> {
+    ) -> Result<Address, Error> {
         if context.vm().code_size(new_beacon) == 0 {
             return Err(ERC1967InvalidBeacon { beacon: new_beacon }.into());
         }
-
-        StorageSlot::get_slot::<StorageAddress>(context, BEACON_SLOT)
-            .set(new_beacon);
 
         let beacon_implementation =
             Erc1967Utils::get_beacon_implementation(context, new_beacon)?;
@@ -381,7 +398,10 @@ impl Erc1967Utils {
             .into());
         }
 
-        Ok(())
+        StorageSlot::get_slot::<StorageAddress>(context, BEACON_SLOT)
+            .set(new_beacon);
+
+        Ok(beacon_implementation)
     }
 }
 
