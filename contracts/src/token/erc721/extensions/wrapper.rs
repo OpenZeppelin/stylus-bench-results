@@ -134,6 +134,7 @@ pub trait IErc721Wrapper: IErc721Receiver {
     ///
     /// # Errors
     ///
+    /// * [`Error::UnsupportedToken`] - If the underlying address has no code.
     /// * [`Error::Erc721FailedOperation`] - If the underlying token is not an
     ///   ERC-721 contract.
     /// * [`Error::InvalidReceiverWithReason`] - If an error occurs during
@@ -160,6 +161,7 @@ pub trait IErc721Wrapper: IErc721Receiver {
     ///
     /// # Errors
     ///
+    /// * [`Error::UnsupportedToken`] - If the underlying address has no code.
     /// * [`Error::Erc721FailedOperation`] - If the underlying token is not an
     ///   ERC-721 contract.
     /// * [`Error::InvalidReceiverWithReason`] - If an error occurs during
@@ -205,7 +207,7 @@ impl Erc721Wrapper {
     ) -> Result<bool, Error> {
         let sender = self.vm().msg_sender();
         let contract_address = self.vm().contract_address();
-        let underlying = Erc721Interface::new(self.underlying());
+        let underlying = Erc721Interface::new(self.ensure_underlying()?);
         let host = (*self.vm()).clone();
 
         for token_id in token_ids {
@@ -253,7 +255,7 @@ impl Erc721Wrapper {
         erc721: &mut Erc721,
     ) -> Result<bool, Error> {
         let sender = self.vm().msg_sender();
-        let underlying = Erc721Interface::new(self.underlying());
+        let underlying = Erc721Interface::new(self.ensure_underlying()?);
         let contract_address = self.vm().contract_address();
         let host = (*self.vm()).clone();
 
@@ -337,6 +339,14 @@ impl Erc721Wrapper {
     #[must_use]
     pub fn underlying(&self) -> Address {
         self.underlying.get()
+    }
+
+    fn ensure_underlying(&self) -> Result<Address, Error> {
+        let token = self.underlying();
+        if self.vm().code_size(token) == 0 {
+            return Err(Error::UnsupportedToken(ERC721UnsupportedToken { token }));
+        }
+        Ok(token)
     }
 
     /// Mints wrapped tokens to cover any underlying tokens that would have been
