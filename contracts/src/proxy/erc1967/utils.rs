@@ -658,6 +658,31 @@ mod tests {
     }
 
     #[test]
+    fn invalid_implementation_precedes_nonpayable_error() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = TestContract::from(&contract_vm);
+        let invalid_address = Address::from([161u8; 20]);
+        contract_vm.set_sender(Address::from([1u8; 20]));
+        contract_vm.set_value(U256::from(1));
+
+        let err = contract
+            .test_upgrade_to_and_call(invalid_address, vec![].into())
+            .expect_err("invalid implementation must be checked first");
+
+        assert_eq!(
+            err,
+            Error::InvalidImplementation(ERC1967InvalidImplementation {
+                implementation: invalid_address,
+            })
+            .encode()
+        );
+        assert_eq!(contract.test_get_implementation(), Address::ZERO);
+        assert!(contract_vm.get_emitted_logs().is_empty());
+    }
+
+    #[test]
     fn upgrade_to_and_call_with_zero_implementation() {
         let contract_vm = TestVM::default();
         let contract_address = Address::from([160u8; 20]);
@@ -1128,6 +1153,31 @@ mod tests {
         })
         .test_get_beacon();
         assert_eq!(beacon, Address::ZERO);
+    }
+
+    #[test]
+    fn invalid_beacon_precedes_nonpayable_error() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = TestContract::from(&contract_vm);
+        let invalid_address = Address::from([161u8; 20]);
+        contract_vm.set_sender(Address::from([1u8; 20]));
+        contract_vm.set_value(U256::from(1));
+
+        let err = contract
+            .test_upgrade_beacon_to_and_call(invalid_address, vec![].into())
+            .expect_err("invalid beacon must be checked first");
+
+        assert_eq!(
+            err,
+            Error::InvalidBeacon(ERC1967InvalidBeacon {
+                beacon: invalid_address,
+            })
+            .encode()
+        );
+        assert_eq!(contract.test_get_beacon(), Address::ZERO);
+        assert!(contract_vm.get_emitted_logs().is_empty());
     }
 
     #[test]
