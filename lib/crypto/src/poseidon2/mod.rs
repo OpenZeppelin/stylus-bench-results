@@ -430,6 +430,47 @@ mod tests {
             <PallasParams as PoseidonParams<FpPallas>>::ROUND_CONSTANTS;
     }
 
+    fn unchecked_sponge() -> Poseidon2<SquaringPallasParams, FpPallas> {
+        // Recreate the pre-guard constructor for the collision regression.
+        Poseidon2 {
+            phantom: core::marker::PhantomData,
+            state: alloc::vec![FpPallas::from(0u8); SquaringPallasParams::T]
+                .into_boxed_slice(),
+            mode: Mode::Absorbing,
+            index: SquaringPallasParams::CAPACITY,
+        }
+    }
+
+    #[test]
+    fn invalid_sbox_makes_the_sponge_hash_collide() {
+        // For one Poseidon round, choose two rate inputs so the first
+        // post-constant state vectors differ by signs in two coordinates.
+        // Squaring erases those signs; all remaining rounds therefore match.
+        let rc =
+            <SquaringPallasParams as PoseidonParams<FpPallas>>::ROUND_CONSTANTS
+                [0];
+        let zero = FpPallas::from(0u8);
+        let two = FpPallas::from(2u8);
+        let three = FpPallas::from(3u8);
+        let four = FpPallas::from(4u8);
+        let five = FpPallas::from(5u8);
+        let x = rc[1] - three * rc[0];
+        let y = zero;
+        let x_collision = five * rc[0] - three * rc[1];
+        let y_collision = two * rc[1] - four * rc[0];
+
+        assert_ne!((x, y), (x_collision, y_collision));
+
+        let mut a = unchecked_sponge();
+        let mut b = unchecked_sponge();
+        a.absorb(&x);
+        a.absorb(&y);
+        b.absorb(&x_collision);
+        b.absorb(&y_collision);
+
+        assert_eq!(a.squeeze(), b.squeeze());
+    }
+
     #[test]
     fn custom_non_permutation_sbox_must_be_rejected() {
         assert!(!Poseidon2::<SquaringPallasParams, FpPallas>::sbox_exponent_is_permutation());
