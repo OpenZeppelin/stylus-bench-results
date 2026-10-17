@@ -654,6 +654,32 @@ mod tests {
     }
 
     #[openzeppelin_stylus_proc::vm_test]
+    fn withdraw_to_reverts_when_underlying_has_no_code(
+        contract: Contract<Erc721WrapperTestExample>,
+        alice: Address,
+    ) {
+        let token_id = random_token_ids(1)[0];
+        contract.sender(alice).constructor(alice);
+        contract
+            .sender(alice)
+            .erc721
+            ._mint(alice, token_id)
+            .expect("should mint wrapped token");
+
+        let err = contract
+            .sender(alice)
+            .withdraw_to(alice, vec![token_id])
+            .expect_error("should reject an underlying address without code");
+
+        assert!(matches!(
+            err,
+            Error::UnsupportedToken(ERC721UnsupportedToken { token })
+                if token == alice
+        ));
+        assert_eq!(contract.sender(alice).erc721.owner_of(token_id), Ok(alice));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn deposit_for_reverts_when_nonexistent_token(
         contract: Contract<Erc721WrapperTestExample>,
         erc721_contract: Contract<Erc721>,
