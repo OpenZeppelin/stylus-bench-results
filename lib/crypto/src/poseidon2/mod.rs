@@ -430,6 +430,24 @@ mod tests {
             <PallasParams as PoseidonParams<FpPallas>>::ROUND_CONSTANTS;
     }
 
+    struct CustomFullRoundsPallasParams<const ROUNDS_F: usize>;
+
+    impl<const ROUNDS_F: usize> PoseidonParams<FpPallas>
+        for CustomFullRoundsPallasParams<ROUNDS_F>
+    {
+        const T: usize = <PallasParams as PoseidonParams<FpPallas>>::T;
+        const D: u8 = <PallasParams as PoseidonParams<FpPallas>>::D;
+        const CAPACITY: usize =
+            <PallasParams as PoseidonParams<FpPallas>>::CAPACITY;
+        const ROUNDS_F: usize = ROUNDS_F;
+        const ROUNDS_P: usize =
+            <PallasParams as PoseidonParams<FpPallas>>::ROUNDS_P;
+        const MAT_INTERNAL_DIAG_M_1: &'static [FpPallas] =
+            <PallasParams as PoseidonParams<FpPallas>>::MAT_INTERNAL_DIAG_M_1;
+        const ROUND_CONSTANTS: &'static [&'static [FpPallas]] =
+            <PallasParams as PoseidonParams<FpPallas>>::ROUND_CONSTANTS;
+    }
+
     fn unchecked_sponge() -> Poseidon2<SquaringPallasParams, FpPallas> {
         // Recreate the pre-guard constructor for the collision regression.
         Poseidon2 {
@@ -478,5 +496,17 @@ mod tests {
             Poseidon2::<SquaringPallasParams, FpPallas>::new
         )
         .is_err());
+    }
+
+    #[test]
+    #[should_panic(expected = "Poseidon2 full round count must be even")]
+    fn custom_odd_full_round_count_must_be_rejected() {
+        let _ = Poseidon2::<CustomFullRoundsPallasParams<7>, FpPallas>::new();
+    }
+
+    #[test]
+    #[should_panic(expected = "Poseidon2 requires at least 8 full rounds")]
+    fn custom_full_round_count_below_security_minimum_must_be_rejected() {
+        let _ = Poseidon2::<CustomFullRoundsPallasParams<6>, FpPallas>::new();
     }
 }
