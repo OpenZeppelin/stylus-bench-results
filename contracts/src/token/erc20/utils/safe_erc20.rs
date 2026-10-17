@@ -787,7 +787,7 @@ mod tests {
         }
     }
 
-    fn mock_transfer(vm: &TestVM, token: Address, to: Address, value: U256) {
+    fn mock_transfer(vm: TestVM, token: Address, to: Address, value: U256) {
         let call = IERC20::transferCall { to, value };
         vm.mock_call(
             token,
@@ -798,7 +798,7 @@ mod tests {
     }
 
     fn mock_transfer_from(
-        vm: &TestVM,
+        vm: TestVM,
         token: Address,
         from: Address,
         to: Address,

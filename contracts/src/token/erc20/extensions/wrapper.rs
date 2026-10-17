@@ -479,7 +479,7 @@ mod tests {
     unsafe impl TopLevelStorage for Erc20WrapperTestExample {}
 
     fn mock_transfer_from(
-        vm: &TestVM,
+        vm: TestVM,
         token: Address,
         from: Address,
         to: Address,
@@ -495,7 +495,7 @@ mod tests {
         );
     }
 
-    fn mock_transfer(vm: &TestVM, token: Address, to: Address, value: U256) {
+    fn mock_transfer(vm: TestVM, token: Address, to: Address, value: U256) {
         let call = ERC20CallMock::transferCall { to, value };
         vm.mock_call(
             token,
@@ -506,7 +506,7 @@ mod tests {
     }
 
     fn mock_balance_of(
-        vm: &TestVM,
+        vm: TestVM,
         token: Address,
         account: Address,
         balance: U256,
@@ -521,12 +521,12 @@ mod tests {
         );
     }
 
-    fn mock_balance_of_reverts(vm: &TestVM, token: Address, account: Address) {
+    fn mock_balance_of_reverts(vm: TestVM, token: Address, account: Address) {
         let call = ERC20CallMock::balanceOfCall { account };
         vm.mock_static_call(token, call.abi_encode(), Err(vec![1]));
     }
 
-    fn mock_decimals(vm: &TestVM, token: Address, decimals: u8) {
+    fn mock_decimals(vm: TestVM, token: Address, decimals: u8) {
         let call = ERC20MetadataCallMock::decimalsCall {};
         vm.mock_static_call(
             token,
@@ -957,7 +957,11 @@ mod tests {
             .recover(alice)
             .expect_error("should return Error::InvalidUnderlying");
 
-        assert!(matches!(err, Error::InvalidUnderlying(_)));
+        assert!(matches!(
+            err,
+            Error::InvalidUnderlying(ERC20InvalidUnderlying { token })
+                if token == invalid_underlying
+        ));
     }
 
     #[openzeppelin_stylus_proc::vm_test]
