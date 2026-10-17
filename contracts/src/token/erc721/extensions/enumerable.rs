@@ -11,18 +11,32 @@
 
 use alloc::{vec, vec::Vec};
 
-use alloy_primitives::{aliases::B32, uint, Address, U256};
+use alloy_primitives::{aliases::B32, uint, Address, B256, U256};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
 use stylus_sdk::{
     prelude::*,
-    storage::{StorageMap, StorageU256, StorageVec},
+    storage::{StorageBool, StorageMap, StorageU256, StorageVec},
     stylus_core::calls::errors::MethodError,
 };
 
 use crate::{
     token::erc721::{self, IErc721},
     utils::introspection::erc165::IErc165,
+    utils::storage_slot::StorageSlot,
+};
+
+// Tracks presence for valid token ID zero entries because a zero-valued
+// StorageMap value otherwise cannot distinguish an entry from a missing key.
+const ZERO_TOKEN_INDEX_SLOT: B256 = {
+    const HASH: [u8; 32] = keccak_const::Keccak256::new()
+        .update(b"Stylus.erc721Enumerable.zeroTokenIndex")
+        .finalize();
+    let slot = U256::from_be_bytes(HASH)
+        .wrapping_sub(uint!(1_U256))
+        .to_be_bytes::<32>();
+
+    B256::new(slot)
 };
 
 #[cfg_attr(coverage_nightly, coverage(off))]
@@ -150,7 +164,7 @@ impl IErc721Enumerable for Erc721Enumerable {
     ) -> Result<U256, Self::Error> {
         let token = self.owned_tokens.getter(owner).get(index);
 
-        if token.is_zero() {
+        if token.is_zero() && !self.has_zero_token_at(owner, index) {
             Err(ERC721OutOfBoundsIndex { owner, index }.into())
         } else {
             Ok(token)
@@ -202,6 +216,9 @@ impl Erc721Enumerable {
         let length = erc721.balance_of(to)? - uint!(1_U256);
         self.owned_tokens.setter(to).setter(length).set(token_id);
         self.owned_tokens_index.setter(token_id).set(length);
+        if token_id.is_zero() {
+            self.zero_token_presence().setter(to).setter(length).set(true);
+        }
 
         Ok(())
     }
@@ -256,24 +273,54 @@ impl Erc721Enumerable {
         let last_token_index = erc721.balance_of(from)?;
         let token_index = self.owned_tokens_index.get(token_id);
 
-        let mut owned_tokens_by_owner = self.owned_tokens.setter(from);
-
         // When the token to delete is the last token,
         // the swap operation is unnecessary.
         if token_index != last_token_index {
-            let last_token_id = owned_tokens_by_owner.get(last_token_index);
+            let last_token_id =
+                self.owned_tokens.getter(from).get(last_token_index);
 
             // Move the last token to the slot of the to-delete token.
-            owned_tokens_by_owner.setter(token_index).set(last_token_id);
+            self.owned_tokens
+                .setter(from)
+                .setter(token_index)
+                .set(last_token_id);
             // Update the moved token's index.
             self.owned_tokens_index.setter(last_token_id).set(token_index);
+
+            if last_token_id.is_zero() {
+                self.zero_token_presence()
+                    .setter(from)
+                    .setter(token_index)
+                    .set(true);
+            }
         }
+
+        if token_id.is_zero() {
+            self.zero_token_presence()
+                .setter(from)
+                .setter(token_index)
+                .set(false);
+        }
+        self.zero_token_presence()
+            .setter(from)
+            .setter(last_token_index)
+            .set(false);
 
         // This also deletes the contents at the last position of the array.
         self.owned_tokens_index.delete(token_id);
-        owned_tokens_by_owner.delete(last_token_index);
+        self.owned_tokens.setter(from).delete(last_token_index);
 
         Ok(())
+    }
+
+    fn zero_token_presence(
+        &self,
+    ) -> StorageMap<Address, StorageMap<U256, StorageBool>> {
+        StorageSlot::get_slot(self, ZERO_TOKEN_INDEX_SLOT)
+    }
+
+    fn has_zero_token_at(&self, owner: Address, index: U256) -> bool {
+        self.zero_token_presence().getter(owner).get(index)
     }
 
     /// Function to remove a token from this extension's
@@ -701,6 +748,77 @@ mod tests {
             })
             .token_of_owner_by_index(alice, U256::ZERO)
             .expect("token ID zero is valid at owner index zero")
+        );
+    }
+
+    #[test]
+    fn token_id_zero_remains_enumerable_after_swap_and_transfer() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc721EnumerableTestExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+        let bob = Address::from([2u8; 20]);
+        let nonzero_token_id = U256::from(1);
+
+        for token_id in [nonzero_token_id, U256::ZERO] {
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .erc721
+            ._mint(alice, token_id)
+            .expect("should mint token");
+            contract_vm.set_sender(alice);
+            contract
+                .enumerable
+                ._add_token_to_owner_enumeration(
+                    alice,
+                    token_id,
+                    &contract.erc721,
+                )
+                .expect("should add token to owner enumeration");
+        }
+
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .erc721
+        .transfer_from(alice, bob, nonzero_token_id)
+        .expect("should transfer the nonzero token");
+        contract_vm.set_sender(alice);
+        contract
+            .enumerable
+            ._remove_token_from_owner_enumeration(
+                alice,
+                nonzero_token_id,
+                &contract.erc721,
+            )
+            .expect("should remove the transferred token from Alice");
+        contract_vm.set_sender(bob);
+        contract
+            .enumerable
+            ._add_token_to_owner_enumeration(
+                bob,
+                nonzero_token_id,
+                &contract.erc721,
+            )
+            .expect("should add the transferred token to Bob");
+
+        assert_eq!(
+            U256::ZERO,
+            contract
+                .enumerable
+                .token_of_owner_by_index(alice, U256::ZERO)
+                .expect("the moved token ID zero should remain enumerable")
+        );
+        assert_eq!(
+            nonzero_token_id,
+            contract
+                .enumerable
+                .token_of_owner_by_index(bob, U256::ZERO)
+                .expect("the transferred token should be enumerable")
         );
     }
 
