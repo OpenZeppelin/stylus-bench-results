@@ -170,15 +170,20 @@ impl Erc1967Utils {
         new_implementation: Address,
         data: &Bytes,
     ) -> Result<(), Error> {
-        if data.is_empty() {
-            Erc1967Utils::check_non_payable(context)?;
-        }
-
         let previous_implementation =
             Erc1967Utils::get_implementation(context);
         Erc1967Utils::set_implementation(context, new_implementation)?;
 
-        if !data.is_empty() {
+        if data.is_empty() {
+            if let Err(error) = Erc1967Utils::check_non_payable(context) {
+                StorageSlot::get_slot::<StorageAddress>(
+                    context,
+                    IMPLEMENTATION_SLOT,
+                )
+                .set(previous_implementation);
+                return Err(error);
+            }
+        } else {
             if let Err(error) = AddressUtils::function_delegate_call(
                 context,
                 new_implementation,
@@ -267,15 +272,17 @@ impl Erc1967Utils {
         new_beacon: Address,
         data: &Bytes,
     ) -> Result<(), Error> {
-        if data.is_empty() {
-            Erc1967Utils::check_non_payable(context)?;
-        }
-
         let previous_beacon = Erc1967Utils::get_beacon(context);
         let beacon_implementation =
             Erc1967Utils::set_beacon(context, new_beacon)?;
 
-        if !data.is_empty() {
+        if data.is_empty() {
+            if let Err(error) = Erc1967Utils::check_non_payable(context) {
+                StorageSlot::get_slot::<StorageAddress>(context, BEACON_SLOT)
+                    .set(previous_beacon);
+                return Err(error);
+            }
+        } else {
             if let Err(error) = AddressUtils::function_delegate_call(
                 context,
                 beacon_implementation,
