@@ -6,6 +6,11 @@ use benches::{
 use futures::FutureExt;
 use itertools::Itertools;
 
+// Nitro's gas estimator can exhaust its request worker when several contract
+// suites deploy and estimate transactions at the same time. Keep measurements
+// deterministic and run one suite at a time.
+const MAX_PARALLEL: usize = 1;
+
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     let benchmarks = [
@@ -24,7 +29,6 @@ async fn main() -> eyre::Result<()> {
 
     // Run benchmarks max 3 at the same time.
     // Otherwise, nitro test node can overload and revert transaction.
-    const MAX_PARALLEL: usize = 3;
     let mut report = BenchmarkReport::default();
     for chunk in &benchmarks.into_iter().chunks(MAX_PARALLEL) {
         report = futures::future::try_join_all(chunk)
