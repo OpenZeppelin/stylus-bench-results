@@ -59,7 +59,7 @@ done
 # No need to compile benchmarks with `--release`
 # since this only runs the benchmarking code and the contracts have already been compiled with `--release`.
 # The benchmark helper starts its SDK-managed Nitro devnet automatically.
-cargo run -p benches
+cargo run -p benches --bin benches
 echo "This benchmarks measure gas execution cost,
  the 21000 EVM base gas fee is omitted."
 echo
