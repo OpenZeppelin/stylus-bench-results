@@ -8,9 +8,9 @@
 //! [curve25519-dalek]: https://github.com/dalek-cryptography/curve25519-dalek
 
 #![allow(non_snake_case)]
+use num_traits::Zero;
 use sha2::{digest::Digest, Sha512};
 use static_assertions::const_assert;
-use num_traits::Zero;
 use zeroize::ZeroizeOnDrop;
 
 use crate::{
@@ -207,9 +207,8 @@ impl SigningKey {
         h.update(self.signing_key.hash_prefix);
         h.update(message);
 
-        let r = WideScalar::from_bigint(U512::from_bytes_le(
-            h.finalize().as_slice(),
-        ));
+        let digest = h.finalize();
+        let r = WideScalar::from_bigint(U512::from_bytes_le(&digest[..]));
         let r = Scalar::from_fp(r);
 
         let R = ProjectivePoint::generator() * r;
@@ -221,9 +220,8 @@ impl SigningKey {
         ));
         h.update(message);
 
-        let k = WideScalar::from_bigint(U512::from_bytes_le(
-            h.finalize().as_slice(),
-        ));
+        let digest = h.finalize();
+        let k = WideScalar::from_bigint(U512::from_bytes_le(&digest[..]));
         let k = Scalar::from_fp(k);
         let s: Scalar = (k * self.signing_key.scalar) + r;
 
@@ -330,7 +328,7 @@ impl Signature {
 }
 
 /// Ed25519 key for signature verification (public key).
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, Default, PartialEq)]
 pub struct VerifyingKey {
     /// Edwards point used for curve arithmetic operations.
     point: ProjectivePoint,
@@ -359,7 +357,6 @@ impl VerifyingKey {
     }
 
     /// Returns the Edwards point for this key.
-    #[must_use]
     pub const fn point(&self) -> ProjectivePoint {
         self.point
     }
@@ -392,9 +389,8 @@ impl VerifyingKey {
         h.update(CompressedPointY::from(A.into_affine()));
         h.update(message);
 
-        let k = WideScalar::from_bigint(U512::from_bytes_le(
-            h.finalize().as_slice(),
-        ));
+        let digest = h.finalize();
+        let k = WideScalar::from_bigint(U512::from_bytes_le(&digest[..]));
         let k = Scalar::from_fp(k);
 
         // Compute R: `-[k]A + [s]B = R`.
@@ -406,12 +402,6 @@ impl VerifyingKey {
     #[must_use]
     pub fn to_bytes(&self) -> PublicKey {
         CompressedPointY::from(self.point.into_affine()).into()
-    }
-}
-
-impl Default for VerifyingKey {
-    fn default() -> Self {
-        VerifyingKey { point: ProjectivePoint::default(), is_valid: false }
     }
 }
 
@@ -439,9 +429,9 @@ impl From<ExpandedSecretKey> for VerifyingKey {
 mod test {
     use alloc::string::String;
 
+    use crate::curve::te::instance::curve25519::Curve25519FqParam;
     use hex_literal::hex;
     use proptest::prelude::*;
-    use crate::curve::te::instance::curve25519::Curve25519FqParam;
 
     use super::*;
 
