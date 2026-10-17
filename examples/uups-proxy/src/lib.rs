@@ -219,3 +219,25 @@ impl IErc1822Proxiable for UUPSProxyErc20Example {
         self.uups.proxiable_uuid()
     }
 }
+
+#[cfg(test)]
+mod legacy_initializer_tests {
+    use alloy_primitives::Address;
+    use stylus_sdk::testing::TestVM;
+
+    use super::{uups_upgradeable, Error, UUPSProxyErc20Example};
+
+    #[test]
+    fn legacy_renounced_owner_state_cannot_be_reinitialized() {
+        let vm = TestVM::default();
+        let mut contract = UUPSProxyErc20Example::from(&vm);
+
+        // v0.3 wrote its UUPS version while initializing, but had no
+        // namespaced initialization marker. A zero owner is possible after
+        // the owner renounced ownership.
+        contract.uups.version.set(uups_upgradeable::VERSION_NUMBER);
+
+        let result = contract.initialize(Address::from([2; 20]));
+        assert!(matches!(result, Err(Error::InvalidInitialization(_))));
+    }
+}
