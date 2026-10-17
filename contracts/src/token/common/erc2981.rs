@@ -224,7 +224,12 @@ impl Erc2981 {
     /// * `&self` - Read access to the contract's state.
     #[must_use]
     pub fn _fee_denominator(&self) -> U96 {
-        self.fee_denominator.get()
+        let fee_denominator = self.fee_denominator.get();
+        if fee_denominator.is_zero() {
+            U96::from(10_000u16)
+        } else {
+            fee_denominator
+        }
     }
 
     /// Sets the royalty information that all ids in this contract
@@ -748,8 +753,7 @@ mod tests {
     }
 
     #[motsu::test]
-    #[should_panic = "division by zero in `royalty_amount` calculation."]
-    fn royalty_info_reverts_on_division_by_zero_in_default_royalty(
+    fn royalty_info_uses_default_denominator_for_default_royalty(
         contract: Contract<Erc2981>,
         bob: Address,
     ) {
@@ -757,11 +761,14 @@ mod tests {
 
         contract
             .sender(bob)
-            ._set_default_royalty(bob, U96::ZERO)
+            ._set_default_royalty(bob, DEFAULT_FEE_NUMERATOR)
             .expect("should set default royalty");
 
-        // should revert on division by zero.
-        _ = contract.sender(bob).royalty_info(TOKEN_ID, SALE_PRICE);
+        let (receiver, amount) =
+            contract.sender(bob).royalty_info(TOKEN_ID, SALE_PRICE);
+
+        assert_eq!(bob, receiver);
+        assert_eq!(uint!(900_U256), amount);
     }
 
     #[motsu::test]
@@ -783,8 +790,7 @@ mod tests {
     }
 
     #[motsu::test]
-    #[should_panic = "division by zero in `royalty_amount` calculation."]
-    fn royalty_info_reverts_on_division_by_zero_in_token_royalty(
+    fn royalty_info_uses_default_denominator_for_token_royalty(
         contract: Contract<Erc2981>,
         bob: Address,
     ) {
@@ -792,11 +798,14 @@ mod tests {
 
         contract
             .sender(bob)
-            ._set_token_royalty(TOKEN_ID, bob, U96::ZERO)
-            .expect("should set default royalty");
+            ._set_token_royalty(TOKEN_ID, bob, DEFAULT_FEE_NUMERATOR)
+            .expect("should set token royalty");
 
-        // should revert on division by zero.
-        _ = contract.sender(bob).royalty_info(TOKEN_ID, SALE_PRICE);
+        let (receiver, amount) =
+            contract.sender(bob).royalty_info(TOKEN_ID, SALE_PRICE);
+
+        assert_eq!(bob, receiver);
+        assert_eq!(uint!(900_U256), amount);
     }
 
     #[motsu::test]
