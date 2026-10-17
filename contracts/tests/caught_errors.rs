@@ -84,3 +84,27 @@ fn failed_erc1155_batch_burn_does_not_partially_burn_or_emit_transfer() {
     assert_eq!(token.balance_of(alice, second_id), U256::from(1));
     assert_eq!(vm.get_emitted_logs(), logs_before);
 }
+
+#[test]
+fn valid_erc1155_batch_with_duplicate_ids_transfers_the_combined_amount() {
+    let vm = TestVM::default();
+    let mut token = Erc1155::from(&vm);
+    let alice = Address::from([1; 20]);
+    let bob = Address::from([2; 20]);
+    let id = U256::from(1);
+
+    token._mint(alice, id, U256::from(3), &Vec::new().into()).unwrap();
+    vm.set_sender(alice);
+    token
+        .safe_batch_transfer_from(
+            alice,
+            bob,
+            vec![id, id],
+            vec![U256::from(2), U256::from(1)],
+            Vec::new().into(),
+        )
+        .unwrap();
+
+    assert_eq!(token.balance_of(alice, id), U256::ZERO);
+    assert_eq!(token.balance_of(bob, id), U256::from(3));
+}
