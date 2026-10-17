@@ -130,7 +130,9 @@ impl UUPSProxyErc20ExampleNewVersion {
         // The owner check recognizes proxies initialized by a pre-marker
         // implementation. The namespaced marker protects newer deployments,
         // including proxies whose owner has since been renounced.
-        if self.ownable.owner() != Address::ZERO {
+        if self.ownable.owner() != Address::ZERO
+            || self.version.get() != U32::ZERO
+        {
             return Err(Error::InvalidInitialization(InvalidInitialization {}));
         }
         uups_upgradeable::initializer(self)?;
@@ -140,6 +142,7 @@ impl UUPSProxyErc20ExampleNewVersion {
     }
 
     fn set_version(&mut self) -> Result<(), Error> {
+        self.ownable.only_owner()?;
         if self.not_delegated().is_ok() {
             return Err(Error::UnauthorizedCallContext(
                 UUPSUnauthorizedCallContext {},

@@ -9,6 +9,7 @@ sol!(
         error UUPSUnauthorizedCallContext();
         error UUPSUnsupportedProxiableUUID(bytes32 slot);
         error ERC1967InvalidImplementation(address implementation);
+        error OwnableUnauthorizedAccount(address account);
 
         function upgradeToAndCall(address newImplementation, bytes calldata data) external payable;
         function UPGRADE_INTERFACE_VERSION() external view returns (string version);

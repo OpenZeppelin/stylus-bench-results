@@ -111,7 +111,9 @@ impl UUPSProxyErc20Example {
         // A nonzero owner identifies proxies initialized before the
         // namespaced marker was introduced. Keep those proxies from being
         // reinitialized when they upgrade to this implementation.
-        if self.ownable.owner() != Address::ZERO {
+        if self.ownable.owner() != Address::ZERO
+            || self.uups.version.get() != U32::ZERO
+        {
             return Err(Error::InvalidInitialization(
                 uups_upgradeable::InvalidInitialization {},
             ));
@@ -123,6 +125,7 @@ impl UUPSProxyErc20Example {
     }
 
     fn set_version(&mut self) -> Result<(), Error> {
+        self.ownable.only_owner()?;
         Ok(self.uups.set_version()?)
     }
 

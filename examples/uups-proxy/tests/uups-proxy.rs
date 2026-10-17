@@ -253,7 +253,13 @@ async fn setting_version_before_initialization_does_not_lock_it() -> Result<()>
 
     let bob_implementation =
         UUPSProxyErc20Example::new(proxy_addr, &bob.wallet);
-    watch!(bob_implementation.setVersion())?;
+    let err = send!(bob_implementation.setVersion())
+        .expect_err("only the owner can set the version");
+    assert!(err.reverted_with(
+        UUPSProxyErc20Example::OwnableUnauthorizedAccount {
+            account: bob.address(),
+        }
+    ));
 
     let proxy = Erc1967Example::new(proxy_addr, &alice.wallet);
     watch!(proxy.initialize(alice.address()))?;
