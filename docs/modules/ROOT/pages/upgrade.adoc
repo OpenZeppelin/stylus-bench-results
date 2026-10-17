@@ -1,0 +1,155 @@
+= Upgrade from v0.3.0
+
+This page lists the changes needed to move a contract from OpenZeppelin Contracts for Stylus v0.3.0 to the SDK 0.10.10 release of this library. Existing storage structs keep their field order and types, and the EIP-1967 slots remain unchanged. An existing proxy does not need a layout migration when its implementation uses the same extensions as before. Adding a stateful extension can still require feature-state backfill even when it does not move the existing fields.
+
+== Pin the supported toolchain
+
+Use stable Rust 1.91.0 and Stylus SDK 0.10.10. Update direct Alloy dependencies to the 1.7.3 family, and allow `ruint` 1.17.1 or newer. The SDK uses `ruint` with its standard library defaults disabled in WASM builds.
+
+[source,toml]
+----
+[dependencies]
+stylus-sdk = "=0.10.10"
+alloy-primitives = { version = "=1.7.3", default-features = false }
+alloy-sol-types = { version = "=1.7.3", default-features = false }
+ruint = { version = ">=1.17.1", default-features = false }
+----
+
+Disabling `ruint`'s default features prevents `std` from being pulled into a `no_std` contract that enables `openzeppelin-crypto/ruint`.
+
+Replace nightly-only build commands such as `cargo +nightly build -Z build-std` with the stable toolchain's configured `wasm32-unknown-unknown` target.
+
+SDK 0.10 discovers deployable contracts through `Stylus.toml`. Add a contract marker to each deployable package and keep shared build settings at the Cargo workspace root. SDK 0.10.9 and later can pin Binaryen and its optimizer flags in that workspace file; opted-in packages inherit the exact recipe for deployment and verification.
+
+[source,toml]
+----
+# Workspace-root Stylus.toml
+[workspace]
+
+[wasm-opt]
+version = "116"
+flags = ["--enable-bulk-memory", "-O3"]
+----
+
+[source,toml]
+----
+# Each deployable package's Stylus.toml
+[workspace]
+
+[contract]
+
+[wasm-opt]
+----
+
+Pin `cargo-stylus` to 0.10.10 or later when using the versioned optimizer configuration. Earlier tools ignore that configuration and cannot provide the same reproducible optimization recipe.
+
+SDK 0.10 uses `#[implements(...)]` for a contract's exposed interfaces. Replace SDK 0.9's `#[inherit(...)]` composition patterns with explicit storage fields and implementations for the traits your contract exposes. Keep the `contract-client-gen = []` package feature on the consuming contract package that generates ABI clients; it is not a `stylus-sdk` dependency feature, and it should not be enabled on the `openzeppelin-stylus` implementation dependency because that mode replaces storage implementations with client stubs. SDK selector collision checks cover methods in each individual `#[public]` block; they do not prove selector uniqueness across separate blocks in a composed contract.
+
+== Pass VM context explicitly
+
+SDK 0.10 uses VM accessors. Replace global calls such as `msg::sender()`, `msg::value()`, `block::timestamp()`, and `contract::address()` with methods on the contract's VM:
+
+[source,rust]
+----
+let sender = self.vm().msg_sender();
+let value = self.vm().msg_value();
+let timestamp = self.vm().block_timestamp();
+let address = self.vm().contract_address();
+let has_code = self.vm().code_size(target) != 0;
+----
+
+Cross-contract interfaces now receive the VM and an explicit call context. Use `Call::new()` for a read-only call and `Call::new_mutating(self)` for a mutating call:
+
+[source,rust]
+----
+let token = Erc20Interface::new(token_address);
+let balance = token.balance_of(self.vm(), Call::new(), owner)?;
+
+let call = Call::new_mutating(self);
+token.transfer(self.vm(), call, recipient, amount)?;
+----
+
+Methods that access VM state must satisfy the SDK's `HostAccess` bounds. The public `StorageSlot::get_slot` helper also takes a VM-accessible context as its first argument: call `StorageSlot::get_slot(self, slot)` from a contract method. EIP-712 `chain_id` and `contract_address` hooks are instance methods in the new API and should read those values from `self.vm()`.
+
+Use the SDK storage integer update methods such as `update_check_add`, `update_wrap_add`, and `update_wrap_sub` instead of importing the removed checked/unchecked helper traits. Use `StorageU96` when storage holds an unsigned 96-bit value.
+
+Move `MethodError` imports to `stylus_sdk::stylus_core::calls::errors::MethodError`.
+
+== Revisit raw calls and reentrancy
+
+SDK 0.10.5 deprecated the `reentrant` feature and entrypoint guard. High-level `call`, `delegate_call`, and `static_call` persist cached storage before handing control to another contract; this prevents stale storage reads during callbacks but does not replace checks-effects-interactions. SDK 0.10.10 still has the guard enabled unless the `reentrant` feature is enabled. The library forwards that feature for contracts whose external callbacks need to call back into the same contract. The flash-mint example enables it by default because borrower callbacks commonly read or call the lender token during the loan. Keep the feature only while targeting SDK versions that still have the guard; it is deprecated upstream.
+
+[source,toml]
+----
+[dependencies]
+openzeppelin-stylus = { version = "0.4", features = ["reentrant"] }
+----
+
+The feature does not make arbitrary reentrant logic safe. Review every external call and state invariant. `RawCall` does not flush cached storage automatically. If a raw call can reenter and read state written earlier in the current call, call `.clear_storage_cache()` on the `RawCall` before invoking it; this persists dirty values and drops the in-memory cache.
+
+The library's SafeERC20 raw call path clears the storage cache before its raw transfer call. Prefer typed SDK interface calls in new code when their return-value contract fits the token being called.
+
+== Propagate extension errors when atomic behavior is required
+
+These APIs are Rust methods that return `Result`. A returned `Err` does not itself revert the current EVM call frame. When a composing contract catches an extension error and later returns `Ok`, writes and events already produced in that frame remain, as do effects from successful external calls. Propagate the error with `?` when the public call should revert atomically. This is especially important for receiver callbacks, token wrappers, ERC-4626 asset transfers, and any operation that calls an untrusted token. A token can also change its own state and then return `false`; the library reports the failure but cannot undo that successful EVM subcall if the caller catches the error.
+
+ERC-721 mint, transfer, burn, and ERC-1155 multi-item balance validation now happen before their first state write where possible, so their ordinary validation errors do not leave a partial token update if caught. ERC-1967 helpers validate nonpayable calls before changing slots, validate beacon implementations before storing the beacon, restore the previous slot when setup delegate execution fails, and emit upgrade events only after success. These protections do not make arbitrary caught errors across callbacks or external contracts transaction-atomic.
+
+== Validate ABI return data
+
+Use Alloy's validating decoders for untrusted ABI data. In particular, SafeERC20 accepts an empty return or a canonical ABI `true`, and rejects malformed boolean words. If your own code previously used a permissive decoder, switch to its `*_validate` form and handle decoding errors.
+
+== Update tests
+
+The old `motsu` unit-test framework and this repository's `e2e` / `e2e-proc` crates were removed. For storage-only unit tests, enable `stylus-sdk`'s `stylus-test` feature and construct a fresh `TestVM` per contract under test. Set sender, contract address, block values, storage, and mocked host calls on that VM. A second `TestVM` is an independent host; it does not automatically become a deployed external contract.
+
+Run cross-contract, proxy, transaction rollback, activation, and gas behavior against the SDK devnet tools in `stylus-tools`. In this repository, run those tests with:
+
+[source,shell]
+----
+./scripts/e2e-tests.sh
+----
+
+The SDK devnet is started and managed by the test harness through Docker. Remove `e2e` and `motsu` dependencies from downstream test manifests and use the SDK test framework or `stylus-tools::devnet::Node` directly.
+
+== Public API and behavior notes
+
+* ERC-20 cap checks can be shared through `Capped::check_increase(total_supply, amount)`. It returns the standard `ExceededCap` error payload and does not change storage.
+* When composing `Capped` with `Erc20FlashMint`, implement the lender methods with `max_flash_loan_with_cap` and `flash_loan_with_cap`. The general flash-mint helpers do not discover sibling extensions and remain uncapped; using them with a capped token can exceed the cap during a loan callback.
+* `Erc721Wrapper` now rejects deposits, withdrawals, and receiver callbacks when its configured underlying address has no code. Previously, an EOA could make a no-return call appear successful, allowing an unbacked wrapper mint or a burn with no underlying transfer, or could call the receiver callback directly to mint an unbacked token. This is an intentional security fix; configure a deployed ERC-721 contract before using the wrapper.
+* `Erc20Wrapper::_recover` now reports the configured underlying token in `ERC20InvalidUnderlying` when the underlying `balanceOf` call fails. The previous error encoded the wrapper's own address.
+* Contracts implementing `IErc721Receiver` must expose the canonical `onERC721Received` selector. The receiver trait now specifies it explicitly so generated ABI and interface ID metadata agree with ERC-721. The v0.3.0 ERC-721 wrapper example omitted the selector annotation and exposed the snake-case `on_erc721_received` method name; update integrations to call `onERC721Received`.
+* Poseidon2 construction now rejects round exponents that are not invertible modulo `p - 1`. Such exponents do not define permutations and can produce collisions. Review any custom Poseidon2 parameter sets and select a valid exponent.
+* `BeaconProxy` keeps its original storage field as a reserved slot, but reads the active beacon from the ERC-1967 beacon slot. v0.3 proxies already wrote that slot. During v0.3 proxy construction the proxy also wrote its beacon address to ordinary slot zero after delegate initialization; if the implementation used slot zero, that field may have been overwritten. The migration cannot recover that value. Keep the existing implementation field order, treat slot zero as reserved for existing deployments, and reconstruct any overwritten application value from trusted state before relying on it.
+* `uups_upgradeable::initializer(storage)` adds a one-time marker in a namespaced slot without changing the contract's storage layout or public ABI. Call it from each initializer before assigning privileged state. Existing v0.3 proxies have no marker: the new implementation must also recognize its existing initialized state before allowing initialization. The UUPS examples use their preserved version field as well as the owner and now restrict `setVersion` to the owner, so an old proxy remains marked even after ownership is renounced. Apply the same legacy-state check for your contract's authorization model before accepting initialization after an upgrade.
+* `Erc721Enumerable` now recognizes token ID zero in owner enumeration by tracking its presence in an unstructured slot. This leaves the storage struct layout unchanged. Previously deployed ID-zero entries have no presence marker; build and review a migration for those tokens before relying on owner enumeration after upgrading.
+* The EdDSA example now rejects affine coordinates outside the Curve25519 field and scalars at or above the scalar modulus. Callers that sent reduced, noncanonical aliases must encode canonical values.
+* `Erc721Consecutive::_mint_consecutive` remains an internal helper that does not check whether it runs during construction. Callers must keep it constructor-only because it omits per-token `Transfer` events and receiver callbacks. The ERC-721 Consecutive docs now show the SDK 0.10 `#[implements]` composition style.
+* The token and proxy examples are composition demonstrations. Several intentionally expose unrestricted mint or fee-setting calls; put access control around privileged operations before deploying a production contract.
+* Contract storage fields, EIP-1967 proxy slots, and event signatures remain unchanged by the SDK migration. The ERC-721 receiver selector is the ABI exception: v0.3.0 wrappers that omitted an explicit selector exposed `on_erc721_received`, while the updated trait exposes canonical `onERC721Received`. Update integrations that called the old selector. Other behavior changes above affect invalid configurations or invalid parameter sets only.
+
+== Adding stateful extensions to deployed proxies
+
+Keeping existing fields in place preserves their slots, but it does not initialize a newly added extension's auxiliary state. Do not add these extensions to a live proxy without an explicit backfill plan:
+
+* `Erc721Enumerable` starts with empty global and per-owner indexes. Tokens already held by accounts will be missing from enumeration until they are explicitly indexed; later transfers do not discover tokens that were never indexed.
+* `AccessControlEnumerable` starts with empty role-member sets while the base `AccessControl` role mapping may already contain members. Re-granting an existing role does not populate the enumerable set because the base grant operation reports that the role was already held.
+* `Erc1155Supply` adds per-ID and aggregate supply storage, which starts at zero even when balances already exist. The extension already documents that it must not be added in an upgrade to an existing deployment.
+* `Capped` starts with a zero cap until initialized. Its constructor is not run during a proxy upgrade; initialize the cap explicitly and set it to at least the existing total supply before allowing further mints.
+
+If a project chooses to add one of these extensions, reconstruct the existing state from trusted historical data and run an audited migration that initializes every relevant index before exposing the new queries. Otherwise, keep the deployed extension set unchanged. Preserve every existing `#[storage]` field order and type; append-only layout does not solve missing semantic state.
+
+`Erc721Enumerable` and `Erc721Consecutive` are incompatible because consecutive ownership changes `balance_of` semantics that enumerable indexing relies on. Keep them separate in new contracts as well as upgrades.
+
+== Rust API migration details
+
+* Replace `stylus_sdk::msg`, `block`, and `contract` global accessors with `self.vm()` methods. Functions that need VM state now take `&self` or `&mut self` and satisfy the SDK `HostAccess` bounds.
+* Add the VM and a `Call` context to generated `sol_interface!` calls. Use `Call::new()` for read-only calls and `Call::new_mutating(self)` for state-changing calls.
+* Import `MethodError` from `stylus_sdk::stylus_core::calls::errors`.
+* Update `IEip712` implementations so `chain_id` and `contract_address` are instance methods, and pass an appropriate VM context to `StorageSlot::get_slot` and proxy utility functions that read VM state.
+* Alloy 1.7 generated contract clients return decoded values directly from `.call().await?`; remove old `.field` accesses on single-value responses.
+* Replace Motsu unit tests with SDK `TestVM`, and move integration tests from the removed `e2e` crates to SDK devnet tooling. `TestVM` instances are isolated host environments, not deployed external contracts.
+
+== Rebuild and check
+
+Build every example and template for WASM with stable Rust, run the SDK check and activation against a devnet, and compare exported ABI and storage layout before upgrading a live proxy. Keep the same `#[storage]` field order and types; new fields in a deployed storage struct require an explicit storage-layout review.

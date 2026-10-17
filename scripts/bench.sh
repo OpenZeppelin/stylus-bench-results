@@ -5,6 +5,18 @@ MYDIR=$(realpath "$(dirname "$0")")
 cd "$MYDIR"
 cd ..
 
+WASM_OPT_VERSION=$(python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["wasm-opt"]["version"])' Stylus.toml)
+WASM_OPT_ACTUAL_VERSION=$(wasm-opt --version)
+if [[ "$WASM_OPT_ACTUAL_VERSION" != *"version $WASM_OPT_VERSION"* ]]; then
+  echo "Expected Binaryen wasm-opt $WASM_OPT_VERSION, found: $WASM_OPT_ACTUAL_VERSION" >&2
+  exit 1
+fi
+
+WASM_OPT_FLAGS=()
+while IFS= read -r FLAG; do
+  WASM_OPT_FLAGS+=("$FLAG")
+done < <(python3 -c 'import sys, tomllib; print("\n".join(tomllib.load(open(sys.argv[1], "rb"))["wasm-opt"]["flags"]))' Stylus.toml)
+
 # Optimize contract's wasm binary by crate name.
 opt_wasm() {
   local CONTRACT_CRATE_NAME=$1
@@ -13,31 +25,40 @@ opt_wasm() {
 
   echo
   echo "Optimizing $CONTRACT_CRATE_NAME WASM binary"
-  # https://rustwasm.github.io/book/reference/code-size.html#use-the-wasm-opt-tool
-  wasm-opt --enable-bulk-memory -O3 -o ./target/wasm32-unknown-unknown/release/"$CONTRACT_OPT_BIN_NAME" ./target/wasm32-unknown-unknown/release/"$CONTRACT_BIN_NAME"
+  wasm-opt "${WASM_OPT_FLAGS[@]}" -o ./target/wasm32-unknown-unknown/release/"$CONTRACT_OPT_BIN_NAME" ./target/wasm32-unknown-unknown/release/"$CONTRACT_BIN_NAME"
 }
 
-# Retrieve all alphanumeric contract's crate names in `./examples` directory.
+# Retrieve the contract crate names configured for cargo-stylus.
 get_example_crate_names() {
-  # shellcheck disable=SC2038
-  # NOTE: optimistically relying on the 'name = ' string at Cargo.toml file
-  find ./examples -maxdepth 2 -type f -name "Cargo.toml" | xargs grep 'name = ' | grep -oE '".*"' | tr -d "'\""
+  while IFS= read -r manifest; do
+    local contract_dir
+    contract_dir=$(dirname "$manifest")
+    sed -n '/^\[package\]/,/^\[/s/^name = "\(.*\)"/\1/p' "$contract_dir/Cargo.toml"
+  done < <(find ./examples ./templates -type f -name Stylus.toml | sort)
 }
 
-cargo build --release --target wasm32-unknown-unknown \
-  -Z build-std=std,panic_abort \
-  -Z build-std-features=panic_immediate_abort
+# The test support, benchmark runner, and basic-script CLI are host tools.
+# Build every Stylus contract package for WASM and skip those native packages.
+cargo build --workspace \
+  --exclude benches \
+  --exclude stylus-test-support \
+  --exclude basic-script-example \
+  --release \
+  --target wasm32-unknown-unknown
+cargo build \
+  --manifest-path templates/crypto-erc20/Cargo.toml \
+  --release \
+  --target wasm32-unknown-unknown \
+  --target-dir target
 
 # Optimize contract's wasm for gas usage.
 for CRATE_NAME in $(get_example_crate_names); do
   opt_wasm "$CRATE_NAME"
 done
 
-export RPC_URL=http://localhost:8547
-export DEPLOYER_ADDRESS=0xcEcba2F1DC234f70Dd89F2041029807F8D03A990
-
 # No need to compile benchmarks with `--release`
 # since this only runs the benchmarking code and the contracts have already been compiled with `--release`.
+# The benchmark helper starts its SDK-managed Nitro devnet automatically.
 cargo run -p benches
 echo "This benchmarks measure gas execution cost,
  the 21000 EVM base gas fee is omitted."

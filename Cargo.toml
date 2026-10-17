@@ -4,8 +4,7 @@ members = [
   "contracts",
   "contracts-proc",
   "lib/crypto",
-  "lib/e2e",
-  "lib/e2e-proc",
+  "lib/stylus-test-support",
   "examples/access-control",
   "examples/precompiles",
   "examples/erc1967",
@@ -45,7 +44,6 @@ default-members = [
   "contracts",
   "contracts-proc",
   "lib/crypto",
-  "lib/e2e-proc",
   "examples/access-control",
   "examples/precompiles",
   "examples/erc1967",
@@ -79,7 +77,12 @@ default-members = [
   "examples/erc1155-holder",
   "examples/eddsa",
 ]
-exclude = ["fuzz", "templates/crypto-erc20"]
+exclude = [
+  "fuzz",
+  "templates/crypto-erc20",
+  "vendor/stylus-proc",
+  "vendor/stylus-test",
+]
 
 # Explicitly set the resolver to version 2, which is the default for packages
 # with edition >= 2021.
@@ -91,13 +94,13 @@ authors = ["OpenZeppelin"]
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/OpenZeppelin/rust-contracts-stylus"
-version = "0.3.0"
+version = "0.4.0"
 
 [workspace.lints.rust]
 missing_docs = "warn"
 unreachable_pub = "warn"
 rust_2021_compatibility = { level = "warn", priority = -1 }
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage_nightly)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage_nightly)', 'cfg(feature, values("contract-client-gen"))'] }
 
 [workspace.lints.clippy]
 pedantic = "warn"
@@ -105,9 +108,9 @@ all = "warn"
 
 [workspace.dependencies]
 # Stylus SDK related
-stylus-sdk = "=0.9.0"
+stylus-sdk = "=0.10.10"
 
-alloy = { version = "=0.7.3", features = [
+alloy = { version = "=1.7.3", features = [
   "contract",
   "network",
   "providers",
@@ -120,15 +123,18 @@ alloy = { version = "=0.7.3", features = [
 # Even though `alloy` includes `alloy-primitives` and `alloy-sol-types` we need
 # to keep both versions for compatibility with the Stylus SDK. Once they start
 # using `alloy` we can remove these.
-alloy-primitives = { version = "=0.8.20", default-features = false, features = [
+alloy-primitives = { version = "=1.7.3", default-features = false, features = [
   "tiny-keccak",
 ] }
-alloy-sol-types = { version = "=0.8.20", default-features = false }
-alloy-sol-macro = { version = "=0.8.20", default-features = false }
-alloy-sol-macro-expander = { version = "=0.8.20", default-features = false }
-alloy-sol-macro-input = { version = "=0.8.20", default-features = false }
+alloy-sol-types = { version = "=1.7.3", default-features = false }
+alloy-sol-macro = { version = "=1.7.3", default-features = false }
+alloy-sol-macro-expander = { version = "=1.7.3", default-features = false }
+alloy-sol-macro-input = { version = "=1.7.3", default-features = false }
+# Alloy's umbrella crate permits newer transitive releases that can pair the
+# 1.5.7 dynamic ABI decoder with the 1.7.3 parser. Keep that pair aligned.
+alloy-dyn-abi = "=1.7.3"
 
-ruint = "^1.12.3"
+ruint = { version = ">=1.17.1", default-features = false }
 
 eyre = "0.6.8"
 keccak-const = "0.2.0"
@@ -150,14 +156,15 @@ syn = { version = "2.0.58", features = ["full"] }
 proc-macro2 = "1.0.79"
 quote = "1.0.35"
 
-motsu = "=0.10.0"
-
 # members
 openzeppelin-stylus = { path = "contracts" }
-openzeppelin-stylus-proc = { path = "contracts-proc", version = "=0.3.0" }
+openzeppelin-stylus-proc = { path = "contracts-proc", version = "=0.4.0" }
 openzeppelin-crypto = { path = "lib/crypto" }
-e2e = { path = "lib/e2e" }
-e2e-proc = { path = "lib/e2e-proc" }
+stylus-test-support = { path = "lib/stylus-test-support" }
+
+[patch.crates-io]
+stylus-proc = { path = "vendor/stylus-proc" }
+stylus-test = { path = "vendor/stylus-test" }
 
 [profile.release]
 codegen-units = 1
@@ -169,9 +176,6 @@ debug = false
 rpath = false
 debug-assertions = false
 incremental = false
-
-[profile.dev]
-panic = "abort"
 
 [workspace.metadata.typos]
 default = { extend-ignore-identifiers-re = [
