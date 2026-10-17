@@ -48,7 +48,10 @@ use crate::{
         interface::Erc20Interface,
         utils::{safe_erc20, ISafeErc20, SafeErc20},
     },
-    utils::{introspection::erc165::IErc165, math::storage::AddAssignChecked},
+    utils::{
+        introspection::erc165::IErc165,
+        math::{alloy::{Math, Rounding}, storage::AddAssignChecked},
+    },
 };
 
 #[cfg_attr(coverage_nightly, coverage(off))]
@@ -290,7 +293,6 @@ pub trait IVestingWallet {
     /// # Panics
     ///
     /// * If total allocation exceeds [`U256::MAX`].
-    /// * If scaled, total allocation (mid calculation) exceeds [`U256::MAX`].
     #[selector(name = "releasable")]
     fn releasable_eth(&self) -> U256;
 
@@ -309,7 +311,6 @@ pub trait IVestingWallet {
     /// # Panics
     ///
     /// * If total allocation exceeds [`U256::MAX`].
-    /// * If scaled, total allocation (mid calculation) exceeds [`U256::MAX`].
     #[selector(name = "releasable")]
     fn releasable_erc20(&mut self, token: Address)
         -> Result<U256, Self::Error>;
@@ -331,7 +332,6 @@ pub trait IVestingWallet {
     /// # Panics
     ///
     /// * If total allocation exceeds [`U256::MAX`].
-    /// * If scaled total allocation (mid calculation) exceeds [`U256::MAX`].
     #[selector(name = "release")]
     fn release_eth(&mut self) -> Result<(), Self::Error>;
 
@@ -355,7 +355,6 @@ pub trait IVestingWallet {
     /// # Panics
     ///
     /// * If total allocation exceeds [`U256::MAX`].
-    /// * If scaled, total allocation (mid calculation) exceeds [`U256::MAX`].
     #[selector(name = "release")]
     fn release_erc20(&mut self, token: Address) -> Result<(), Self::Error>;
 
@@ -370,7 +369,6 @@ pub trait IVestingWallet {
     /// # Panics
     ///
     /// * If total allocation exceeds [`U256::MAX`].
-    /// * If scaled, total allocation (mid calculation) exceeds [`U256::MAX`].
     #[selector(name = "vestedAmount")]
     fn vested_amount_eth(&self, timestamp: u64) -> U256;
 
@@ -390,7 +388,6 @@ pub trait IVestingWallet {
     /// # Panics
     ///
     /// * If total allocation exceeds [`U256::MAX`].
-    /// * If scaled, total allocation (mid calculation) exceeds [`U256::MAX`].
     #[selector(name = "vestedAmount")]
     fn vested_amount_erc20(
         &mut self,
@@ -582,7 +579,6 @@ impl VestingWallet {
     ///
     /// # Panics
     ///
-    /// * If scaled, total allocation (mid calculation) exceeds [`U256::MAX`].
     fn vesting_schedule(&self, total_allocation: U256, timestamp: U64) -> U256 {
         let timestamp = U256::from(timestamp);
 
@@ -595,14 +591,14 @@ impl VestingWallet {
             // `self.start()` as checked by earlier bounds.
             let elapsed = timestamp - self.start();
 
-            let scaled_allocation = total_allocation
-                .checked_mul(elapsed)
-                .expect("scaled allocation exceeds `U256::MAX`");
-
             // SAFETY: `self.duration()` is non-zero. If `self.duration()` were
             // zero, then `end == start`, meaning that `timestamp >= self.end()`
             // and the function would have returned earlier.
-            scaled_allocation / self.duration()
+            total_allocation.mul_div(
+                elapsed,
+                self.duration(),
+                Rounding::Floor,
+            )
         }
     }
 }
