@@ -573,6 +573,23 @@ async fn set_version_can_only_be_delegate_called() -> Result<()> {
 }
 
 #[tokio::test]
+async fn new_version_implementation_initializes_through_proxy() -> Result<()> {
+    let alice = Account::new().await?;
+    let logic_addr = alice.deploy_uups_new_version().await?.contract_address;
+    let proxy_addr =
+        alice.deploy_proxy(logic_addr, alice.address()).await?.contract_address;
+    let proxy = Erc1967Example::new(proxy_addr, &alice.wallet);
+
+    assert_eq!(alice.address(), proxy.owner().call().await?);
+    assert_eq!(
+        uups_proxy_new_version_example::VERSION_NUMBER,
+        U32::from(proxy.getVersion().call().await?),
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn version_cannot_be_decreased() -> Result<()> {
     let alice = Account::new().await?;
 
