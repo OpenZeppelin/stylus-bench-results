@@ -5,7 +5,10 @@ use alloy_sol_types::{sol, SolCall};
 use openzeppelin_stylus::token::erc20::{
     extensions::{
         capped::Capped,
-        flash_mint::{Erc20FlashMint, BORROWER_CALLBACK_VALUE},
+        flash_mint::{
+            Erc20FlashMint, Error as FlashMintError,
+            ERC3156ExceededMaxLoan, BORROWER_CALLBACK_VALUE,
+        },
     },
     Erc20, IErc20,
 };
@@ -68,17 +71,28 @@ fn flash_loan_must_not_exceed_the_composed_supply_cap() {
     );
 
     vm.set_sender(alice);
-    let result = contract.flash_mint.flash_loan(
+    assert_eq!(
+        contract.flash_mint.max_flash_loan_with_cap(
+            token,
+            &contract.erc20,
+            &contract.capped,
+        ),
+        U256::from(10),
+    );
+
+    let result = contract.flash_mint.flash_loan_with_cap(
         borrower,
         token,
         loan,
         &Bytes::new(),
         &mut contract.erc20,
+        &contract.capped,
     );
 
-    assert!(
-        result.is_err(),
-        "a 20-token flash mint must fail when only 10 tokens remain under the cap"
-    );
+    assert!(matches!(
+        result,
+        Err(FlashMintError::ExceededMaxLoan(ERC3156ExceededMaxLoan { max_loan }))
+            if max_loan == U256::from(10)
+    ));
     assert_eq!(contract.erc20.total_supply(), initial_supply);
 }

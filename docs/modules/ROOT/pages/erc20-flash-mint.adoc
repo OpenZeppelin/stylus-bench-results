@@ -2,10 +2,65 @@
 
 Extension of xref:erc20.adoc[ERC-20] that provides flash loan support at the token level.
 
+IMPORTANT: The default `flash_loan` helper does not account for the cap from the `Capped` extension. If the token combines flash minting with `Capped`, use the cap-aware helpers for both lender methods. Otherwise a borrower can observe a temporary `totalSupply` above the configured cap during its callback.
+
+== Reentrant callbacks
+
+Stylus SDK 0.10.10 rejects reentrant entrypoints by default. Borrower callbacks often read or call the lender token while a loan is active, so contracts using this extension should enable the library's `reentrant` Cargo feature:
+
+[source,toml]
+----
+[dependencies]
+openzeppelin-stylus = { version = "0.4", features = ["reentrant"] }
+----
+
+The feature allows callbacks to reenter the contract. Review callback paths for reentrancy safety and preserve the invariant that the loan amount and fee are recovered or the whole transaction reverts.
+
+== Combining with Capped
+
+Use `max_flash_loan_with_cap` and `flash_loan_with_cap` together in the public lender implementation. The first reports the remaining supply under the cap, and the second checks that limit before calling the borrower.
+
+[source,rust]
+----
+use openzeppelin_stylus::token::erc20::{
+    extensions::{capped::Capped, flash_mint, Erc20FlashMint},
+    Erc20,
+};
+
+// In IErc3156FlashLender for a token containing `erc20`, `flash_mint`, and
+// `capped` fields:
+fn max_flash_loan(&self, token: Address) -> U256 {
+    self.flash_mint.max_flash_loan_with_cap(
+        token,
+        &self.erc20,
+        &self.capped,
+    )
+}
+
+fn flash_loan(
+    &mut self,
+    receiver: Address,
+    token: Address,
+    value: U256,
+    data: Bytes,
+) -> Result<bool, flash_mint::Error> {
+    self.flash_mint.flash_loan_with_cap(
+        receiver,
+        token,
+        value,
+        &data,
+        &mut self.erc20,
+        &self.capped,
+    )
+}
+----
+
+Do not call the plain `flash_loan` method from a capped lender implementation. Its maximum is limited only by `U256::MAX` and the current total supply.
+
 [[usage]]
 == Usage
 
-In order to make https://docs.rs/openzeppelin-stylus/0.3.0/openzeppelin_stylus/token/erc20/extensions/flash_mint/index.html[`ERC-20 Flash Mint`]  methods “external” so that other contracts can call them, you need to add the following code to your contract:
+In order to make https://docs.rs/openzeppelin-stylus/0.4.0/openzeppelin_stylus/token/erc20/extensions/flash_mint/index.html[`ERC-20 Flash Mint`]  methods “external” so that other contracts can call them, you need to add the following code to your contract:
 
 [source,rust]
 ----
