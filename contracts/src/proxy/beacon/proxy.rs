@@ -140,6 +140,12 @@ mod tests {
         }
     }
 
+    impl BeaconProxyExample {
+        fn overwrite_beacon_slot(&mut self, beacon: Address) {
+            self.beacon_proxy.beacon.set(beacon);
+        }
+    }
+
     #[storage]
     struct Beacon {
         implementation: StorageAddress,
@@ -255,6 +261,33 @@ mod tests {
 
         let beacon_address = proxy.sender(alice).get_beacon();
         assert_eq!(beacon_address, beacon.address());
+    }
+
+    #[motsu::test]
+    fn implementation_lookup_ignores_colliding_proxy_slot(
+        proxy: Contract<BeaconProxyExample>,
+        beacon: Contract<Beacon>,
+        another_beacon: Contract<Beacon>,
+        erc20: Contract<Erc20Example>,
+        another_erc20: Contract<Erc20Example>,
+        alice: Address,
+    ) {
+        beacon.sender(alice).constructor(erc20.address());
+        another_beacon.sender(alice).constructor(another_erc20.address());
+        proxy
+            .sender(alice)
+            .constructor(beacon.address(), vec![].into())
+            .expect("should be able to construct");
+
+        // Delegate-called implementation logic can write this ordinary slot.
+        proxy
+            .sender(alice)
+            .overwrite_beacon_slot(another_beacon.address());
+
+        assert_eq!(
+            proxy.sender(alice).implementation(),
+            Ok(erc20.address()),
+        );
     }
 
     #[motsu::test]
