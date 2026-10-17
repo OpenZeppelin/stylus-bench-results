@@ -77,6 +77,10 @@ pub struct Erc721Enumerable {
     pub(crate) all_tokens: StorageVec<StorageU256>,
     /// Maps indices at `all_tokens` to tokens ids.
     pub(crate) all_tokens_index: StorageMap<U256, StorageU256>,
+    /// Tracks the initialized length of each owner's enumeration.
+    ///
+    /// This field is appended to preserve the layout of existing fields.
+    pub(crate) owned_tokens_count: StorageMap<Address, StorageU256>,
 }
 
 /// This is the interface of the optional `Enumerable` extension
@@ -147,9 +151,18 @@ impl IErc721Enumerable for Erc721Enumerable {
         owner: Address,
         index: U256,
     ) -> Result<U256, Self::Error> {
+        let token_count = self.owned_tokens_count.get(owner);
         let token = self.owned_tokens.getter(owner).get(index);
 
-        if token.is_zero() {
+        let is_out_of_bounds = if token_count.is_zero() {
+            // A zero count is also the default value for contracts deployed
+            // before this length was tracked. Preserve their non-zero entries.
+            token.is_zero()
+        } else {
+            index >= token_count
+        };
+
+        if is_out_of_bounds {
             Err(ERC721OutOfBoundsIndex { owner, index }.into())
         } else {
             Ok(token)
@@ -201,6 +214,7 @@ impl Erc721Enumerable {
         let length = erc721.balance_of(to)? - uint!(1_U256);
         self.owned_tokens.setter(to).setter(length).set(token_id);
         self.owned_tokens_index.setter(token_id).set(length);
+        self.owned_tokens_count.setter(to).set(length + U256::ONE);
 
         Ok(())
     }
@@ -271,6 +285,7 @@ impl Erc721Enumerable {
         // This also deletes the contents at the last position of the array.
         self.owned_tokens_index.delete(token_id);
         owned_tokens_by_owner.delete(last_token_index);
+        self.owned_tokens_count.setter(from).set(last_token_index);
 
         Ok(())
     }
@@ -630,6 +645,28 @@ mod tests {
             .expect("should enumerate token zero");
 
         assert_eq!(enumerated_token, U256::ZERO);
+    }
+
+    #[motsu::test]
+    fn reads_legacy_owner_entries_without_a_count(
+        contract: Contract<Erc721EnumerableTestExample>,
+        alice: Address,
+    ) {
+        let token_id = uint!(42_U256);
+        contract
+            .sender(alice)
+            .enumerable
+            .owned_tokens
+            .setter(alice)
+            .setter(U256::ZERO)
+            .set(token_id);
+
+        let enumerated_token = contract
+            .sender(alice)
+            .token_of_owner_by_index(alice, U256::ZERO)
+            .expect("should retain reads of legacy entries");
+
+        assert_eq!(enumerated_token, token_id);
     }
 
     #[motsu::test]
