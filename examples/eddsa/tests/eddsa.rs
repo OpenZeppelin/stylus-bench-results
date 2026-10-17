@@ -1,7 +1,7 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "devnet")]
 
 use alloy_primitives::hex;
-use e2e::Account;
+use stylus_test_support::Account;
 use eyre::Result;
 use openzeppelin_crypto::{
     curve::CurveGroup,
@@ -16,8 +16,10 @@ mod abi;
 // Integration Tests: EDDSA
 // ============================================================================
 
-#[e2e::test]
-async fn eddsa_works(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn eddsa_works() -> Result<()> {
+    let alice = Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = EddsaExample::new(contract_addr, &alice.wallet);
 
@@ -68,7 +70,7 @@ fn encode_signature(signature: Signature) -> [alloy_primitives::U256; 3] {
 fn encode_verifying_key(
     verifying_key: VerifyingKey,
 ) -> [alloy_primitives::U256; 2] {
-    let affine_verifying_key = verifying_key.point.into_affine();
+    let affine_verifying_key = verifying_key.point().into_affine();
     [
         affine_verifying_key.x.into_bigint().into(),
         affine_verifying_key.y.into_bigint().into(),
