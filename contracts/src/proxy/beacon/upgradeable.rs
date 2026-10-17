@@ -132,6 +132,17 @@ impl UpgradeableBeacon {
         implementation: Address,
         initial_owner: Address,
     ) -> Result<(), Error> {
+        if initial_owner == Address::ZERO {
+            return Err(Error::InvalidOwner(ownable::OwnableInvalidOwner {
+                owner: initial_owner,
+            }));
+        }
+        if self.vm().code_size(implementation) == 0 {
+            return Err(Error::InvalidImplementation(
+                BeaconInvalidImplementation { implementation },
+            ));
+        }
+
         self.ownable.constructor(initial_owner)?;
         self.set_implementation(implementation)?;
         Ok(())
