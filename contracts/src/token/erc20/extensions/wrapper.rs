@@ -17,9 +17,8 @@ use alloy_primitives::{Address, U256, U8};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
 use stylus_sdk::{
-    prelude::Call, stylus_core::calls::errors::MethodError,
-        prelude::*,
-    storage::StorageAddress,
+    prelude::Call, prelude::*, storage::StorageAddress,
+    stylus_core::calls::errors::MethodError,
 };
 
 use crate::token::erc20::{
@@ -354,9 +353,7 @@ impl Erc20Wrapper {
 
         let underlying_balance = underlying_token
             .balance_of(self.vm(), Call::new(), contract_address)
-            .map_err(|_| ERC20InvalidUnderlying {
-                token: self.underlying(),
-            })?;
+            .map_err(|_| ERC20InvalidUnderlying { token: self.underlying() })?;
 
         let value = underlying_balance
             .checked_sub(erc20.total_supply())
@@ -372,8 +369,8 @@ impl Erc20Wrapper {
 
 #[cfg(test)]
 mod tests {
-    use alloy_sol_types::{SolCall, SolError, SolValue};
     use alloy_primitives::{aliases::B32, uint};
+    use alloy_sol_types::{SolCall, SolError, SolValue};
     use stylus_sdk::{alloy_sol_types::sol, testing::TestVM};
 
     sol! {
@@ -400,7 +397,8 @@ mod tests {
         vm.set_code(token, vec![1]);
         vm.mock_call(
             token,
-            IERC20WrapperTestUnderlying::transferFromCall { from, to, value }.abi_encode(),
+            IERC20WrapperTestUnderlying::transferFromCall { from, to, value }
+                .abi_encode(),
             U256::ZERO,
             result,
         );
@@ -416,13 +414,19 @@ mod tests {
         vm.set_code(token, vec![1]);
         vm.mock_call(
             token,
-            IERC20WrapperTestUnderlying::transferCall { to, value }.abi_encode(),
+            IERC20WrapperTestUnderlying::transferCall { to, value }
+                .abi_encode(),
             U256::ZERO,
             result,
         );
     }
 
-    fn mock_balance_of(vm: &TestVM, token: Address, account: Address, balance: U256) {
+    fn mock_balance_of(
+        vm: &TestVM,
+        token: Address,
+        account: Address,
+        balance: U256,
+    ) {
         vm.set_code(token, vec![1]);
         vm.mock_static_call(
             token,
@@ -441,7 +445,10 @@ mod tests {
     #[implements(IErc20Wrapper<Error = Error>)]
     impl Erc20WrapperTestExample {
         #[constructor]
-        fn constructor(&mut self, underlying_token: Address) -> Result<(), Error> {
+        fn constructor(
+            &mut self,
+            underlying_token: Address,
+        ) -> Result<(), Error> {
             self.wrapper.constructor(underlying_token)
         }
 
@@ -462,11 +469,19 @@ mod tests {
             self.wrapper.underlying()
         }
 
-        fn deposit_for(&mut self, account: Address, value: U256) -> Result<bool, Error> {
+        fn deposit_for(
+            &mut self,
+            account: Address,
+            value: U256,
+        ) -> Result<bool, Error> {
             self.wrapper.deposit_for(account, value, &mut self.erc20)
         }
 
-        fn withdraw_to(&mut self, account: Address, value: U256) -> Result<bool, Error> {
+        fn withdraw_to(
+            &mut self,
+            account: Address,
+            value: U256,
+        ) -> Result<bool, Error> {
             self.wrapper.withdraw_to(account, value, &mut self.erc20)
         }
     }
@@ -483,14 +498,26 @@ mod tests {
         let alice = Address::from([1u8; 20]);
         vm.set_contract_address(address);
         let mut contract = Erc20WrapperTestExample::from(&vm);
-        ({ vm.set_sender(alice); &mut contract }).constructor(token).expect("construct");
+        ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .constructor(token)
+        .expect("construct");
         vm.set_code(token, vec![1]);
         vm.mock_static_call(
             token,
             IERC20WrapperTestUnderlying::decimalsCall {}.abi_encode(),
             Ok(U256::from(DUMMY_TEST_DECIMALS).abi_encode()),
         );
-        assert_eq!(({ vm.set_sender(alice); &mut contract }).decimals(), U8::from(DUMMY_TEST_DECIMALS));
+        assert_eq!(
+            ({
+                vm.set_sender(alice);
+                &mut contract
+            })
+            .decimals(),
+            U8::from(DUMMY_TEST_DECIMALS)
+        );
     }
 
     #[test]
@@ -499,7 +526,12 @@ mod tests {
         vm.set_contract_address(Address::from([160u8; 20]));
         let mut contract = Erc20WrapperTestExample::from(&vm);
         let token = Address::from([161u8; 20]);
-        ({ vm.set_sender(Address::from([1u8; 20])); &mut contract }).constructor(token).expect("construct");
+        ({
+            vm.set_sender(Address::from([1u8; 20]));
+            &mut contract
+        })
+        .constructor(token)
+        .expect("construct");
         assert_eq!(contract.wrapper.underlying(), token);
     }
 
@@ -567,9 +599,21 @@ mod tests {
         vm.set_contract_address(address);
         let mut contract = Erc20WrapperTestExample::from(&vm);
         let alice = Address::from([1u8; 20]);
-        ({ vm.set_sender(alice); &mut contract }).constructor(Address::from([161u8; 20])).expect("construct");
-        let err = ({ vm.set_sender(address); &mut contract }).deposit_for(alice, uint!(10_U256)).unwrap_err();
-        assert!(matches!(err, Error::InvalidSender(erc20::ERC20InvalidSender { sender }) if sender == address));
+        ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .constructor(Address::from([161u8; 20]))
+        .expect("construct");
+        let err = ({
+            vm.set_sender(address);
+            &mut contract
+        })
+        .deposit_for(alice, uint!(10_U256))
+        .unwrap_err();
+        assert!(
+            matches!(err, Error::InvalidSender(erc20::ERC20InvalidSender { sender }) if sender == address)
+        );
     }
 
     #[test]
@@ -578,9 +622,21 @@ mod tests {
         let address = Address::from([160u8; 20]);
         vm.set_contract_address(address);
         let mut contract = Erc20WrapperTestExample::from(&vm);
-        ({ vm.set_sender(Address::from([1u8; 20])); &mut contract }).constructor(Address::from([161u8; 20])).expect("construct");
-        let err = ({ vm.set_sender(Address::from([1u8; 20])); &mut contract }).deposit_for(address, uint!(10_U256)).unwrap_err();
-        assert!(matches!(err, Error::InvalidReceiver(erc20::ERC20InvalidReceiver { receiver }) if receiver == address));
+        ({
+            vm.set_sender(Address::from([1u8; 20]));
+            &mut contract
+        })
+        .constructor(Address::from([161u8; 20]))
+        .expect("construct");
+        let err = ({
+            vm.set_sender(Address::from([1u8; 20]));
+            &mut contract
+        })
+        .deposit_for(address, uint!(10_U256))
+        .unwrap_err();
+        assert!(
+            matches!(err, Error::InvalidReceiver(erc20::ERC20InvalidReceiver { receiver }) if receiver == address)
+        );
     }
 
     #[test]
@@ -592,10 +648,34 @@ mod tests {
         let amount = uint!(10_U256);
         vm.set_contract_address(address);
         let mut contract = Erc20WrapperTestExample::from(&vm);
-        ({ vm.set_sender(alice); &mut contract }).constructor(token).expect("construct");
-        mock_transfer_from(&vm, token, alice, address, amount, Err(erc20::ERC20InsufficientAllowance { spender: address, allowance: U256::ZERO, needed: amount }.abi_encode()));
-        let err = ({ vm.set_sender(alice); &mut contract }).deposit_for(alice, amount).unwrap_err();
-        assert!(matches!(err, Error::SafeErc20FailedOperation(safe_erc20::SafeErc20FailedOperation { token: failed }) if failed == token));
+        ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .constructor(token)
+        .expect("construct");
+        mock_transfer_from(
+            &vm,
+            token,
+            alice,
+            address,
+            amount,
+            Err(erc20::ERC20InsufficientAllowance {
+                spender: address,
+                allowance: U256::ZERO,
+                needed: amount,
+            }
+            .abi_encode()),
+        );
+        let err = ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .deposit_for(alice, amount)
+        .unwrap_err();
+        assert!(
+            matches!(err, Error::SafeErc20FailedOperation(safe_erc20::SafeErc20FailedOperation { token: failed }) if failed == token)
+        );
     }
 
     #[test]
@@ -608,10 +688,34 @@ mod tests {
         let needed = amount + uint!(1_U256);
         vm.set_contract_address(address);
         let mut contract = Erc20WrapperTestExample::from(&vm);
-        ({ vm.set_sender(alice); &mut contract }).constructor(token).expect("construct");
-        mock_transfer_from(&vm, token, alice, address, needed, Err(erc20::ERC20InsufficientBalance { sender: alice, balance: amount, needed }.abi_encode()));
-        let err = ({ vm.set_sender(alice); &mut contract }).deposit_for(alice, needed).unwrap_err();
-        assert!(matches!(err, Error::SafeErc20FailedOperation(safe_erc20::SafeErc20FailedOperation { token: failed }) if failed == token));
+        ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .constructor(token)
+        .expect("construct");
+        mock_transfer_from(
+            &vm,
+            token,
+            alice,
+            address,
+            needed,
+            Err(erc20::ERC20InsufficientBalance {
+                sender: alice,
+                balance: amount,
+                needed,
+            }
+            .abi_encode()),
+        );
+        let err = ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .deposit_for(alice, needed)
+        .unwrap_err();
+        assert!(
+            matches!(err, Error::SafeErc20FailedOperation(safe_erc20::SafeErc20FailedOperation { token: failed }) if failed == token)
+        );
     }
 
     #[test]
@@ -623,14 +727,53 @@ mod tests {
         let amount = uint!(10_U256);
         vm.set_contract_address(address);
         let mut contract = Erc20WrapperTestExample::from(&vm);
-        ({ vm.set_sender(alice); &mut contract }).constructor(token).expect("construct");
+        ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .constructor(token)
+        .expect("construct");
         mock_transfer_from(&vm, token, alice, address, amount, Ok(Vec::new()));
-        let balance = ({ vm.set_sender(alice); &mut contract }).erc20.balance_of(alice);
-        let supply = ({ vm.set_sender(alice); &mut contract }).erc20.total_supply();
-        assert!(({ vm.set_sender(alice); &mut contract }).deposit_for(alice, amount).expect("deposit"));
-        assert_emitted(&vm, &erc20::Transfer { from: Address::ZERO, to: alice, value: amount });
-        assert_eq!(({ vm.set_sender(alice); &mut contract }).erc20.balance_of(alice), balance + amount);
-        assert_eq!(({ vm.set_sender(alice); &mut contract }).erc20.total_supply(), supply + amount);
+        let balance = ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .erc20
+        .balance_of(alice);
+        let supply = ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .erc20
+        .total_supply();
+        assert!(({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .deposit_for(alice, amount)
+        .expect("deposit"));
+        assert_emitted(
+            &vm,
+            &erc20::Transfer { from: Address::ZERO, to: alice, value: amount },
+        );
+        assert_eq!(
+            ({
+                vm.set_sender(alice);
+                &mut contract
+            })
+            .erc20
+            .balance_of(alice),
+            balance + amount
+        );
+        assert_eq!(
+            ({
+                vm.set_sender(alice);
+                &mut contract
+            })
+            .erc20
+            .total_supply(),
+            supply + amount
+        );
     }
 
     #[test]
@@ -640,9 +783,21 @@ mod tests {
         let alice = Address::from([1u8; 20]);
         vm.set_contract_address(address);
         let mut contract = Erc20WrapperTestExample::from(&vm);
-        ({ vm.set_sender(alice); &mut contract }).constructor(Address::from([161u8; 20])).expect("construct");
-        let err = ({ vm.set_sender(alice); &mut contract }).withdraw_to(address, uint!(10_U256)).unwrap_err();
-        assert!(matches!(err, Error::InvalidReceiver(erc20::ERC20InvalidReceiver { receiver }) if receiver == address));
+        ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .constructor(Address::from([161u8; 20]))
+        .expect("construct");
+        let err = ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .withdraw_to(address, uint!(10_U256))
+        .unwrap_err();
+        assert!(
+            matches!(err, Error::InvalidReceiver(erc20::ERC20InvalidReceiver { receiver }) if receiver == address)
+        );
     }
 
     #[test]
@@ -655,11 +810,28 @@ mod tests {
         let needed = amount + uint!(1_U256);
         vm.set_contract_address(address);
         let mut contract = Erc20WrapperTestExample::from(&vm);
-        ({ vm.set_sender(alice); &mut contract }).constructor(token).expect("construct");
+        ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .constructor(token)
+        .expect("construct");
         mock_transfer_from(&vm, token, alice, address, amount, Ok(Vec::new()));
-        ({ vm.set_sender(alice); &mut contract }).deposit_for(alice, amount).expect("deposit");
-        let err = ({ vm.set_sender(alice); &mut contract }).withdraw_to(alice, needed).unwrap_err();
-        assert!(matches!(err, Error::InsufficientBalance(erc20::ERC20InsufficientBalance { sender, balance, needed: requested }) if sender == alice && balance == amount && requested == needed));
+        ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .deposit_for(alice, amount)
+        .expect("deposit");
+        let err = ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .withdraw_to(alice, needed)
+        .unwrap_err();
+        assert!(
+            matches!(err, Error::InsufficientBalance(erc20::ERC20InsufficientBalance { sender, balance, needed: requested }) if sender == alice && balance == amount && requested == needed)
+        );
     }
 
     #[test]
@@ -671,16 +843,60 @@ mod tests {
         let amount = uint!(10_U256);
         vm.set_contract_address(address);
         let mut contract = Erc20WrapperTestExample::from(&vm);
-        ({ vm.set_sender(alice); &mut contract }).constructor(token).expect("construct");
+        ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .constructor(token)
+        .expect("construct");
         mock_transfer_from(&vm, token, alice, address, amount, Ok(Vec::new()));
-        ({ vm.set_sender(alice); &mut contract }).deposit_for(alice, amount).expect("deposit");
-        let balance = ({ vm.set_sender(alice); &mut contract }).erc20.balance_of(alice);
-        let supply = ({ vm.set_sender(alice); &mut contract }).erc20.total_supply();
+        ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .deposit_for(alice, amount)
+        .expect("deposit");
+        let balance = ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .erc20
+        .balance_of(alice);
+        let supply = ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .erc20
+        .total_supply();
         mock_transfer(&vm, token, alice, amount, Ok(Vec::new()));
-        assert!(({ vm.set_sender(alice); &mut contract }).withdraw_to(alice, amount).expect("withdraw"));
-        assert_emitted(&vm, &erc20::Transfer { from: alice, to: Address::ZERO, value: amount });
-        assert_eq!(({ vm.set_sender(alice); &mut contract }).erc20.balance_of(alice), balance - amount);
-        assert_eq!(({ vm.set_sender(alice); &mut contract }).erc20.total_supply(), supply - amount);
+        assert!(({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .withdraw_to(alice, amount)
+        .expect("withdraw"));
+        assert_emitted(
+            &vm,
+            &erc20::Transfer { from: alice, to: Address::ZERO, value: amount },
+        );
+        assert_eq!(
+            ({
+                vm.set_sender(alice);
+                &mut contract
+            })
+            .erc20
+            .balance_of(alice),
+            balance - amount
+        );
+        assert_eq!(
+            ({
+                vm.set_sender(alice);
+                &mut contract
+            })
+            .erc20
+            .total_supply(),
+            supply - amount
+        );
     }
 
     #[test]
@@ -690,11 +906,47 @@ mod tests {
         let invalid = Address::from([1u8; 20]);
         vm.set_contract_address(address);
         let mut contract = Erc20WrapperTestExample::from(&vm);
-        ({ vm.set_sender(invalid); &mut contract }).wrapper.underlying.set(invalid);
+        ({
+            vm.set_sender(invalid);
+            &mut contract
+        })
+        .wrapper
+        .underlying
+        .set(invalid);
         vm.set_code(invalid, vec![1]);
-        vm.mock_static_call(invalid, IERC20WrapperTestUnderlying::balanceOfCall { account: address }.abi_encode(), Err(Vec::new()));
-        let err = ({ vm.set_sender(invalid); &mut contract }).recover(invalid).unwrap_err();
-        assert!(matches!(err, Error::InvalidUnderlying(ERC20InvalidUnderlying { token }) if token == invalid));
+        vm.mock_static_call(
+            invalid,
+            IERC20WrapperTestUnderlying::balanceOfCall { account: address }
+                .abi_encode(),
+            Err(Vec::new()),
+        );
+        let err = ({
+            vm.set_sender(invalid);
+            &mut contract
+        })
+        .recover(invalid)
+        .unwrap_err();
+        assert!(
+            matches!(err, Error::InvalidUnderlying(ERC20InvalidUnderlying { token }) if token == invalid)
+        );
+        assert_eq!(
+            ({
+                vm.set_sender(invalid);
+                &mut contract
+            })
+            .erc20
+            .balance_of(invalid),
+            U256::ZERO
+        );
+        assert_eq!(
+            ({
+                vm.set_sender(invalid);
+                &mut contract
+            })
+            .erc20
+            .total_supply(),
+            U256::ZERO
+        );
     }
 
     #[test]
@@ -707,12 +959,32 @@ mod tests {
         let amount = uint!(10_U256);
         vm.set_contract_address(address);
         let mut contract = Erc20WrapperTestExample::from(&vm);
-        ({ vm.set_sender(alice); &mut contract }).constructor(token).expect("construct");
+        ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .constructor(token)
+        .expect("construct");
         mock_transfer_from(&vm, token, alice, address, amount, Ok(Vec::new()));
-        ({ vm.set_sender(alice); &mut contract }).deposit_for(alice, amount).expect("deposit");
-        ({ vm.set_sender(alice); &mut contract }).erc20._mint(alice, amount).expect("mint");
+        ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .deposit_for(alice, amount)
+        .expect("deposit");
+        ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .erc20
+        ._mint(alice, amount)
+        .expect("mint");
         mock_balance_of(&vm, token, address, amount);
-        _ = ({ vm.set_sender(alice); &mut contract }).recover(alice);
+        _ = ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .recover(alice);
     }
 
     #[test]
@@ -724,11 +996,29 @@ mod tests {
         let amount = uint!(10_U256);
         vm.set_contract_address(address);
         let mut contract = Erc20WrapperTestExample::from(&vm);
-        ({ vm.set_sender(alice); &mut contract }).constructor(token).expect("construct");
+        ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .constructor(token)
+        .expect("construct");
         mock_transfer_from(&vm, token, alice, address, amount, Ok(Vec::new()));
-        ({ vm.set_sender(alice); &mut contract }).deposit_for(alice, amount).expect("deposit");
+        ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .deposit_for(alice, amount)
+        .expect("deposit");
         mock_balance_of(&vm, token, address, amount);
-        assert_eq!(({ vm.set_sender(alice); &mut contract }).recover(alice).expect("recover"), U256::ZERO);
+        assert_eq!(
+            ({
+                vm.set_sender(alice);
+                &mut contract
+            })
+            .recover(alice)
+            .expect("recover"),
+            U256::ZERO
+        );
     }
 
     #[test]
@@ -741,12 +1031,33 @@ mod tests {
         let delta = uint!(1_U256);
         vm.set_contract_address(address);
         let mut contract = Erc20WrapperTestExample::from(&vm);
-        ({ vm.set_sender(alice); &mut contract }).constructor(token).expect("construct");
+        ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .constructor(token)
+        .expect("construct");
         mock_transfer_from(&vm, token, alice, address, amount, Ok(Vec::new()));
-        ({ vm.set_sender(alice); &mut contract }).deposit_for(alice, amount).expect("deposit");
+        ({
+            vm.set_sender(alice);
+            &mut contract
+        })
+        .deposit_for(alice, amount)
+        .expect("deposit");
         mock_balance_of(&vm, token, address, amount + delta);
-        assert_eq!(({ vm.set_sender(alice); &mut contract }).recover(alice).expect("recover"), delta);
-        assert_emitted(&vm, &erc20::Transfer { from: Address::ZERO, to: alice, value: delta });
+        assert_eq!(
+            ({
+                vm.set_sender(alice);
+                &mut contract
+            })
+            .recover(alice)
+            .expect("recover"),
+            delta
+        );
+        assert_emitted(
+            &vm,
+            &erc20::Transfer { from: Address::ZERO, to: alice, value: delta },
+        );
     }
 
     #[test]

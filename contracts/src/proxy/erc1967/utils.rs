@@ -48,7 +48,7 @@ mod sol {
         error ERC1967InvalidBeacon(address beacon);
 
         /// Indicates an error relatoed to the fact that an upgrade function
-        /// sees [`self.vm().msg_value()`] > [`U256::ZERO`] that may be lost.
+        /// sees `self.vm().msg_value()` > [`U256::ZERO`] that may be lost.
         #[derive(Debug)]
         #[allow(missing_docs)]
         error ERC1967NonPayable();
@@ -68,7 +68,7 @@ pub enum Error {
     /// of the proxy is invalid.
     InvalidBeacon(ERC1967InvalidBeacon),
     /// Indicates an error relatoed to the fact that an upgrade function
-    /// sees [`self.vm().msg_value()`] > [`alloy_primitives::U256::ZERO`]
+    /// sees `self.vm().msg_value()` > [`alloy_primitives::U256::ZERO`]
     /// that may be lost.
     NonPayable(ERC1967NonPayable),
     /// There's no code at `target` (it is not a contract).
@@ -146,7 +146,7 @@ impl Erc1967Utils {
 
     /// Performs implementation upgrade with additional setup call if
     /// data is nonempty. This function is payable only if the setup call
-    /// is performed, otherwise [`self.vm().msg_value()`] is rejected to avoid stuck
+    /// is performed, otherwise `self.vm().msg_value()` is rejected to avoid stuck
     /// value in the contract.
     ///
     /// # Arguments
@@ -238,7 +238,7 @@ impl Erc1967Utils {
 
     /// Change the beacon and trigger a setup call if data is nonempty.
     /// This function is payable only if the setup call is performed,
-    /// otherwise [`self.vm().msg_value()`] is rejected to avoid stuck value in the
+    /// otherwise `self.vm().msg_value()` is rejected to avoid stuck value in the
     /// contract.
     ///
     /// # Arguments
@@ -293,13 +293,13 @@ impl Erc1967Utils {
 }
 
 impl Erc1967Utils {
-    /// Reverts if [`self.vm().msg_value()`] is not [`alloy_primitives::U256::ZERO`]. It
-    /// can be used to avoid [`self.vm().msg_value()`] stuck in the contract if an
+    /// Reverts if `self.vm().msg_value()` is not [`alloy_primitives::U256::ZERO`]. It
+    /// can be used to avoid `self.vm().msg_value()` stuck in the contract if an
     /// upgrade does not perform an initialization call.
     ///
     /// # Errors
     ///
-    /// * [`Error::NonPayable`] - If [`self.vm().msg_value()`] is not
+    /// * [`Error::NonPayable`] - If `self.vm().msg_value()` is not
     ///   [`alloy_primitives::U256::ZERO`].
     fn check_non_payable<T: HostAccess<Host = VM>>(
         context: &T,

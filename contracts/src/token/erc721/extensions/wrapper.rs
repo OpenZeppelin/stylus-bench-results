@@ -13,10 +13,8 @@ use alloy_primitives::{aliases::B32, Address, U256};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
 use stylus_sdk::{
-    abi::Bytes,
-    call::{self}, prelude::Call, stylus_core::calls::errors::MethodError,
-        prelude::*,
-    storage::StorageAddress,
+    abi::Bytes, prelude::Call, prelude::*, storage::StorageAddress,
+    stylus_core::calls::errors::MethodError,
 };
 
 use crate::token::erc721::{
@@ -389,13 +387,13 @@ impl Erc721Wrapper {
         self.ensure_underlying_has_code()?;
         let underlying = Erc721Interface::new(self.underlying());
 
-        let owner = underlying.owner_of(self.vm(), Call::new(), token_id).map_err(
-            |_| {
+        let owner = underlying
+            .owner_of(self.vm(), Call::new(), token_id)
+            .map_err(|_| {
                 Error::Erc721FailedOperation(Erc721FailedOperation {
                     token: self.underlying(),
                 })
-            },
-        )?;
+            })?;
 
         let contract_address = self.vm().contract_address();
         if owner != contract_address {
@@ -417,9 +415,9 @@ impl Erc721Wrapper {
 
 #[cfg(test)]
 mod tests {
-    use alloy_sol_types::{SolCall, SolValue};
     use alloy_primitives::uint;
     use alloy_sol_types::SolError;
+    use alloy_sol_types::{SolCall, SolValue};
     use stylus_sdk::alloy_primitives::Bytes;
     use stylus_sdk::{alloy_sol_types::sol, testing::TestVM};
 
@@ -452,7 +450,12 @@ mod tests {
         vm.set_code(token, vec![1]);
         vm.mock_call(
             token,
-            IERC721WrapperTestUnderlying::transferFromCall { from, to, tokenId: token_id }.abi_encode(),
+            IERC721WrapperTestUnderlying::transferFromCall {
+                from,
+                to,
+                tokenId: token_id,
+            }
+            .abi_encode(),
             U256::ZERO,
             result,
         );
@@ -481,11 +484,17 @@ mod tests {
         );
     }
 
-    fn mock_owner_of(vm: &TestVM, token: Address, token_id: U256, owner: Address) {
+    fn mock_owner_of(
+        vm: &TestVM,
+        token: Address,
+        token_id: U256,
+        owner: Address,
+    ) {
         vm.set_code(token, vec![1]);
         vm.mock_static_call(
             token,
-            IERC721WrapperTestUnderlying::ownerOfCall { tokenId: token_id }.abi_encode(),
+            IERC721WrapperTestUnderlying::ownerOfCall { tokenId: token_id }
+                .abi_encode(),
             Ok(owner.abi_encode()),
         );
     }
@@ -504,7 +513,11 @@ mod tests {
             self.wrapper.constructor(underlying_token);
         }
 
-        fn recover(&mut self, account: Address, token_id: U256) -> Result<U256, Error> {
+        fn recover(
+            &mut self,
+            account: Address,
+            token_id: U256,
+        ) -> Result<U256, Error> {
             self.wrapper._recover(account, token_id, &mut self.erc721)
         }
     }
@@ -537,8 +550,7 @@ mod tests {
             token_id: U256,
             data: Bytes,
         ) -> Result<(), erc721::Error> {
-            self.erc721
-                .safe_transfer_from_with_data(from, to, token_id, data)
+            self.erc721.safe_transfer_from_with_data(from, to, token_id, data)
         }
 
         fn transfer_from(
@@ -550,7 +562,11 @@ mod tests {
             self.erc721.transfer_from(from, to, token_id)
         }
 
-        fn approve(&mut self, to: Address, token_id: U256) -> Result<(), erc721::Error> {
+        fn approve(
+            &mut self,
+            to: Address,
+            token_id: U256,
+        ) -> Result<(), erc721::Error> {
             self.erc721.approve(to, token_id)
         }
 
@@ -562,11 +578,18 @@ mod tests {
             self.erc721.set_approval_for_all(operator, approved)
         }
 
-        fn get_approved(&self, token_id: U256) -> Result<Address, erc721::Error> {
+        fn get_approved(
+            &self,
+            token_id: U256,
+        ) -> Result<Address, erc721::Error> {
             self.erc721.get_approved(token_id)
         }
 
-        fn is_approved_for_all(&self, owner: Address, operator: Address) -> bool {
+        fn is_approved_for_all(
+            &self,
+            owner: Address,
+            operator: Address,
+        ) -> bool {
             self.erc721.is_approved_for_all(owner, operator)
         }
     }
@@ -579,14 +602,20 @@ mod tests {
             self.wrapper.underlying()
         }
 
-        fn deposit_for(&mut self, account: Address, token_ids: Vec<U256>) -> Result<bool, Error> {
-            self.wrapper
-                .deposit_for(account, token_ids, &mut self.erc721)
+        fn deposit_for(
+            &mut self,
+            account: Address,
+            token_ids: Vec<U256>,
+        ) -> Result<bool, Error> {
+            self.wrapper.deposit_for(account, token_ids, &mut self.erc721)
         }
 
-        fn withdraw_to(&mut self, account: Address, token_ids: Vec<U256>) -> Result<bool, Error> {
-            self.wrapper
-                .withdraw_to(account, token_ids, &mut self.erc721)
+        fn withdraw_to(
+            &mut self,
+            account: Address,
+            token_ids: Vec<U256>,
+        ) -> Result<bool, Error> {
+            self.wrapper.withdraw_to(account, token_ids, &mut self.erc721)
         }
     }
 
@@ -700,9 +729,9 @@ mod tests {
             alice,
             contract_address,
             token_ids[0],
-            Err(erc721::Error::NonexistentToken(erc721::ERC721NonexistentToken {
-                token_id: token_ids[0],
-            })
+            Err(erc721::Error::NonexistentToken(
+                erc721::ERC721NonexistentToken { token_id: token_ids[0] },
+            )
             .into()),
         );
 
@@ -767,12 +796,13 @@ mod tests {
         .deposit_for(alice, token_ids.clone())
         .expect_err("should return Error::InvalidReceiverWithReason");
 
-        let expected_error: Vec<u8> =
-            erc721::Error::InsufficientApproval(erc721::ERC721InsufficientApproval {
+        let expected_error: Vec<u8> = erc721::Error::InsufficientApproval(
+            erc721::ERC721InsufficientApproval {
                 operator: contract_address,
                 token_id: token_ids[0],
-            })
-            .into();
+            },
+        )
+        .into();
         let expected_error = String::from_utf8_lossy(&expected_error);
 
         assert!(matches!(
@@ -880,11 +910,7 @@ mod tests {
         for token_id in token_ids {
             assert_emitted(
                 &contract_vm,
-                &erc721::Transfer {
-                    from: Address::ZERO,
-                    to: alice,
-                    token_id,
-                },
+                &erc721::Transfer { from: Address::ZERO, to: alice, token_id },
             );
         }
 
@@ -898,7 +924,6 @@ mod tests {
             .unwrap(),
             initial_wrapped_balance + U256::from(tokens)
         );
-
     }
 
     #[test]
@@ -942,9 +967,9 @@ mod tests {
             contract_address,
             Address::ZERO,
             token_ids[0],
-            Err(erc721::Error::InvalidReceiver(erc721::ERC721InvalidReceiver {
-                receiver: Address::ZERO,
-            })
+            Err(erc721::Error::InvalidReceiver(
+                erc721::ERC721InvalidReceiver { receiver: Address::ZERO },
+            )
             .into()),
         );
 
@@ -952,7 +977,7 @@ mod tests {
             contract_vm.set_sender(alice);
             &mut contract
         })
-        .withdraw_to(Address::ZERO, token_ids,)
+        .withdraw_to(Address::ZERO, token_ids)
         .expect_err("should return Error::InvalidReceiverWithReason");
 
         let expected_error: Vec<u8> =
@@ -1115,11 +1140,7 @@ mod tests {
         for token_id in token_ids {
             assert_emitted(
                 &contract_vm,
-                &erc721::Transfer {
-                    from: alice,
-                    to: Address::ZERO,
-                    token_id,
-                },
+                &erc721::Transfer { from: alice, to: Address::ZERO, token_id },
             );
         }
 
@@ -1162,10 +1183,7 @@ mod tests {
 
         assert_eq!(
             err,
-            ERC721UnsupportedToken {
-                token: invalid_operator
-            }
-            .abi_encode()
+            ERC721UnsupportedToken { token: invalid_operator }.abi_encode()
         );
     }
 
@@ -1204,10 +1222,7 @@ mod tests {
 
         assert_eq!(
             err,
-            erc721::ERC721InvalidSender {
-                sender: Address::ZERO
-            }
-            .abi_encode()
+            erc721::ERC721InvalidSender { sender: Address::ZERO }.abi_encode()
         );
     }
 
@@ -1246,11 +1261,7 @@ mod tests {
         assert_eq!(interface_id, RECEIVER_FN_SELECTOR);
         assert_emitted(
             &contract_vm,
-            &erc721::Transfer {
-                from: Address::ZERO,
-                to: alice,
-                token_id,
-            },
+            &erc721::Transfer { from: Address::ZERO, to: alice, token_id },
         );
         assert_eq!(
             ({
@@ -1282,7 +1293,8 @@ mod tests {
         contract_vm.set_code(invalid_token_address, vec![1]);
         contract_vm.mock_static_call(
             invalid_token_address,
-            IERC721WrapperTestUnderlying::ownerOfCall { tokenId: token_id }.abi_encode(),
+            IERC721WrapperTestUnderlying::ownerOfCall { tokenId: token_id }
+                .abi_encode(),
             Err(Vec::new()),
         );
 
@@ -1298,6 +1310,23 @@ mod tests {
             Error::Erc721FailedOperation(Erc721FailedOperation { token })
                 if token == invalid_token_address
         ));
+        assert_eq!(
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .erc721
+            .balance_of(alice)
+            .unwrap(),
+            U256::ZERO
+        );
+        assert!(({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .erc721
+        .owner_of(token_id)
+        .is_err());
     }
 
     #[test]
@@ -1349,7 +1378,12 @@ mod tests {
         })
         .constructor(erc721_contract_address);
         contract_vm.set_code(erc721_contract_address, vec![0]);
-        mock_owner_of(&contract_vm, erc721_contract_address, token_id, contract_address);
+        mock_owner_of(
+            &contract_vm,
+            erc721_contract_address,
+            token_id,
+            contract_address,
+        );
 
         // Mint an "unexpected" wrapped token.
         ({
@@ -1390,7 +1424,12 @@ mod tests {
         })
         .constructor(erc721_contract_address);
         contract_vm.set_code(erc721_contract_address, vec![0]);
-        mock_owner_of(&contract_vm, erc721_contract_address, token_id, contract_address);
+        mock_owner_of(
+            &contract_vm,
+            erc721_contract_address,
+            token_id,
+            contract_address,
+        );
 
         let initial_wrapped_balance = ({
             contract_vm.set_sender(alice);
@@ -1419,13 +1458,7 @@ mod tests {
         );
         assert_emitted(
             &contract_vm,
-            &erc721::Transfer {
-                from: Address::ZERO,
-                to: alice,
-                token_id,
-            },
+            &erc721::Transfer { from: Address::ZERO, to: alice, token_id },
         );
     }
-
-
 }

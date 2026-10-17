@@ -44,6 +44,7 @@ pub struct AccessControlEnumerable {
 
 /// Interface for the [`AccessControlEnumerable`] extension.
 #[interface_id]
+#[public]
 pub trait IAccessControlEnumerable {
     /// The error type associated to the trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -175,8 +176,7 @@ impl IErc165 for AccessControlEnumerable {
 mod tests {
 
     use alloy_primitives::{uint, Address};
-    use motsu::prelude::*;
-    use stylus_sdk::msg;
+    use stylus_sdk::testing::TestVM;
 
     use super::*;
     use crate::access::control::{self, IAccessControl};
@@ -251,7 +251,7 @@ mod tests {
             role: B256,
             confirmation: Address,
         ) -> Result<(), Self::Error> {
-            if msg::sender() != confirmation {
+            if self.vm().msg_sender() != confirmation {
                 return Err(control::Error::BadConfirmation(
                     control::AccessControlBadConfirmation {},
                 ));
@@ -291,32 +291,46 @@ mod tests {
         }
     }
 
-    #[motsu::test]
-    fn get_role_member_count_returns_zero_by_default(
-        contract: Contract<AccessControlEnumerableExample>,
-        alice: Address,
-    ) {
-        let count = contract.sender(alice).get_role_member_count(ROLE.into());
+    #[test]
+    fn get_role_member_count_returns_zero_by_default() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = AccessControlEnumerableExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
+        let count = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .get_role_member_count(ROLE.into());
         assert_eq!(count, U256::ZERO);
 
-        assert!(contract
-            .sender(alice)
-            .get_role_members(ROLE.into())
-            .is_empty());
+        assert!(({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .get_role_members(ROLE.into())
+        .is_empty());
     }
 
-    #[motsu::test]
-    fn get_role_member_reverts_when_empty_role(
-        contract: Contract<AccessControlEnumerableExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn get_role_member_reverts_when_empty_role() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = AccessControlEnumerableExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
         let role = ROLE.into();
         let index = U256::ZERO;
 
-        let err = contract
-            .sender(alice)
-            .get_role_member(role, index)
-            .motsu_expect_err("should return `Error::OutOfBounds`");
+        let err = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .get_role_member(role, index)
+        .expect_err("should return `Error::OutOfBounds`");
 
         assert!(matches!(
             err,
@@ -324,197 +338,291 @@ mod tests {
                 if r == role && idx == index
         ));
 
-        assert!(contract.sender(alice).get_role_members(role).is_empty());
+        assert!(({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .get_role_members(role)
+        .is_empty());
     }
 
-    #[motsu::test]
-    fn can_enumerate_role_members(
-        contract: Contract<AccessControlEnumerableExample>,
-        admin: Address,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn can_enumerate_role_members() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = AccessControlEnumerableExample::from(&contract_vm);
+        let admin = Address::from([1u8; 20]);
+        let alice = Address::from([2u8; 20]);
+        let bob = Address::from([3u8; 20]);
+
         // Grant [`AccessControl::DEFAULT_ADMIN_ROLE`] to `admin`.
-        contract
-            .sender(admin)
-            .access_control
-            ._grant_role(AccessControl::DEFAULT_ADMIN_ROLE.into(), admin);
+        ({
+            contract_vm.set_sender(admin);
+            &mut contract
+        })
+        .access_control
+        ._grant_role(AccessControl::DEFAULT_ADMIN_ROLE.into(), admin);
 
         // Grant `ROLE` to `alice` and `bob`.
-        contract
-            .sender(admin)
-            .grant_role(ROLE.into(), alice)
-            .motsu_expect("should grant alice");
+        ({
+            contract_vm.set_sender(admin);
+            &mut contract
+        })
+        .grant_role(ROLE.into(), alice)
+        .expect("should grant alice");
 
-        contract
-            .sender(admin)
-            .grant_role(ROLE.into(), bob)
-            .motsu_expect("should grant bob");
+        ({
+            contract_vm.set_sender(admin);
+            &mut contract
+        })
+        .grant_role(ROLE.into(), bob)
+        .expect("should grant bob");
 
         // Check members count.
         assert_eq!(
-            contract.sender(alice).get_role_member_count(ROLE.into()),
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .get_role_member_count(ROLE.into()),
             uint!(2_U256)
         );
 
         // Check members.
         assert_eq!(
-            contract
-                .sender(alice)
-                .get_role_member(ROLE.into(), U256::ZERO)
-                .motsu_expect("should return alice"),
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .get_role_member(ROLE.into(), U256::ZERO)
+            .expect("should return alice"),
             alice
         );
 
         assert_eq!(
-            contract
-                .sender(alice)
-                .get_role_member(ROLE.into(), U256::from(1))
-                .motsu_expect("should return bob"),
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .get_role_member(ROLE.into(), U256::from(1))
+            .expect("should return bob"),
             bob
         );
 
         assert_eq!(
-            contract.sender(alice).get_role_members(ROLE.into()),
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .get_role_members(ROLE.into()),
             vec![alice, bob]
         );
     }
 
-    #[motsu::test]
-    fn revoked_members_are_removed_from_enumeration(
-        contract: Contract<AccessControlEnumerableExample>,
-        admin: Address,
-        alice: Address,
-    ) {
+    #[test]
+    fn revoked_members_are_removed_from_enumeration() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = AccessControlEnumerableExample::from(&contract_vm);
+        let admin = Address::from([1u8; 20]);
+        let alice = Address::from([2u8; 20]);
+
         // Grant [`AccessControl::DEFAULT_ADMIN_ROLE`] to `admin`.
-        contract
-            .sender(admin)
-            .access_control
-            ._grant_role(AccessControl::DEFAULT_ADMIN_ROLE.into(), admin);
+        ({
+            contract_vm.set_sender(admin);
+            &mut contract
+        })
+        .access_control
+        ._grant_role(AccessControl::DEFAULT_ADMIN_ROLE.into(), admin);
 
         // Grant and revoke `ROLE` to `alice`.
-        contract
-            .sender(admin)
-            .grant_role(ROLE.into(), alice)
-            .motsu_expect("should grant alice");
-        contract
-            .sender(admin)
-            .revoke_role(ROLE.into(), alice)
-            .motsu_expect("should revoke alice");
+        ({
+            contract_vm.set_sender(admin);
+            &mut contract
+        })
+        .grant_role(ROLE.into(), alice)
+        .expect("should grant alice");
+        ({
+            contract_vm.set_sender(admin);
+            &mut contract
+        })
+        .revoke_role(ROLE.into(), alice)
+        .expect("should revoke alice");
 
         // Check member count.
         assert_eq!(
-            contract.sender(alice).get_role_member_count(ROLE.into()),
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .get_role_member_count(ROLE.into()),
             U256::ZERO
         );
 
-        assert!(contract
-            .sender(alice)
-            .get_role_members(ROLE.into())
-            .is_empty());
+        assert!(({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .get_role_members(ROLE.into())
+        .is_empty());
     }
 
-    #[motsu::test]
-    fn supports_interface_returns_true_for_iaccess_control_enumerable(
-        contract: Contract<AccessControlEnumerableExample>,
-        alice: Address,
-    ) {
-        assert!(contract
-            .sender(alice)
-            .supports_interface(<AccessControlEnumerableExample as IAccessControlEnumerable>::interface_id()));
+    #[test]
+    fn supports_interface_returns_true_for_iaccess_control_enumerable() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = AccessControlEnumerableExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
 
-        assert!(contract.sender(alice).supports_interface(
+        assert!(({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .supports_interface(
+            <AccessControlEnumerableExample as IAccessControlEnumerable>::interface_id()
+        ));
+
+        assert!(({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .supports_interface(
             <AccessControlEnumerableExample as IAccessControl>::interface_id()
         ));
 
-        assert!(contract.sender(alice).supports_interface(
+        assert!(({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .supports_interface(
             <AccessControlEnumerableExample as IErc165>::interface_id()
         ));
     }
 
-    #[motsu::test]
-    fn granting_role_twice_does_not_duplicate_member(
-        contract: Contract<AccessControlEnumerableExample>,
-        admin: Address,
-        alice: Address,
-    ) {
+    #[test]
+    fn granting_role_twice_does_not_duplicate_member() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = AccessControlEnumerableExample::from(&contract_vm);
+        let admin = Address::from([1u8; 20]);
+        let alice = Address::from([2u8; 20]);
+
         // Grant [`AccessControl::DEFAULT_ADMIN_ROLE`] to `admin`.
-        contract
-            .sender(admin)
-            .access_control
-            ._grant_role(AccessControl::DEFAULT_ADMIN_ROLE.into(), admin);
+        ({
+            contract_vm.set_sender(admin);
+            &mut contract
+        })
+        .access_control
+        ._grant_role(AccessControl::DEFAULT_ADMIN_ROLE.into(), admin);
 
         // Grant `ROLE` to `alice`.
-        contract
-            .sender(admin)
-            .grant_role(ROLE.into(), alice)
-            .motsu_expect("should grant alice");
+        ({
+            contract_vm.set_sender(admin);
+            &mut contract
+        })
+        .grant_role(ROLE.into(), alice)
+        .expect("should grant alice");
 
         // Grant `ROLE` to `alice` again.
-        contract
-            .sender(admin)
-            .grant_role(ROLE.into(), alice)
-            .motsu_expect("should grant alice");
+        ({
+            contract_vm.set_sender(admin);
+            &mut contract
+        })
+        .grant_role(ROLE.into(), alice)
+        .expect("should grant alice");
 
         // Check member count.
         assert_eq!(
-            contract.sender(alice).get_role_member_count(ROLE.into()),
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .get_role_member_count(ROLE.into()),
             uint!(1_U256)
         );
 
         // Check member.
-        let member = contract
-            .sender(alice)
-            .get_role_member(ROLE.into(), U256::ZERO)
-            .motsu_expect("should return alice");
+        let member = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .get_role_member(ROLE.into(), U256::ZERO)
+        .expect("should return alice");
         assert_eq!(member, alice);
 
         assert_eq!(
-            contract.sender(alice).get_role_members(ROLE.into()),
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .get_role_members(ROLE.into()),
             vec![alice]
         );
     }
 
-    #[motsu::test]
-    fn revoking_nonexistent_role_member_has_no_effect(
-        contract: Contract<AccessControlEnumerableExample>,
-        admin: Address,
-        alice: Address,
-        charlie: Address,
-    ) {
-        // Grant [`AccessControl::DEFAULT_ADMIN_ROLE`] to `admin`.
-        contract
-            .sender(admin)
-            .access_control
-            ._grant_role(AccessControl::DEFAULT_ADMIN_ROLE.into(), admin);
+    #[test]
+    fn revoking_nonexistent_role_member_has_no_effect() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = AccessControlEnumerableExample::from(&contract_vm);
+        let admin = Address::from([1u8; 20]);
+        let alice = Address::from([2u8; 20]);
+        let charlie = Address::from([3u8; 20]);
 
-        contract
-            .sender(admin)
-            .grant_role(ROLE.into(), alice)
-            .motsu_expect("should grant alice");
+        // Grant [`AccessControl::DEFAULT_ADMIN_ROLE`] to `admin`.
+        ({
+            contract_vm.set_sender(admin);
+            &mut contract
+        })
+        .access_control
+        ._grant_role(AccessControl::DEFAULT_ADMIN_ROLE.into(), admin);
+
+        ({
+            contract_vm.set_sender(admin);
+            &mut contract
+        })
+        .grant_role(ROLE.into(), alice)
+        .expect("should grant alice");
 
         // Try to revoke a role that `charlie` doesn't have.
-        contract
-            .sender(admin)
-            .revoke_role(ROLE.into(), charlie)
-            .motsu_expect("should not revert");
+        ({
+            contract_vm.set_sender(admin);
+            &mut contract
+        })
+        .revoke_role(ROLE.into(), charlie)
+        .expect("should not revert");
 
         // Check member count.
         assert_eq!(
-            contract.sender(alice).get_role_member_count(ROLE.into()),
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .get_role_member_count(ROLE.into()),
             uint!(1_U256)
         );
 
         assert_eq!(
-            contract
-                .sender(alice)
-                .get_role_member(ROLE.into(), U256::ZERO)
-                .motsu_expect("should return alice"),
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .get_role_member(ROLE.into(), U256::ZERO)
+            .expect("should return alice"),
             alice
         );
 
         assert_eq!(
-            contract.sender(alice).get_role_members(ROLE.into()),
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .get_role_members(ROLE.into()),
             vec![alice]
         );
     }

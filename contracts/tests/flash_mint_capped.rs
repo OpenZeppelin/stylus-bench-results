@@ -1,3 +1,5 @@
+//! Regression test for ERC-20 Capped and `FlashMint` composition.
+
 extern crate alloc;
 
 use alloy_primitives::{Address, U256};
@@ -6,8 +8,8 @@ use openzeppelin_stylus::token::erc20::{
     extensions::{
         capped::Capped,
         flash_mint::{
-            Erc20FlashMint, Error as FlashMintError,
-            ERC3156ExceededMaxLoan, BORROWER_CALLBACK_VALUE,
+            ERC3156ExceededMaxLoan, Erc20FlashMint, Error as FlashMintError,
+            BORROWER_CALLBACK_VALUE,
         },
     },
     Erc20, IErc20,

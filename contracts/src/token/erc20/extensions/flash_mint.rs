@@ -15,6 +15,7 @@
 
 // TODO: once ERC20Votes is implemented, include it in the comment above next to
 // ERC20Capped.
+#![allow(clippy::too_many_arguments)]
 
 use alloc::{vec, vec::Vec};
 
@@ -233,7 +234,7 @@ pub trait IErc3156FlashLender {
     /// * `&mut self` - Write access to the contract's state.
     /// * `receiver` - The receiver of the flash loan. Should implement the
     ///   [`IERC3156FlashBorrower::on_flash_loan`] interface.
-    /// * `token` - The token to be flash loaned. Only [`self.vm().contract_address()`]
+    /// * `token` - The token to be flash loaned. Only `self.vm().contract_address()`
     ///   is supported.
     /// * `value` - The amount of tokens to be loaned.
     /// * `data` - Arbitrary data that is passed to the receiver.
@@ -414,15 +415,6 @@ impl Erc20FlashMint {
         self.flash_loan(receiver, token, value, data, erc20)
     }
 }
-
-// TODO: implement `IErc165` once `IErc3156FlashLender` is implemented for
-// `Erc20FlashMint`.
-// impl IErc165 for Erc20FlashMint {
-//     fn supports_interface(&self, interface_id: B32) -> bool {
-//         <Self as IErc3156FlashLender>::interface_id() == interface_id
-//             || <Self as IErc165>::interface_id() == interface_id
-//     }
-// }
 
 #[cfg(test)]
 mod tests {

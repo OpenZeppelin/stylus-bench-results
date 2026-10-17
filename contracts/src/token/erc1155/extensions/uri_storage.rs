@@ -6,7 +6,6 @@ use alloc::{string::String, vec, vec::Vec};
 use alloy_primitives::U256;
 use openzeppelin_stylus_proc::interface_id;
 use stylus_sdk::{
-    evm,
     prelude::*,
     storage::{StorageMap, StorageString},
 };
@@ -25,6 +24,7 @@ pub struct Erc1155UriStorage {
 /// Interface of an optional extension for ERC-1155 with storage based token URI
 /// management.
 #[interface_id]
+#[public]
 pub trait IErc1155UriStorage {
     /// Returns the Uniform Resource Identifier (URI) for `token_id` token.
     ///
@@ -71,7 +71,8 @@ impl Erc1155UriStorage {
         metadata_uri: &impl IErc1155MetadataUri,
     ) {
         self.token_uris.setter(token_id).set_str(token_uri);
-        evm::log(URI { value: self.uri(token_id, metadata_uri), id: token_id });
+        self.vm()
+            .log(URI { value: self.uri(token_id, metadata_uri), id: token_id });
     }
 
     /// Sets `base_uri` as the `base_uri` for all tokens.
@@ -88,8 +89,8 @@ impl Erc1155UriStorage {
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{uint, Address};
-    use motsu::prelude::Contract;
     use stylus_sdk::prelude::*;
+    use stylus_sdk::testing::TestVM;
 
     use super::*;
     use crate::token::erc1155::extensions::Erc1155MetadataUri;
@@ -115,111 +116,211 @@ mod tests {
 
     const TOKEN_ID: U256 = uint!(1_U256);
 
-    #[motsu::test]
-    fn uri_returns_metadata_uri_when_token_uri_is_not_set(
-        contract: Contract<Erc1155MetadataExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn uri_returns_metadata_uri_when_token_uri_is_not_set() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc1155MetadataExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
         let uri = "https://some.metadata/token/uri";
 
-        contract.sender(alice).metadata_uri.uri.set_str(uri);
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .metadata_uri
+        .uri
+        .set_str(uri);
 
-        assert_eq!(uri, contract.sender(alice).uri(TOKEN_ID));
+        assert_eq!(
+            uri,
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .uri(TOKEN_ID)
+        );
     }
 
-    #[motsu::test]
-    fn uri_returns_empty_string_when_no_uri_is_set(
-        contract: Contract<Erc1155MetadataExample>,
-        alice: Address,
-    ) {
-        assert!(contract.sender(alice).uri(TOKEN_ID).is_empty());
+    #[test]
+    fn uri_returns_empty_string_when_no_uri_is_set() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc1155MetadataExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
+        assert!(({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .uri(TOKEN_ID)
+        .is_empty());
     }
 
-    #[motsu::test]
-    fn uri_returns_token_uri_when_base_uri_is_empty(
-        contract: Contract<Erc1155MetadataExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn uri_returns_token_uri_when_base_uri_is_empty() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc1155MetadataExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
         let token_uri = "https://some.short/token/uri";
 
-        contract
-            .sender(alice)
-            .uri_storage
-            .token_uris
-            .setter(TOKEN_ID)
-            .set_str(token_uri);
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .uri_storage
+        .token_uris
+        .setter(TOKEN_ID)
+        .set_str(token_uri);
 
-        assert_eq!(token_uri, contract.sender(alice).uri(TOKEN_ID));
+        assert_eq!(
+            token_uri,
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .uri(TOKEN_ID)
+        );
     }
 
-    #[motsu::test]
-    fn uri_returns_concatenated_base_uri_and_token_uri(
-        contract: Contract<Erc1155MetadataExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn uri_returns_concatenated_base_uri_and_token_uri() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc1155MetadataExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
         let base_uri = "https://some.base.uri";
         let token_uri = "/some/token/uri";
 
-        contract.sender(alice).uri_storage.base_uri.set_str(base_uri);
-        contract
-            .sender(alice)
-            .uri_storage
-            .token_uris
-            .setter(TOKEN_ID)
-            .set_str(token_uri);
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .uri_storage
+        .base_uri
+        .set_str(base_uri);
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .uri_storage
+        .token_uris
+        .setter(TOKEN_ID)
+        .set_str(token_uri);
 
         assert_eq!(
             base_uri.to_string() + token_uri,
-            contract.sender(alice).uri(TOKEN_ID)
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .uri(TOKEN_ID)
         );
     }
 
-    #[motsu::test]
-    fn uri_ignores_metadata_uri_when_token_uri_is_set(
-        contract: Contract<Erc1155MetadataExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn uri_ignores_metadata_uri_when_token_uri_is_set() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc1155MetadataExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
         let uri = "https://some.metadata/token/uri";
         let token_uri = "https://some.short/token/uri";
 
-        contract.sender(alice).metadata_uri.uri.set_str(uri);
-        contract
-            .sender(alice)
-            .uri_storage
-            .token_uris
-            .setter(TOKEN_ID)
-            .set_str(token_uri);
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .metadata_uri
+        .uri
+        .set_str(uri);
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .uri_storage
+        .token_uris
+        .setter(TOKEN_ID)
+        .set_str(token_uri);
 
-        assert_eq!(token_uri, contract.sender(alice).uri(TOKEN_ID));
+        assert_eq!(
+            token_uri,
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .uri(TOKEN_ID)
+        );
     }
-    #[motsu::test]
-    fn test_set_uri(
-        contract: Contract<Erc1155MetadataExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn test_set_uri() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc1155MetadataExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
         let uri = "https://some.metadata/token/uri";
         let token_uri = "https://some.short/token/uri".to_string();
 
-        contract.sender(alice).metadata_uri.uri.set_str(uri);
-        contract.sender(alice).uri_storage.set_token_uri(
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .metadata_uri
+        .uri
+        .set_str(uri);
+        contract_vm.set_sender(alice);
+        contract.uri_storage.set_token_uri(
             TOKEN_ID,
             token_uri.clone(),
-            &contract.sender(alice).metadata_uri,
+            &contract.metadata_uri,
         );
 
-        assert_eq!(token_uri, contract.sender(alice).uri(TOKEN_ID));
+        assert_eq!(
+            token_uri,
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .uri(TOKEN_ID)
+        );
     }
-    #[motsu::test]
-    fn test_set_base_uri(
-        contract: Contract<Erc1155MetadataExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn test_set_base_uri() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Erc1155MetadataExample::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
         let base_uri = "https://docs.openzeppelin.com/".to_string();
-        contract.sender(alice).uri_storage.set_base_uri(base_uri.clone());
+        ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .uri_storage
+        .set_base_uri(base_uri.clone());
 
         assert_eq!(
             base_uri,
-            contract.sender(alice).uri_storage.base_uri.get_string()
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .uri_storage
+            .base_uri
+            .get_string()
         );
     }
 }

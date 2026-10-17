@@ -9,10 +9,12 @@ pub mod upgradeable;
 pub use interface::IBeaconInterface;
 use openzeppelin_stylus_proc::interface_id;
 pub use proxy::BeaconProxy;
+use stylus_sdk::prelude::*;
 pub use upgradeable::{Error, IUpgradeableBeacon, UpgradeableBeacon};
 
 /// This is the interface that [`BeaconProxy`] expects of its beacon.
 #[interface_id]
+#[public]
 pub trait IBeacon {
     /// Must return an address that can be used as a delegate call target.
     ///

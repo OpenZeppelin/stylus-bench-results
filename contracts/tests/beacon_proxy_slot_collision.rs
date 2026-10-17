@@ -1,4 +1,4 @@
-//! Regression test for BeaconProxy storage isolation.
+//! Regression test for `BeaconProxy` storage isolation.
 
 extern crate alloc;
 

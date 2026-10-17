@@ -40,6 +40,7 @@ sol_interface! {
 /// and [`super::IErc721::safe_transfer_from_with_data`] from ERC-721 asset
 /// contracts.
 #[interface_id]
+#[public]
 pub trait IErc721Receiver {
     /// This function is called whenever an [`super::Erc721`] `token_id`
     /// token is transferred to this contract via
@@ -61,6 +62,7 @@ pub trait IErc721Receiver {
     /// # Errors
     ///
     /// * May return a custom error.
+    #[selector(name = "onERC721Received")]
     fn on_erc721_received(
         &mut self,
         operator: Address,

@@ -1,0 +1,51 @@
+[package]
+name = "stylus-proc"
+keywords = ["arbitrum", "ethereum", "stylus", "alloy"]
+description = "Procedural macros for stylus-sdk"
+
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+alloy-primitives.workspace = true
+alloy-sol-types.workspace = true
+cfg-if.workspace = true
+convert_case.workspace = true
+lazy_static.workspace = true
+proc-macro-error.workspace = true
+proc-macro2.workspace = true
+quote.workspace = true
+regex.workspace = true
+sha3.workspace = true
+syn.workspace = true
+syn-solidity.workspace = true
+trybuild.workspace = true
+stylus-core.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+alloy-primitives = { workspace = true, features = ["native-keccak"] }
+
+[dev-dependencies]
+paste.workspace = true
+pretty_assertions.workspace = true
+prettyplease.workspace = true
+stylus-sdk = { workspace = true, features = ["stylus-test"] }
+assert_cmd = "2.0"
+
+[features]
+default = ["trybuild-tests"]
+export-abi = ["stylus-sdk/export-abi"]
+# Deprecated: see stylus-sdk Cargo.toml for details.
+reentrant = []
+stylus-test = ["stylus-sdk/stylus-test"]
+trybuild-tests = []
+contract-client-gen = []
+
+[package.metadata.docs.rs]
+features = ["export-abi"]
+
+[lib]
+proc-macro = true

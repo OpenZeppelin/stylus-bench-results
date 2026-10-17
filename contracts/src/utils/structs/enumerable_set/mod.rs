@@ -268,10 +268,19 @@ mod tests {
             $(
                 mod $test_mod {
                     use super::*;
-                    use motsu::prelude::Contract;
+                    use stylus_sdk::testing::TestVM;
                     use alloc::collections::BTreeSet;
                     use stylus_sdk::prelude::TopLevelStorage;
                     use alloy_primitives::private::proptest::{prop_assert, prop_assert_eq, proptest};
+
+                    fn with_sender<'a, T>(
+                        vm: &TestVM,
+                        sender: Address,
+                        contract: &'a mut T,
+                    ) -> &'a mut T {
+                        vm.set_sender(sender);
+                        contract
+                    }
 
                     #[storage]
                     struct TestEnumerableSet {
@@ -315,77 +324,93 @@ mod tests {
                         }
                     }
 
-                    #[motsu::test]
-                    fn idempotency_add(alice: Address) {
-                        proptest!(|(value: $value_type)| {
-                            let contract = Contract::<TestEnumerableSet>::new();
+                    #[test]
+                    fn idempotency_add() {
+        let alice = Address::from([1u8; 20]);
 
-                            let first_add = contract.sender(alice).add(value);
+                        proptest!(|(value: $value_type)| {
+                            let contract_vm = TestVM::default();
+                            let mut contract = TestEnumerableSet::from(&contract_vm);
+
+                            let first_add = with_sender(&contract_vm, alice, &mut contract).add(value);
                             prop_assert!(first_add);
-                            prop_assert_eq!(contract.sender(alice).length(), U256::ONE);
+                            prop_assert_eq!(with_sender(&contract_vm, alice, &mut contract).length(), U256::ONE);
 
-                            let subsequent_add = contract.sender(alice).add(value);
+                            let subsequent_add = with_sender(&contract_vm, alice, &mut contract).add(value);
                             prop_assert!(!subsequent_add);
-                            prop_assert_eq!(contract.sender(alice).length(), U256::ONE);
-                            prop_assert!(contract.sender(alice).contains(value));
+                            prop_assert_eq!(with_sender(&contract_vm, alice, &mut contract).length(), U256::ONE);
+                            prop_assert!(with_sender(&contract_vm, alice, &mut contract).contains(value));
                         });
                     }
 
-                    #[motsu::test]
-                    fn idempotency_remove(alice: Address) {
+                    #[test]
+                    fn idempotency_remove() {
+        let alice = Address::from([1u8; 20]);
+
                         proptest!(|(value: $value_type)| {
-                            let contract = Contract::<TestEnumerableSet>::new();
-                            let remove_result = contract.sender(alice).remove(value);
+                            let contract_vm = TestVM::default();
+                            let mut contract = TestEnumerableSet::from(&contract_vm);
+                            let remove_result = with_sender(&contract_vm, alice, &mut contract).remove(value);
                             prop_assert!(!remove_result);
-                            prop_assert_eq!(contract.sender(alice).length(), U256::ZERO);
-                            prop_assert!(!contract.sender(alice).contains(value));
+                            prop_assert_eq!(with_sender(&contract_vm, alice, &mut contract).length(), U256::ZERO);
+                            prop_assert!(!with_sender(&contract_vm, alice, &mut contract).contains(value));
                         });
                     }
 
-                    #[motsu::test]
-                    fn commutativity_add(alice: Address, bob: Address) {
+                    #[test]
+                    fn commutativity_add() {
+        let alice = Address::from([1u8; 20]);
+        let bob = Address::from([2u8; 20]);
+
                         proptest!(|(value1: $value_type, value2: $value_type)| {
-                            let contract1 = Contract::<TestEnumerableSet>::new();
-                            let contract2 = Contract::<TestEnumerableSet>::new();
+                            let contract1_vm = TestVM::default();
+                            let mut contract1 = TestEnumerableSet::from(&contract1_vm);
+                            let contract2_vm = TestVM::default();
+                            let mut contract2 = TestEnumerableSet::from(&contract2_vm);
 
-                            contract1.sender(alice).add(value1);
-                            contract1.sender(alice).add(value2);
+                            with_sender(&contract1_vm, alice, &mut contract1).add(value1);
+                            with_sender(&contract1_vm, alice, &mut contract1).add(value2);
 
-                            contract2.sender(bob).add(value2);
-                            contract2.sender(bob).add(value1);
+                            with_sender(&contract2_vm, bob, &mut contract2).add(value2);
+                            with_sender(&contract2_vm, bob, &mut contract2).add(value1);
 
-                            prop_assert_eq!(contract1.sender(alice).length(), contract2.sender(bob).length());
+                            prop_assert_eq!(with_sender(&contract1_vm, alice, &mut contract1).length(), with_sender(&contract2_vm, bob, &mut contract2).length());
 
-                            let mut values1 = contract1.sender(alice).values();
-                            let mut values2 = contract2.sender(bob).values();
+                            let mut values1 = with_sender(&contract1_vm, alice, &mut contract1).values();
+                            let mut values2 = with_sender(&contract2_vm, bob, &mut contract2).values();
                             values1.sort();
                             values2.sort();
                             prop_assert_eq!(values1, values2);
                         });
                     }
 
-                    #[motsu::test]
-                    fn associativity_operations(alice: Address, bob: Address) {
+                    #[test]
+                    fn associativity_operations() {
+        let alice = Address::from([1u8; 20]);
+        let bob = Address::from([2u8; 20]);
+
                         proptest!(|(values1: Vec<$value_type>, values2: Vec<$value_type>)| {
                             if values1.is_empty() || values2.is_empty() {
                                 return Ok(());
                             }
 
-                            let contract1 = Contract::<TestEnumerableSet>::new();
-                            let contract2 = Contract::<TestEnumerableSet>::new();
+                            let contract1_vm = TestVM::default();
+                            let mut contract1 = TestEnumerableSet::from(&contract1_vm);
+                            let contract2_vm = TestVM::default();
+                            let mut contract2 = TestEnumerableSet::from(&contract2_vm);
 
                             for value1 in &values1 {
-                                contract1.sender(alice).add(*value1);
+                                with_sender(&contract1_vm, alice, &mut contract1).add(*value1);
                             }
                             for value2 in &values2 {
-                                contract2.sender(bob).add(*value2);
+                                with_sender(&contract2_vm, bob, &mut contract2).add(*value2);
                             }
 
-                            for v in contract2.sender(bob).values() {
-                                contract1.sender(alice).add(v);
+                            for v in with_sender(&contract2_vm, bob, &mut contract2).values() {
+                                with_sender(&contract1_vm, alice, &mut contract1).add(v);
                             }
 
-                            let c_values = contract1.sender(alice).values();
+                            let c_values = with_sender(&contract1_vm, alice, &mut contract1).values();
                             let all_values: BTreeSet<_> = values1.iter().chain(values2.iter()).collect();
                             let final_values: BTreeSet<_> = c_values.iter().collect();
 
@@ -393,157 +418,180 @@ mod tests {
                         });
                     }
 
-                    #[motsu::test]
-                    fn identity_empty_set(alice: Address) {
-                        let contract = Contract::<TestEnumerableSet>::new();
+                    #[test]
+                    fn identity_empty_set() {
+        let alice = Address::from([1u8; 20]);
 
-                        assert_eq!(contract.sender(alice).length(), U256::ZERO);
-                        assert_eq!(contract.sender(alice).values(), Vec::<$value_type>::new());
-                        assert!(contract.sender(alice).at(U256::ZERO).is_err());
+                        let contract_vm = TestVM::default();
+                            let mut contract = TestEnumerableSet::from(&contract_vm);
 
-                        contract.sender(alice).clear();
-                        assert_eq!(contract.sender(alice).length(), U256::ZERO);
+                        assert_eq!(with_sender(&contract_vm, alice, &mut contract).length(), U256::ZERO);
+                        assert_eq!(with_sender(&contract_vm, alice, &mut contract).values(), Vec::<$value_type>::new());
+                        assert!(with_sender(&contract_vm, alice, &mut contract).at(U256::ZERO).is_err());
+
+                        with_sender(&contract_vm, alice, &mut contract).clear();
+                        assert_eq!(with_sender(&contract_vm, alice, &mut contract).length(), U256::ZERO);
                     }
 
-                    #[motsu::test]
-                    fn single_element_edge_case(alice: Address) {
+                    #[test]
+                    fn single_element_edge_case() {
+        let alice = Address::from([1u8; 20]);
+
                         proptest!(|(value: $value_type)| {
-                            let contract = Contract::<TestEnumerableSet>::new();
+                            let contract_vm = TestVM::default();
+                            let mut contract = TestEnumerableSet::from(&contract_vm);
 
-                            let first_add = contract.sender(alice).add(value);
+                            let first_add = with_sender(&contract_vm, alice, &mut contract).add(value);
                             prop_assert!(first_add);
-                            prop_assert_eq!(contract.sender(alice).length(), U256::ONE);
-                            prop_assert!(contract.sender(alice).at(U256::ZERO).is_ok());
+                            prop_assert_eq!(with_sender(&contract_vm, alice, &mut contract).length(), U256::ONE);
+                            prop_assert!(with_sender(&contract_vm, alice, &mut contract).at(U256::ZERO).is_ok());
 
-                            let was_removed = contract.sender(alice).remove(value);
+                            let was_removed = with_sender(&contract_vm, alice, &mut contract).remove(value);
                             prop_assert!(was_removed);
 
-                            prop_assert!(contract.sender(alice).at(U256::ZERO).is_err());
-                            prop_assert!(contract.sender(alice).at(U256::ONE).is_err());
+                            prop_assert!(with_sender(&contract_vm, alice, &mut contract).at(U256::ZERO).is_err());
+                            prop_assert!(with_sender(&contract_vm, alice, &mut contract).at(U256::ONE).is_err());
 
-                            contract.sender(alice).clear();
-                            prop_assert_eq!(contract.sender(alice).length(), U256::ZERO);
+                            with_sender(&contract_vm, alice, &mut contract).clear();
+                            prop_assert_eq!(with_sender(&contract_vm, alice, &mut contract).length(), U256::ZERO);
                         });
                     }
 
-                    #[motsu::test]
-                    fn inverse_add_remove(alice: Address) {
+                    #[test]
+                    fn inverse_add_remove() {
+        let alice = Address::from([1u8; 20]);
+
                         proptest!(|(values: Vec<$value_type>)| {
-                            let contract = Contract::<TestEnumerableSet>::new();
+                            let contract_vm = TestVM::default();
+                            let mut contract = TestEnumerableSet::from(&contract_vm);
 
                             let mut unique_values = Vec::new();
                             for value in &values {
-                                if contract.sender(alice).add(*value) {
+                                if with_sender(&contract_vm, alice, &mut contract).add(*value) {
                                     unique_values.push(*value);
                                 }
                             }
 
                             for value in &unique_values {
-                                let was_removed = contract.sender(alice).remove(*value);
+                                let was_removed = with_sender(&contract_vm, alice, &mut contract).remove(*value);
                                 prop_assert!(was_removed);
                             }
 
-                            prop_assert_eq!(contract.sender(alice).length(), U256::ZERO);
-                            prop_assert_eq!(contract.sender(alice).values(), Vec::<$value_type>::new());
+                            prop_assert_eq!(with_sender(&contract_vm, alice, &mut contract).length(), U256::ZERO);
+                            prop_assert_eq!(with_sender(&contract_vm, alice, &mut contract).values(), Vec::<$value_type>::new());
 
                             for value in &unique_values {
-                                prop_assert!(!contract.sender(alice).contains(*value));
+                                prop_assert!(!with_sender(&contract_vm, alice, &mut contract).contains(*value));
                             }
                         });
                     }
 
-                    #[motsu::test]
-                    fn subset_values_contained(alice: Address) {
+                    #[test]
+                    fn subset_values_contained() {
+        let alice = Address::from([1u8; 20]);
+
                         proptest!(|(values: Vec<$value_type>)| {
-                            let contract = Contract::<TestEnumerableSet>::new();
+                            let contract_vm = TestVM::default();
+                            let mut contract = TestEnumerableSet::from(&contract_vm);
 
                             for value in &values {
-                                contract.sender(alice).add(*value);
+                                with_sender(&contract_vm, alice, &mut contract).add(*value);
                             }
 
-                            let all_values = contract.sender(alice).values();
+                            let all_values = with_sender(&contract_vm, alice, &mut contract).values();
 
                             for value in &all_values {
-                                prop_assert!(contract.sender(alice).contains(*value));
+                                prop_assert!(with_sender(&contract_vm, alice, &mut contract).contains(*value));
                             }
 
-                            prop_assert_eq!(contract.sender(alice).length(), U256::from(all_values.len()));
+                            prop_assert_eq!(with_sender(&contract_vm, alice, &mut contract).length(), U256::from(all_values.len()));
                         });
                     }
 
-                    #[motsu::test]
-                    fn cardinality_preservation(alice: Address) {
+                    #[test]
+                    fn cardinality_preservation() {
+        let alice = Address::from([1u8; 20]);
+
                         proptest!(|(values: Vec<$value_type>)| {
-                            let contract = Contract::<TestEnumerableSet>::new();
+                            let contract_vm = TestVM::default();
+                            let mut contract = TestEnumerableSet::from(&contract_vm);
                             let mut expected_set = BTreeSet::new();
 
                             for value in &values {
-                                contract.sender(alice).add(*value);
+                                with_sender(&contract_vm, alice, &mut contract).add(*value);
                                 expected_set.insert(*value);
                             }
 
-                            prop_assert_eq!(contract.sender(alice).length(), U256::from(expected_set.len()));
+                            prop_assert_eq!(with_sender(&contract_vm, alice, &mut contract).length(), U256::from(expected_set.len()));
 
                             for value in values.iter().take(values.len() / 2) {
-                                contract.sender(alice).remove(*value);
+                                with_sender(&contract_vm, alice, &mut contract).remove(*value);
                                 expected_set.remove(value);
                             }
 
-                            prop_assert_eq!(contract.sender(alice).length(), U256::from(expected_set.len()));
+                            prop_assert_eq!(with_sender(&contract_vm, alice, &mut contract).length(), U256::from(expected_set.len()));
                         });
                     }
 
-                    #[motsu::test]
-                    fn transitivity_enumeration(alice: Address) {
+                    #[test]
+                    fn transitivity_enumeration() {
+        let alice = Address::from([1u8; 20]);
+
                         proptest!(|(values: Vec<$value_type>)| {
-                            let contract = Contract::<TestEnumerableSet>::new();
+                            let contract_vm = TestVM::default();
+                            let mut contract = TestEnumerableSet::from(&contract_vm);
 
                             for value in &values {
-                                contract.sender(alice).add(*value);
+                                with_sender(&contract_vm, alice, &mut contract).add(*value);
                             }
 
-                            let length = contract.sender(alice).length();
-                            let all_values = contract.sender(alice).values();
+                            let length = with_sender(&contract_vm, alice, &mut contract).length();
+                            let all_values = with_sender(&contract_vm, alice, &mut contract).values();
 
                             for i in 0..length.try_into().unwrap_or(0) {
-                                let at_result = contract.sender(alice).at(U256::from(i));
+                                let at_result = with_sender(&contract_vm, alice, &mut contract).at(U256::from(i));
                                 prop_assert!(at_result.is_ok());
 
                                 if let Ok(value) = at_result {
                                     prop_assert!(all_values.contains(&value));
-                                    prop_assert!(contract.sender(alice).contains(value));
+                                    prop_assert!(with_sender(&contract_vm, alice, &mut contract).contains(value));
                                 }
                             }
                         });
                     }
 
-                    #[motsu::test]
-                    fn consistency_multiple_paths(alice: Address, bob: Address) {
+                    #[test]
+                    fn consistency_multiple_paths() {
+        let alice = Address::from([1u8; 20]);
+        let bob = Address::from([2u8; 20]);
+
                         proptest!(|(values: Vec<$value_type>)| {
-                            let contract1 = Contract::<TestEnumerableSet>::new();
-                            let contract2 = Contract::<TestEnumerableSet>::new();
+                            let contract1_vm = TestVM::default();
+                            let mut contract1 = TestEnumerableSet::from(&contract1_vm);
+                            let contract2_vm = TestVM::default();
+                            let mut contract2 = TestEnumerableSet::from(&contract2_vm);
 
                             for value in &values {
-                                contract1.sender(alice).add(*value);
+                                with_sender(&contract1_vm, alice, &mut contract1).add(*value);
                             }
 
                             let to_remove: Vec<_> = values.iter().take(values.len() / 2).cloned().collect();
                             for value in &to_remove {
-                                contract1.sender(alice).remove(*value);
+                                with_sender(&contract1_vm, alice, &mut contract1).remove(*value);
                             }
 
                             for value in &to_remove {
-                                contract1.sender(alice).add(*value);
+                                with_sender(&contract1_vm, alice, &mut contract1).add(*value);
                             }
 
                             for value in &values {
-                                contract2.sender(bob).add(*value);
+                                with_sender(&contract2_vm, bob, &mut contract2).add(*value);
                             }
 
-                            prop_assert_eq!(contract1.sender(alice).length(), contract2.sender(bob).length());
+                            prop_assert_eq!(with_sender(&contract1_vm, alice, &mut contract1).length(), with_sender(&contract2_vm, bob, &mut contract2).length());
 
-                            let values1 = contract1.sender(alice).values();
-                            let values2 = contract2.sender(bob).values();
+                            let values1 = with_sender(&contract1_vm, alice, &mut contract1).values();
+                            let values2 = with_sender(&contract2_vm, bob, &mut contract2).values();
                             let set1: BTreeSet<_> = values1.into_iter().collect();
                             let set2: BTreeSet<_> = values2.into_iter().collect();
                             prop_assert_eq!(set1, set2);
@@ -551,18 +599,21 @@ mod tests {
                     }
 
                     // tests slice_consistency: `values_slice()` should be consistent with `values()`.
-                    #[motsu::test]
-                    fn slice_consistency(alice: Address) {
+                    #[test]
+                    fn slice_consistency() {
+        let alice = Address::from([1u8; 20]);
+
                         proptest!(|(values: Vec<$value_type>)| {
-                            let contract = Contract::<TestEnumerableSet>::new();
+                            let contract_vm = TestVM::default();
+                            let mut contract = TestEnumerableSet::from(&contract_vm);
 
                             for value in &values {
-                                contract.sender(alice).add(*value);
+                                with_sender(&contract_vm, alice, &mut contract).add(*value);
                             }
 
-                            let len = contract.sender(alice).length();
-                            let all_values = contract.sender(alice).values();
-                            let full_slice = contract.sender(alice).values_slice(U256::ZERO, len);
+                            let len = with_sender(&contract_vm, alice, &mut contract).length();
+                            let all_values = with_sender(&contract_vm, alice, &mut contract).values();
+                            let full_slice = with_sender(&contract_vm, alice, &mut contract).values_slice(U256::ZERO, len);
 
                             let set1: BTreeSet<_> = all_values.into_iter().collect();
                             let set2: BTreeSet<_> = full_slice.into_iter().collect();
@@ -571,47 +622,53 @@ mod tests {
                     }
 
                     // tests slice_bounds_safety: invalid parameters should return empty safely
-                    #[motsu::test]
-                    fn slice_bounds_safety(alice: Address) {
+                    #[test]
+                    fn slice_bounds_safety() {
+        let alice = Address::from([1u8; 20]);
+
                         proptest!(|(values: Vec<$value_type>)| {
-                            let contract = Contract::<TestEnumerableSet>::new();
+                            let contract_vm = TestVM::default();
+                            let mut contract = TestEnumerableSet::from(&contract_vm);
 
                             for value in &values {
-                                contract.sender(alice).add(*value);
+                                with_sender(&contract_vm, alice, &mut contract).add(*value);
                             }
 
-                            let len = contract.sender(alice).length();
+                            let len = with_sender(&contract_vm, alice, &mut contract).length();
 
                             // Test invalid ranges (fast path)
-                            let empty1 = contract.sender(alice).values_slice(uint!(10_U256), uint!(5_U256));
+                            let empty1 = with_sender(&contract_vm, alice, &mut contract).values_slice(uint!(10_U256), uint!(5_U256));
                             prop_assert_eq!(empty1.len(), 0);
 
                             // Test out of bounds (fast path)
-                            let empty2 = contract.sender(alice).values_slice(len + U256::ONE, len + uint!(10_U256));
+                            let empty2 = with_sender(&contract_vm, alice, &mut contract).values_slice(len + U256::ONE, len + uint!(10_U256));
                             prop_assert_eq!(empty2.len(), 0);
                         });
                     }
 
                     // tests slice_u256_path: explicitly test U256 arithmetic path
-                    #[motsu::test]
-                    fn slice_u256_path(alice: Address) {
-                        let contract = Contract::<TestEnumerableSet>::new();
+                    #[test]
+                    fn slice_u256_path() {
+        let alice = Address::from([1u8; 20]);
+
+                        let contract_vm = TestVM::default();
+                            let mut contract = TestEnumerableSet::from(&contract_vm);
 
                         // Add a test value
                         let test_value = <$value_type>::default();
-                        contract.sender(alice).add(test_value);
+                        with_sender(&contract_vm, alice, &mut contract).add(test_value);
 
                         // Force U256 path with indices beyond usize::MAX
                         let huge_start = U256::from(usize::MAX) + U256::ONE;
                         let huge_end = huge_start + uint!(100_U256);
 
                         // This should use the slow U256 path and return empty (out of bounds)
-                        let empty_slice = contract.sender(alice).values_slice(huge_start, huge_end);
+                        let empty_slice = with_sender(&contract_vm, alice, &mut contract).values_slice(huge_start, huge_end);
                         assert_eq!(empty_slice.len(), 0);
 
                         // Test U256 path with start=0 but end beyond usize::MAX
-                        let mixed_slice = contract.sender(alice).values_slice(U256::ZERO, huge_start);
-                        let all_values = contract.sender(alice).values();
+                        let mixed_slice = with_sender(&contract_vm, alice, &mut contract).values_slice(U256::ZERO, huge_start);
+                        let all_values = with_sender(&contract_vm, alice, &mut contract).values();
 
                         // Should return all values via slow path when end is clamped
                         let set1: BTreeSet<_> = mixed_slice.into_iter().collect();
@@ -620,32 +677,35 @@ mod tests {
                     }
 
                     // tests slice_usize_boundary: test exact boundary between fast/slow paths
-                    #[motsu::test]
-                    fn slice_usize_boundary(alice: Address) {
+                    #[test]
+                    fn slice_usize_boundary() {
+        let alice = Address::from([1u8; 20]);
+
                         proptest!(|(values: Vec<$value_type>)| {
-                            let contract = Contract::<TestEnumerableSet>::new();
+                            let contract_vm = TestVM::default();
+                            let mut contract = TestEnumerableSet::from(&contract_vm);
 
                             for value in &values {
-                                contract.sender(alice).add(*value);
+                                with_sender(&contract_vm, alice, &mut contract).add(*value);
                             }
 
-                            let len = contract.sender(alice).length();
+                            let len = with_sender(&contract_vm, alice, &mut contract).length();
 
                             // Test exactly at usize::MAX boundary (should use fast path)
                             let boundary_end = core::cmp::min(len, U256::from(usize::MAX));
-                            let boundary_slice = contract.sender(alice).values_slice(U256::ZERO, boundary_end);
+                            let boundary_slice = with_sender(&contract_vm, alice, &mut contract).values_slice(U256::ZERO, boundary_end);
 
                             // Should produce valid results via fast path
                             for value in &boundary_slice {
-                                prop_assert!(contract.sender(alice).contains(*value));
+                                prop_assert!(with_sender(&contract_vm, alice, &mut contract).contains(*value));
                             }
 
                             // Test one beyond usize::MAX (should use slow path)
                             let beyond_boundary = U256::from(usize::MAX) + U256::ONE;
-                            let beyond_slice = contract.sender(alice).values_slice(U256::ZERO, beyond_boundary);
+                            let beyond_slice = with_sender(&contract_vm, alice, &mut contract).values_slice(U256::ZERO, beyond_boundary);
 
                             // Should clamp to actual length and return all values via slow path
-                            let all_values = contract.sender(alice).values();
+                            let all_values = with_sender(&contract_vm, alice, &mut contract).values();
                             let set1: BTreeSet<_> = beyond_slice.into_iter().collect();
                             let set2: BTreeSet<_> = all_values.into_iter().collect();
                             prop_assert_eq!(set1, set2);

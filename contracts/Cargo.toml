@@ -20,7 +20,7 @@ openzeppelin-stylus-proc.workspace = true
 
 [dev-dependencies]
 alloy-primitives = { workspace = true, features = ["arbitrary"] }
-motsu.workspace = true
+stylus-sdk = { workspace = true, features = ["stylus-test"] }
 
 [features]
 reentrant = ["stylus-sdk/reentrant"]

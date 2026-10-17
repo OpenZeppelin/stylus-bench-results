@@ -6,12 +6,10 @@ use alloc::{vec, vec::Vec};
 
 use alloy_primitives::{uint, Address, U256};
 use stylus_sdk::{
-    call::MethodError,
     prelude::*,
     storage::{StorageMap, StorageU256},
+    stylus_core::calls::errors::MethodError,
 };
-
-use crate::utils::math::storage::AddAssignChecked;
 
 const ONE: U256 = uint!(1_U256);
 
@@ -49,6 +47,7 @@ pub struct Nonces {
 }
 
 /// Interface for [`Nonces`]
+#[public]
 pub trait INonces {
     /// Returns the unused nonce for the given account.
     ///
@@ -87,7 +86,8 @@ impl Nonces {
 
         self.nonces
             .setter(owner)
-            .add_assign_checked(ONE, "nonce should not exceed `U256::MAX`");
+            .update_check_add(ONE)
+            .expect("nonce should not exceed U256::MAX");
 
         nonce
     }
@@ -130,45 +130,91 @@ impl Nonces {
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{Address, U256};
-    use motsu::prelude::Contract;
     use stylus_sdk::prelude::*;
+    use stylus_sdk::testing::TestVM;
 
     use super::ONE;
     use crate::utils::nonces::{Error, INonces, Nonces};
 
     unsafe impl TopLevelStorage for Nonces {}
 
-    #[motsu::test]
-    fn initiate_nonce(contract: Contract<Nonces>, alice: Address) {
-        assert_eq!(contract.sender(alice).nonces(alice), U256::ZERO);
+    #[test]
+    fn initiate_nonce() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Nonces::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
+        assert_eq!(
+            ({
+                contract_vm.set_sender(alice);
+                &mut contract
+            })
+            .nonces(alice),
+            U256::ZERO
+        );
     }
 
-    #[motsu::test]
-    fn use_nonce(contract: Contract<Nonces>, alice: Address) {
-        let use_nonce = contract.sender(alice).use_nonce(alice);
+    #[test]
+    fn use_nonce() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Nonces::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
+        let use_nonce = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .use_nonce(alice);
         assert_eq!(use_nonce, U256::ZERO);
 
-        let nonce = contract.sender(alice).nonces(alice);
+        let nonce = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .nonces(alice);
         assert_eq!(nonce, ONE);
     }
 
-    #[motsu::test]
-    fn use_checked_nonce(contract: Contract<Nonces>, alice: Address) {
-        let use_checked_nonce =
-            contract.sender(alice).use_checked_nonce(alice, U256::ZERO);
+    #[test]
+    fn use_checked_nonce() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Nonces::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
+        let use_checked_nonce = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .use_checked_nonce(alice, U256::ZERO);
         assert!(use_checked_nonce.is_ok());
 
-        let nonce = contract.sender(alice).nonces(alice);
+        let nonce = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .nonces(alice);
         assert_eq!(nonce, ONE);
     }
 
-    #[motsu::test]
-    fn use_checked_nonce_invalid_nonce(
-        contract: Contract<Nonces>,
-        alice: Address,
-    ) {
-        let use_checked_nonce =
-            contract.sender(alice).use_checked_nonce(alice, ONE);
+    #[test]
+    fn use_checked_nonce_invalid_nonce() {
+        let contract_vm = TestVM::default();
+        let contract_address = Address::from([160u8; 20]);
+        contract_vm.set_contract_address(contract_address);
+        let mut contract = Nonces::from(&contract_vm);
+        let alice = Address::from([1u8; 20]);
+
+        let use_checked_nonce = ({
+            contract_vm.set_sender(alice);
+            &mut contract
+        })
+        .use_checked_nonce(alice, ONE);
         assert!(matches!(
             use_checked_nonce,
             Err(Error::InvalidAccountNonce(_))
