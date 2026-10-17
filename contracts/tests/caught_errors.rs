@@ -44,6 +44,17 @@ fn incorrect_erc721_from_error_does_not_transfer_or_emit_transfer() {
 }
 
 #[test]
+fn burning_nonexistent_erc721_does_not_emit_transfer() {
+    let vm = TestVM::default();
+    let mut token = Erc721::from(&vm);
+    let logs_before = vm.get_emitted_logs();
+
+    assert!(token._burn(U256::from(1)).is_err());
+
+    assert_eq!(vm.get_emitted_logs(), logs_before);
+}
+
+#[test]
 fn failed_erc1155_batch_burn_does_not_partially_burn_or_emit_transfer() {
     let vm = TestVM::default();
     let mut token = Erc1155::from(&vm);
