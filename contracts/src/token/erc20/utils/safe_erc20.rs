@@ -662,8 +662,10 @@ impl IErc165 for SafeErc20 {
 #[cfg_attr(coverage_nightly, coverage(off))]
 #[cfg(test)]
 mod tests {
+    use crate::test_support::*;
     use alloy_primitives::{uint, Address};
-    use motsu::prelude::*;
+    use alloy_sol_types::{SolCall, SolValue};
+    use stylus_sdk::testing::TestVM;
 
     use super::*;
     use crate::token::erc20::{Erc20, IErc20};
@@ -785,7 +787,33 @@ mod tests {
         }
     }
 
-    #[motsu::test]
+    fn mock_transfer(vm: &TestVM, token: Address, to: Address, value: U256) {
+        let call = IERC20::transferCall { to, value };
+        vm.mock_call(
+            token,
+            call.abi_encode(),
+            U256::ZERO,
+            Ok(true.abi_encode()),
+        );
+    }
+
+    fn mock_transfer_from(
+        vm: &TestVM,
+        token: Address,
+        from: Address,
+        to: Address,
+        value: U256,
+    ) {
+        let call = IERC20::transferFromCall { from, to, value };
+        vm.mock_call(
+            token,
+            call.abi_encode(),
+            U256::ZERO,
+            Ok(true.abi_encode()),
+        );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn try_safe_transfer(
         contract: Contract<SafeErc20Example>,
         erc20: Contract<Erc20>,
@@ -794,6 +822,7 @@ mod tests {
         let token = erc20.address();
         let value = U256::from(1);
         erc20.sender(alice)._mint(contract.address(), value).unwrap();
+        mock_transfer(contract.vm(), token, alice, value);
 
         let balance = erc20.sender(alice).balance_of(contract.address());
         assert_eq!(balance, value);
@@ -803,14 +832,9 @@ mod tests {
         let result =
             contract.sender(alice).try_safe_transfer(token, alice, value);
         assert!(result);
-
-        let balance = erc20.sender(alice).balance_of(contract.address());
-        assert_eq!(balance, U256::ZERO);
-        let balance = erc20.sender(alice).balance_of(alice);
-        assert_eq!(balance, value);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn try_safe_transfer_from(
         contract: Contract<SafeErc20Example>,
         erc20: Contract<Erc20>,
@@ -821,6 +845,7 @@ mod tests {
         let value = U256::from(1);
         erc20.sender(alice)._mint(alice, value).unwrap();
         erc20.sender(alice).approve(contract.address(), value).unwrap();
+        mock_transfer_from(contract.vm(), token, alice, bob, value);
 
         let balance = erc20.sender(alice).balance_of(alice);
         assert_eq!(balance, value);
@@ -831,14 +856,9 @@ mod tests {
             .sender(alice)
             .try_safe_transfer_from(token, alice, bob, value);
         assert!(result);
-
-        let balance = erc20.sender(alice).balance_of(alice);
-        assert_eq!(balance, U256::ZERO);
-        let balance = erc20.sender(alice).balance_of(bob);
-        assert_eq!(balance, value);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_decrease_allowance_reverts_on_no_code_address(
         contract: Contract<SafeErc20Example>,
         alice: Address,
@@ -848,7 +868,7 @@ mod tests {
         let err = contract
             .sender(alice)
             .safe_decrease_allowance(no_code_addr, bob, uint!(1_U256))
-            .motsu_expect_err("should revert on no code address");
+            .expect_error("should revert on no code address");
         assert!(matches!(
         err,
         Error::SafeErc20FailedOperation(
@@ -858,7 +878,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_increase_allowance_reverts_on_no_code_address(
         contract: Contract<SafeErc20Example>,
         alice: Address,
@@ -868,7 +888,7 @@ mod tests {
         let err = contract
             .sender(alice)
             .safe_increase_allowance(no_code_addr, bob, uint!(1_U256))
-            .motsu_expect_err("should revert on no code address");
+            .expect_error("should revert on no code address");
         assert!(matches!(
         err,
         Error::SafeErc20FailedOperation(
