@@ -1,0 +1,1 @@
+{"run":"trial","provider":"codex","model":"gpt-6-luna","effort":"low","result":"failed environment check (false negative: did not detect installed Rust 1.91.0)","seconds":16,"counted":false}
