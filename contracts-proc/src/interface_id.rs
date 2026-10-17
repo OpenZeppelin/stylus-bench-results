@@ -1,6 +1,6 @@
 //! Defines the `#[interface_id]` procedural macro.
 
-use std::{collections::HashMap, mem};
+use std::mem;
 
 use convert_case::{Case, Casing};
 use proc_macro::TokenStream;
@@ -8,8 +8,17 @@ use proc_macro2::{Ident, TokenTree};
 use quote::quote;
 use syn::{
     parse::{Parse, ParseStream},
-    parse_macro_input, FnArg, ItemTrait, LitStr, Result, Token, TraitItem,
+    parse_macro_input, Attribute, FnArg, ItemTrait, LitStr, Result, Token,
+    TraitItem,
 };
+
+struct MethodSelector {
+    signature: String,
+    rust_fn_name: String,
+    selector: proc_macro2::TokenStream,
+    cfg_attrs: Vec<Attribute>,
+    dynamic: bool,
+}
 
 /// Computes an interface id as an associated function for the trait.
 pub(crate) fn interface_id(
@@ -19,9 +28,7 @@ pub(crate) fn interface_id(
     let mut input = parse_macro_input!(input as ItemTrait);
 
     let unsafety = input.unsafety;
-    let mut selectors_map =
-        HashMap::<String, (String, proc_macro2::TokenStream)>::new();
-    let mut selector_checks = Vec::new();
+    let mut selectors = Vec::<MethodSelector>::new();
     let has_trait_generics = !input.generics.params.is_empty();
 
     for item in &mut input.items {
@@ -29,6 +36,14 @@ pub(crate) fn interface_id(
             continue;
         };
 
+        let cfg_attrs = func
+            .attrs
+            .iter()
+            .filter(|attr| {
+                attr.path().is_ident("cfg") || attr.path().is_ident("cfg_attr")
+            })
+            .cloned()
+            .collect::<Vec<_>>();
         let mut override_fn_name = None;
         for attr in mem::take(&mut func.attrs) {
             if attr.path().is_ident("selector") {
@@ -68,25 +83,32 @@ pub(crate) fn interface_id(
         let selector =
             quote! { alloy_primitives::aliases::B32::new(#selector_bytes) };
 
-        selector_checks.push((
-            signature.clone(),
-            selector_bytes,
-            has_trait_generics || uses_self_type,
-        ));
+        let method_selector = MethodSelector {
+            signature: signature.clone(),
+            rust_fn_name: rust_fn_name.clone(),
+            selector,
+            cfg_attrs,
+            dynamic: has_trait_generics || uses_self_type,
+        };
 
-        // Store selector expression from every function in the trait.
-        match selectors_map.get(&signature) {
-            Some((existing_rust_fn_name, _)) => {
+        // Report unconditional signature collisions immediately. Conditional
+        // methods are checked in generated code so inactive methods do not
+        // affect the interface ID or make their collision checks unconditional.
+        if let Some(existing) = selectors.iter().find(|existing| {
+            existing.signature == signature
+                && existing.cfg_attrs.is_empty()
+                && method_selector.cfg_attrs.is_empty()
+        }) {
                 error!(
-                    existing_rust_fn_name,
+                    existing.rust_fn_name,
                     "selector collision detected: function '{}' has the same selector as function '{}': {}",
                     rust_fn_name,
-                    existing_rust_fn_name,
+                    existing.rust_fn_name,
                     signature,
                 );
-            }
-            None => selectors_map.insert(signature, (rust_fn_name, selector)),
         };
+
+        selectors.push(method_selector);
     }
 
     let name = input.ident;
@@ -105,25 +127,27 @@ pub(crate) fn interface_id(
 
     let mut module_selector_checks = Vec::new();
     let mut method_selector_checks = Vec::new();
-    for (index, (signature, selector_a, dynamic_a)) in
-        selector_checks.iter().enumerate()
-    {
-        for (other_signature, selector_b, dynamic_b) in
-            &selector_checks[index + 1..]
-        {
+    for (index, selector_a) in selectors.iter().enumerate() {
+        for selector_b in &selectors[index + 1..] {
             let message = LitStr::new(
                 &format!(
                     "selector collision detected: '{}' and '{}' have the same selector",
-                    signature, other_signature
+                    selector_a.signature, selector_b.signature
                 ),
                 proc_macro2::Span::call_site(),
             );
-            let check = if *dynamic_a || *dynamic_b {
+            let selector_bytes_a = &selector_a.selector;
+            let selector_bytes_b = &selector_b.selector;
+            let cfg_attrs_a = &selector_a.cfg_attrs;
+            let cfg_attrs_b = &selector_b.cfg_attrs;
+            let check = if selector_a.dynamic || selector_b.dynamic {
                 quote! {
+                    #(#cfg_attrs_a)*
+                    #(#cfg_attrs_b)*
                     const {
                         assert!(
-                            u32::from_be_bytes(#selector_a)
-                                != u32::from_be_bytes(#selector_b),
+                            u32::from_be_bytes(#selector_bytes_a)
+                                != u32::from_be_bytes(#selector_bytes_b),
                             #message,
                         );
                     };
@@ -131,17 +155,19 @@ pub(crate) fn interface_id(
             } else {
                 quote! {
                     #(#cfg_attrs)*
+                    #(#cfg_attrs_a)*
+                    #(#cfg_attrs_b)*
                     const _: () = {
                         assert!(
-                            u32::from_be_bytes(#selector_a)
-                                != u32::from_be_bytes(#selector_b),
+                            u32::from_be_bytes(#selector_bytes_a)
+                                != u32::from_be_bytes(#selector_bytes_b),
                             #message,
                         );
                     };
                 }
             };
 
-            if *dynamic_a || *dynamic_b {
+            if selector_a.dynamic || selector_b.dynamic {
                 method_selector_checks.push(check);
             } else {
                 module_selector_checks.push(check);
@@ -156,7 +182,14 @@ pub(crate) fn interface_id(
         quote! { : #supertraits }
     };
 
-    let selectors = selectors_map.values().map(|(_, tokens)| tokens);
+    let selector_xors = selectors.iter().map(|selector| {
+        let attrs = &selector.cfg_attrs;
+        let value = &selector.selector;
+        quote! {
+            #(#attrs)*
+            let __interface_id = __interface_id ^ #value;
+        }
+    });
 
     // Keep the same trait with an additional associated function
     // `interface_id`.
@@ -172,8 +205,11 @@ pub(crate) fn interface_id(
             where
                 Self: Sized,
             {
+                let __interface_id =
+                    alloy_primitives::aliases::B32::new([0; 4]);
                 #(#method_selector_checks)*
-                #(#selectors)^*
+                #(#selector_xors)*
+                __interface_id
             }
         }
     }

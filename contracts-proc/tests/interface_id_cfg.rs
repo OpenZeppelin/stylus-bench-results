@@ -18,6 +18,9 @@ impl ConditionalInterface for Contract {
 
 #[test]
 fn interface_id_only_contains_compiled_methods() {
+    #[cfg(feature = "conditional-selector")]
+    Contract.optional();
+
     let expected = if cfg!(feature = "conditional-selector") {
         B32::new(stylus_sdk::function_selector!("optional"))
     } else {
