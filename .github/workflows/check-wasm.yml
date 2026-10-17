@@ -1,6 +1,6 @@
 name: check-wasm
-# This workflow checks that the compiled wasm binary of every example contract
-# can be deployed to Arbitrum Stylus.
+# This workflow uses the SDK devnet to build, check, deploy, and activate each
+# example contract. The SDK integration-test harness starts Nitro in Docker.
 permissions:
   contents: read
 on:
@@ -14,7 +14,7 @@ env:
   CARGO_TERM_COLOR: always
 jobs:
   check-wasm:
-    name: Check WASM binary
+    name: Check and activate WASM on SDK devnet
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,10 +22,12 @@ jobs:
       - name: Install rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
+          toolchain: 1.91.0
+          target: wasm32-unknown-unknown
           rustflags: ""
 
-      - name: Install cargo-stylus
-        run: cargo install --locked --force cargo-stylus@0.6.3
+      - name: Install wasm-opt
+        run: cargo install wasm-opt@0.116.1
 
-      - name: Run wasm check
+      - name: Run SDK devnet checks
         run: ./scripts/check-wasm.sh

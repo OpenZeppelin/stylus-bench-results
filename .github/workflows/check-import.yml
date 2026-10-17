@@ -36,14 +36,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin/cargo-stylus
-          key: cargo-stylus-0.6.3-${{ runner.os }}
+          key: cargo-stylus-0.10.10-${{ runner.os }}
 
       - name: Install cargo-stylus
         if: steps.cache-cargo-stylus.outputs.cache-hit != 'true'
-        run: cargo install --locked --force cargo-stylus@0.6.3
+        run: cargo install --locked --force cargo-stylus@0.10.10
 
       - name: Verify cargo-stylus installation
         run: cargo stylus --version
+
+      - name: Install wasm-opt
+        run: cargo install wasm-opt@0.116.1
 
       - name: Replace path dependencies with git dependencies
         working-directory: templates/crypto-erc20
