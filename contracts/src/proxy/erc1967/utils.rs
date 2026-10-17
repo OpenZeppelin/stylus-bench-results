@@ -170,8 +170,7 @@ impl Erc1967Utils {
         new_implementation: Address,
         data: &Bytes,
     ) -> Result<(), Error> {
-        let previous_implementation =
-            Erc1967Utils::get_implementation(context);
+        let previous_implementation = Erc1967Utils::get_implementation(context);
         Erc1967Utils::set_implementation(context, new_implementation)?;
 
         if data.is_empty() {
@@ -183,19 +182,17 @@ impl Erc1967Utils {
                 .set(previous_implementation);
                 return Err(error);
             }
-        } else {
-            if let Err(error) = AddressUtils::function_delegate_call(
+        } else if let Err(error) = AddressUtils::function_delegate_call(
+            context,
+            new_implementation,
+            data.as_ref(),
+        ) {
+            StorageSlot::get_slot::<StorageAddress>(
                 context,
-                new_implementation,
-                data.as_ref(),
-            ) {
-                StorageSlot::get_slot::<StorageAddress>(
-                    context,
-                    IMPLEMENTATION_SLOT,
-                )
-                .set(previous_implementation);
-                return Err(error.into());
-            }
+                IMPLEMENTATION_SLOT,
+            )
+            .set(previous_implementation);
+            return Err(error.into());
         }
 
         context
@@ -228,10 +225,7 @@ impl Erc1967Utils {
         let previous_admin = Erc1967Utils::get_admin(context);
         Erc1967Utils::set_admin(context, new_admin)?;
 
-        context.vm().log(erc1967::AdminChanged {
-            previous_admin,
-            new_admin,
-        });
+        context.vm().log(erc1967::AdminChanged { previous_admin, new_admin });
 
         Ok(())
     }
@@ -282,16 +276,14 @@ impl Erc1967Utils {
                     .set(previous_beacon);
                 return Err(error);
             }
-        } else {
-            if let Err(error) = AddressUtils::function_delegate_call(
-                context,
-                beacon_implementation,
-                data.as_ref(),
-            ) {
-                StorageSlot::get_slot::<StorageAddress>(context, BEACON_SLOT)
-                    .set(previous_beacon);
-                return Err(error.into());
-            }
+        } else if let Err(error) = AddressUtils::function_delegate_call(
+            context,
+            beacon_implementation,
+            data.as_ref(),
+        ) {
+            StorageSlot::get_slot::<StorageAddress>(context, BEACON_SLOT)
+                .set(previous_beacon);
+            return Err(error.into());
         }
 
         context.vm().log(erc1967::BeaconUpgraded { beacon: new_beacon });
