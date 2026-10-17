@@ -283,6 +283,9 @@ mod tests {
                 implementation,
             }) if implementation == invalid_address
         ));
+
+        assert_eq!(beacon.owner(), Address::ZERO);
+        assert!(beacon_vm.get_emitted_logs().is_empty());
     }
 
     #[test]
