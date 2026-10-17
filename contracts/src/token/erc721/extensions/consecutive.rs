@@ -973,6 +973,23 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn batch_mint_after_deployment_is_rejected() {
+        use stylus_sdk::testing::TestVM;
+
+        let vm = TestVM::default();
+        let mut contract = Erc721Consecutive::from(&vm);
+        contract.constructor();
+
+        vm.set_code(vm.contract_address(), vec![0x00]);
+
+        let err = contract
+            ._mint_consecutive(Address::from([1; 20]), uint!(1_U96))
+            .expect_err("batch minting after deployment must be rejected");
+
+        assert!(matches!(err, Error::ForbiddenBatchMint(_)));
+    }
+
     #[motsu::test]
     fn transfers_from(
         contract: Contract<Erc721Consecutive>,
