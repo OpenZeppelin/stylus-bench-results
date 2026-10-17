@@ -105,9 +105,10 @@ all = "warn"
 
 [workspace.dependencies]
 # Stylus SDK related
-stylus-sdk = "=0.9.0"
+stylus-sdk = "=0.10.10"
+stylus-tools = { version = "=0.10.10", features = ["integration-tests"] }
 
-alloy = { version = "=0.7.3", features = [
+alloy = { version = "=1.7.3", features = [
   "contract",
   "network",
   "providers",
@@ -120,15 +121,13 @@ alloy = { version = "=0.7.3", features = [
 # Even though `alloy` includes `alloy-primitives` and `alloy-sol-types` we need
 # to keep both versions for compatibility with the Stylus SDK. Once they start
 # using `alloy` we can remove these.
-alloy-primitives = { version = "=0.8.20", default-features = false, features = [
+alloy-primitives = { version = "=1.5.7", default-features = false, features = [
   "tiny-keccak",
 ] }
-alloy-sol-types = { version = "=0.8.20", default-features = false }
-alloy-sol-macro = { version = "=0.8.20", default-features = false }
-alloy-sol-macro-expander = { version = "=0.8.20", default-features = false }
-alloy-sol-macro-input = { version = "=0.8.20", default-features = false }
+alloy-sol-types = { version = "=1.5.7", default-features = false }
+alloy-sol-macro = { version = "=1.5.7", default-features = false }
 
-ruint = "^1.12.3"
+ruint = { version = ">=1.17.1", default-features = false }
 
 eyre = "0.6.8"
 keccak-const = "0.2.0"
@@ -145,19 +144,19 @@ hex-literal = "0.4.1"
 sha2 = "0.10.9"
 static_assertions = "1.1.0"
 
+# Temporary E2E compatibility while example integration tests are migrated.
+e2e = { path = "lib/e2e" }
+e2e-proc = { path = "lib/e2e-proc" }
+
 # procedural macros
 syn = { version = "2.0.58", features = ["full"] }
 proc-macro2 = "1.0.79"
 quote = "1.0.35"
 
-motsu = "=0.10.0"
-
 # members
 openzeppelin-stylus = { path = "contracts" }
 openzeppelin-stylus-proc = { path = "contracts-proc", version = "=0.3.0" }
 openzeppelin-crypto = { path = "lib/crypto" }
-e2e = { path = "lib/e2e" }
-e2e-proc = { path = "lib/e2e-proc" }
 
 [profile.release]
 codegen-units = 1
