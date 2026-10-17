@@ -354,7 +354,9 @@ impl Erc20Wrapper {
 
         let underlying_balance = underlying_token
             .balance_of(self.vm(), Call::new(), contract_address)
-            .map_err(|_| ERC20InvalidUnderlying { token: contract_address })?;
+            .map_err(|_| ERC20InvalidUnderlying {
+                token: self.underlying(),
+            })?;
 
         let value = underlying_balance
             .checked_sub(erc20.total_supply())
