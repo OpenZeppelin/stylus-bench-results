@@ -317,9 +317,14 @@ impl IErc20 for Erc20 {
         to: Address,
         value: U256,
     ) -> Result<bool, Self::Error> {
-        let spender = msg::sender();
-        self._spend_allowance(from, spender, value)?;
+        let spender = self.vm().msg_sender();
+        let allowance_after_spend =
+            self._allowance_after_spend(from, spender, value)?;
         self._transfer(from, to, value)?;
+        if let Some(allowance) = allowance_after_spend {
+            self.allowances.setter(from).insert(spender, allowance);
+        }
+
         Ok(true)
     }
 }
@@ -565,22 +570,48 @@ impl Erc20 {
         spender: Address,
         value: U256,
     ) -> Result<(), Error> {
-        let current_allowance = self.allowance(owner, spender);
-        if current_allowance != U256::MAX {
-            if current_allowance < value {
-                return Err(Error::InsufficientAllowance(
-                    ERC20InsufficientAllowance {
-                        spender,
-                        allowance: current_allowance,
-                        needed: value,
-                    },
-                ));
-            }
-
-            self._approve(owner, spender, current_allowance - value, false)?;
+        if let Some(allowance) =
+            self._allowance_after_spend(owner, spender, value)?
+        {
+            self.allowances.setter(owner).insert(spender, allowance);
         }
 
         Ok(())
+    }
+
+    /// Returns the finite allowance remaining after a spend, validating the
+    /// same conditions as `_spend_allowance` without changing storage.
+    fn _allowance_after_spend(
+        &self,
+        owner: Address,
+        spender: Address,
+        value: U256,
+    ) -> Result<Option<U256>, Error> {
+        let current_allowance = self.allowance(owner, spender);
+        if current_allowance == U256::MAX {
+            return Ok(None);
+        }
+        if current_allowance < value {
+            return Err(Error::InsufficientAllowance(
+                ERC20InsufficientAllowance {
+                    spender,
+                    allowance: current_allowance,
+                    needed: value,
+                },
+            ));
+        }
+        if owner.is_zero() {
+            return Err(Error::InvalidApprover(ERC20InvalidApprover {
+                approver: Address::ZERO,
+            }));
+        }
+        if spender.is_zero() {
+            return Err(Error::InvalidSpender(ERC20InvalidSpender {
+                spender: Address::ZERO,
+            }));
+        }
+
+        Ok(Some(current_allowance - value))
     }
 }
 
@@ -878,6 +909,15 @@ mod tests {
         })
         ._mint(alice, two)
         .unwrap();
+
+        let err = ({
+            contract_vm.set_sender(bob);
+            &mut contract
+        })
+        .transfer_from(alice, Address::ZERO, one)
+        .unwrap_err();
+        assert!(matches!(err, Error::InsufficientAllowance(_)));
+
         ({
             contract_vm.set_sender(alice);
             &mut contract
