@@ -676,7 +676,10 @@ mod tests {
             Error::UnsupportedToken(ERC721UnsupportedToken { token })
                 if token == alice
         ));
-        assert_eq!(contract.sender(alice).erc721.owner_of(token_id), Ok(alice));
+        assert!(matches!(
+            contract.sender(alice).erc721.owner_of(token_id),
+            Ok(owner) if owner == alice
+        ));
     }
 
     #[openzeppelin_stylus_proc::vm_test]
