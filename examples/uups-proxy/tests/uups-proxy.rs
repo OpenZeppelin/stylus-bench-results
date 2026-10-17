@@ -197,9 +197,8 @@ async fn initialize_cannot_be_replayed_after_deployment() -> Result<()> {
     };
     assert_eq!(alice.address(), proxy.owner().call().await?);
     assert!(replay_reverted, "reinitialization must revert");
-    let err = match bob_proxy.initialize(bob.address()).call().await {
-        Err(err) => err,
-        Ok(_) => panic!("reinitialization must revert"),
+    let Err(err) = bob_proxy.initialize(bob.address()).call().await else {
+        panic!("reinitialization must revert");
     };
     assert!(err.reverted_with(UUPSProxyErc20Example::InvalidInitialization {}));
 
@@ -227,9 +226,8 @@ async fn initialize_cannot_be_replayed_after_upgrade() -> Result<()> {
     };
     assert_eq!(alice.address(), proxy.owner().call().await?);
     assert!(replay_reverted, "reinitialization after upgrade must revert");
-    let err = match bob_proxy.initialize(bob.address()).call().await {
-        Err(err) => err,
-        Ok(_) => panic!("reinitialization after upgrade must revert"),
+    let Err(err) = bob_proxy.initialize(bob.address()).call().await else {
+        panic!("reinitialization after upgrade must revert");
     };
     assert!(err.reverted_with(UUPSProxyErc20Example::InvalidInitialization {}));
 

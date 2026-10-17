@@ -3,8 +3,6 @@
 
 extern crate alloc;
 
-use alloc::vec::Vec;
-
 use alloy_primitives::{uint, U256};
 use openzeppelin_crypto::{
     curve::te::instance::curve25519::Curve25519FqParam,

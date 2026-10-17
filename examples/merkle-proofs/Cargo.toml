@@ -12,8 +12,14 @@ alloy-primitives.workspace = true
 alloy-sol-types.workspace = true
 stylus-sdk.workspace = true
 
+[dev-dependencies]
+alloy.workspace = true
+eyre.workspace = true
+stylus-test-support = { path = "../../lib/stylus-test-support" }
+tokio.workspace = true
+
 [features]
-e2e = []
+devnet = []
 export-abi = ["stylus-sdk/export-abi"]
 
 [lib]
@@ -22,3 +28,5 @@ crate-type = ["lib", "cdylib"]
 [[bin]]
 name = "merkle-proofs-example"
 path = "src/main.rs"
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("contract-client-gen"))'] }

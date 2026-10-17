@@ -1,7 +1,7 @@
 #![allow(dead_code)]
-#![cfg(feature = "e2e")]
+#![cfg(feature = "devnet")]
 use alloy::{primitives::Address, sol};
-use e2e::Wallet;
+use stylus_test_support::Wallet;
 
 sol! {
     #[allow(missing_docs)]

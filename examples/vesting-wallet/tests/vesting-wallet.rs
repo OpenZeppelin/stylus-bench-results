@@ -1,4 +1,4 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "devnet")]
 
 use abi::VestingWallet;
 use alloy::{
@@ -6,13 +6,13 @@ use alloy::{
     network::TransactionBuilder,
     primitives::{Address, U256},
     providers::Provider,
-    rpc::types::{BlockTransactionsKind, TransactionRequest},
+    rpc::types::TransactionRequest,
 };
-use e2e::{
+use mock::{erc20, erc20::ERC20Mock};
+use stylus_test_support::{
     constructor, receipt, send, watch, Account, Constructor,
     ContractInitializationError, EventExt, Panic, PanicCode, Revert,
 };
-use mock::{erc20, erc20::ERC20Mock};
 
 mod abi;
 mod mock;
@@ -31,7 +31,7 @@ fn ctr(
 async fn block_timestamp(account: &Account) -> eyre::Result<u64> {
     let timestamp = account
         .wallet
-        .get_block(BlockId::latest(), BlockTransactionsKind::Hashes)
+        .get_block(BlockId::latest())
         .await?
         .expect("latest block should exist")
         .header
@@ -53,8 +53,10 @@ fn assert_in_delta(expected: U256, actual: U256) {
     assert!(diff <= delta, "Your result of {actual} should be within {delta} of the expected result {expected}");
 }
 
-#[e2e::test]
-async fn constructs(alice: Account) -> eyre::Result<()> {
+#[tokio::test]
+async fn constructs() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
     let start_timestamp = block_timestamp(&alice).await?;
     let contract_addr = alice
         .as_deployer()
@@ -64,10 +66,10 @@ async fn constructs(alice: Account) -> eyre::Result<()> {
         .contract_address;
     let contract = VestingWallet::new(contract_addr, &alice.wallet);
 
-    let owner = contract.owner().call().await?.owner;
-    let start = contract.start().call().await?.start;
-    let duration = contract.duration().call().await?.duration;
-    let end = contract.end().call().await?.end;
+    let owner = contract.owner().call().await?;
+    let start = contract.start().call().await?;
+    let duration = contract.duration().call().await?;
+    let end = contract.end().call().await?;
 
     assert_eq!(alice.address(), owner);
     assert_eq!(U256::from(start_timestamp), start);
@@ -77,10 +79,10 @@ async fn constructs(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn rejects_zero_address_for_beneficiary(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn rejects_zero_address_for_beneficiary() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
     let start = block_timestamp(&alice).await?;
     let err = alice
         .as_deployer()
@@ -144,8 +146,8 @@ mod ether_vesting {
         let old_contract_balance =
             alice.wallet.get_balance(contract_addr).await?;
 
-        let released = contract.released_0().call().await?.released;
-        let releasable = contract.releasable_0().call().await?.releasable;
+        let released = contract.released_0().call().await?;
+        let releasable = contract.releasable_0().call().await?;
         assert_eq!(U256::ZERO, released);
         assert_in_delta(expected_amount, releasable);
 
@@ -153,13 +155,14 @@ mod ether_vesting {
 
         let alice_balance = alice.wallet.get_balance(alice.address()).await?;
         let contract_balance = alice.wallet.get_balance(contract_addr).await?;
-        let released = contract.released_0().call().await?.released;
-        let releasable = contract.releasable_0().call().await?.releasable;
+        let released = contract.released_0().call().await?;
+        let releasable = contract.releasable_0().call().await?;
         assert_in_delta(expected_amount, released);
         assert_in_delta(U256::ZERO, releasable);
         assert_in_delta(
             old_alice_balance + released
-                - U256::from(receipt.gas_used * receipt.effective_gas_price),
+                - U256::from(receipt.gas_used)
+                    * U256::from(receipt.effective_gas_price),
             alice_balance,
         );
         assert_in_delta(old_contract_balance - released, contract_balance);
@@ -171,35 +174,46 @@ mod ether_vesting {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn check_release_0_percent(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_0_percent() -> eyre::Result<()> {
+        let alice = Account::new().await?;
+
         run_check_release(alice, 0).await
     }
 
-    #[e2e::test]
-    async fn check_release_25_percent(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_25_percent() -> eyre::Result<()> {
+        let alice = Account::new().await?;
+
         run_check_release(alice, DURATION / 4).await
     }
 
-    #[e2e::test]
-    async fn check_release_50_percent(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_50_percent() -> eyre::Result<()> {
+        let alice = Account::new().await?;
+
         run_check_release(alice, DURATION / 2).await
     }
 
-    #[e2e::test]
-    async fn check_release_100_percent(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_100_percent() -> eyre::Result<()> {
+        let alice = Account::new().await?;
+
         run_check_release(alice, DURATION).await
     }
 
-    #[e2e::test]
-    async fn check_release_100_percent_vesting_in_the_past(
-        alice: Account,
-    ) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_100_percent_vesting_in_the_past() -> eyre::Result<()>
+    {
+        let alice = Account::new().await?;
+
         run_check_release(alice, DURATION * 4 / 3).await
     }
 
-    #[e2e::test]
-    async fn check_vested_amount(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_vested_amount() -> eyre::Result<()> {
+        let alice = Account::new().await?;
+
         let start = block_timestamp(&alice).await?;
         let contract_addr = deploy(&alice, start, DURATION, BALANCE).await?;
 
@@ -213,7 +227,7 @@ mod ether_vesting {
             ));
 
             let vested_amount =
-                contract.vestedAmount_0(timestamp).call().await?.vestedAmount;
+                contract.vestedAmount_0(timestamp).call().await?;
             assert_eq!(
                 expected_amount, vested_amount,
                 "\n---\ni: {i}\nstart: {start}\ntimestamp: {timestamp}\n---\n"
@@ -284,28 +298,21 @@ mod erc20_vesting {
         let contract = VestingWallet::new(contract_addr, &alice.wallet);
         let erc20 = ERC20Mock::new(erc20_address, &alice.wallet);
 
-        let old_alice_balance =
-            erc20.balanceOf(alice.address()).call().await?.balance;
+        let old_alice_balance = erc20.balanceOf(alice.address()).call().await?;
         let old_contract_balance =
-            erc20.balanceOf(contract_addr).call().await?.balance;
+            erc20.balanceOf(contract_addr).call().await?;
 
-        let released =
-            contract.released_1(erc20_address).call().await?.released;
-        let releasable =
-            contract.releasable_1(erc20_address).call().await?.releasable;
+        let released = contract.released_1(erc20_address).call().await?;
+        let releasable = contract.releasable_1(erc20_address).call().await?;
         assert_eq!(U256::ZERO, released);
         assert_in_delta(expected_amount, releasable);
 
         let receipt = receipt!(contract.release_1(erc20_address))?;
 
-        let alice_balance =
-            erc20.balanceOf(alice.address()).call().await?.balance;
-        let contract_balance =
-            erc20.balanceOf(contract_addr).call().await?.balance;
-        let released =
-            contract.released_1(erc20_address).call().await?.released;
-        let releasable =
-            contract.releasable_1(erc20_address).call().await?.releasable;
+        let alice_balance = erc20.balanceOf(alice.address()).call().await?;
+        let contract_balance = erc20.balanceOf(contract_addr).call().await?;
+        let released = contract.released_1(erc20_address).call().await?;
+        let releasable = contract.releasable_1(erc20_address).call().await?;
         assert_in_delta(expected_amount, released);
         assert_in_delta(U256::ZERO, releasable);
         assert_in_delta(old_alice_balance + released, alice_balance);
@@ -319,35 +326,46 @@ mod erc20_vesting {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn check_release_0_percent(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_0_percent() -> eyre::Result<()> {
+        let alice = Account::new().await?;
+
         run_check_release(alice, 0).await
     }
 
-    #[e2e::test]
-    async fn check_release_25_percent(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_25_percent() -> eyre::Result<()> {
+        let alice = Account::new().await?;
+
         run_check_release(alice, DURATION / 4).await
     }
 
-    #[e2e::test]
-    async fn check_release_50_percent(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_50_percent() -> eyre::Result<()> {
+        let alice = Account::new().await?;
+
         run_check_release(alice, DURATION / 2).await
     }
 
-    #[e2e::test]
-    async fn check_release_100_percent(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_100_percent() -> eyre::Result<()> {
+        let alice = Account::new().await?;
+
         run_check_release(alice, DURATION).await
     }
 
-    #[e2e::test]
-    async fn check_release_100_percent_vesting_in_the_past(
-        alice: Account,
-    ) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_release_100_percent_vesting_in_the_past() -> eyre::Result<()>
+    {
+        let alice = Account::new().await?;
+
         run_check_release(alice, DURATION * 4 / 3).await
     }
 
-    #[e2e::test]
-    async fn check_vested_amount(alice: Account) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn check_vested_amount() -> eyre::Result<()> {
+        let alice = Account::new().await?;
+
         let start = block_timestamp(&alice).await?;
         let contract_addr = deploy(&alice, start, DURATION).await?;
         let erc20_address =
@@ -365,8 +383,7 @@ mod erc20_vesting {
             let vested_amount = contract
                 .vestedAmount_1(erc20_address, timestamp)
                 .call()
-                .await?
-                .vestedAmount;
+                .await?;
             assert_eq!(
                 expected_amount, vested_amount,
                 "\n---\ni: {i}\nstart: {start}\ntimestamp: {timestamp}\n---\n"
@@ -376,10 +393,10 @@ mod erc20_vesting {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn releasable_erc20_reverts_on_invalid_token(
-        alice: Account,
-    ) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn releasable_erc20_reverts_on_invalid_token() -> eyre::Result<()> {
+        let alice = Account::new().await?;
+
         let start = block_timestamp(&alice).await?;
         let contract_addr = deploy(&alice, start, DURATION).await?;
 
@@ -395,10 +412,10 @@ mod erc20_vesting {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn release_erc20_reverts_on_invalid_token(
-        alice: Account,
-    ) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn release_erc20_reverts_on_invalid_token() -> eyre::Result<()> {
+        let alice = Account::new().await?;
+
         let start = block_timestamp(&alice).await?;
         let contract_addr = deploy(&alice, start, DURATION).await?;
 
@@ -414,10 +431,10 @@ mod erc20_vesting {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn release_erc20_reverts_on_failed_transfer(
-        alice: Account,
-    ) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn release_erc20_reverts_on_failed_transfer() -> eyre::Result<()> {
+        let alice = Account::new().await?;
+
         let start = block_timestamp(&alice).await?;
         let contract_addr = deploy(&alice, start, DURATION).await?;
         let erc20_address =
@@ -435,10 +452,11 @@ mod erc20_vesting {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn vested_amount_erc20_reverts_on_invalid_token(
-        alice: Account,
-    ) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn vested_amount_erc20_reverts_on_invalid_token() -> eyre::Result<()>
+    {
+        let alice = Account::new().await?;
+
         let start = block_timestamp(&alice).await?;
         let contract_addr = deploy(&alice, start, DURATION).await?;
 
@@ -454,10 +472,11 @@ mod erc20_vesting {
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn vested_amount_reverts_on_scaled_allocation_overflow(
-        alice: Account,
     ) -> eyre::Result<()> {
+        let alice = Account::new().await?;
+
         let start = block_timestamp(&alice).await?;
         let timestamp = DURATION / 2 + start;
         let contract_addr = deploy(&alice, start, DURATION).await?;

@@ -1,0 +1,7 @@
+[workspace]
+
+[workspace.networks]
+
+[contract]
+
+[wasm-opt]

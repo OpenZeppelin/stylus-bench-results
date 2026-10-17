@@ -1,23 +1,23 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "devnet")]
 
 use abi::SafeErc20;
 use alloy::primitives::uint;
 use alloy_primitives::{Bytes, U256};
-use e2e::{send, watch, Account};
 use mock::{
     erc1363_no_return::ERC1363NoReturnMock, erc1363_receiver,
     erc1363_return_false, erc1363_spender,
 };
+use stylus_test_support::{send, watch, Account};
 
 mod abi;
 mod mock;
 
 const DATA: Bytes = Bytes::from_static(b"0x12345678");
 
-#[e2e::test]
-async fn reverts_on_transfer_and_call_relaxed(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn reverts_on_transfer_and_call_relaxed() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
     let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
 
@@ -44,10 +44,10 @@ async fn reverts_on_transfer_and_call_relaxed(
     Ok(())
 }
 
-#[e2e::test]
-async fn reverts_on_transfer_from_and_call_relaxed(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn reverts_on_transfer_from_and_call_relaxed() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
     let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
 
@@ -76,10 +76,10 @@ async fn reverts_on_transfer_from_and_call_relaxed(
     Ok(())
 }
 
-#[e2e::test]
-async fn reverts_on_approve_and_call_relaxed(
-    alice: Account,
-) -> eyre::Result<()> {
+#[tokio::test]
+async fn reverts_on_approve_and_call_relaxed() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
     let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
 

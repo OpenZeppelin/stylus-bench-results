@@ -11,4 +11,8 @@ basic-example = { path = "../token" }
 alloy-primitives.workspace = true
 alloy.workspace = true
 tokio.workspace = true
-e2e.workspace = true
+stylus-test-support = { path = "../../../lib/stylus-test-support" }
+cargo_metadata = "0.20"
+eyre.workspace = true
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("contract-client-gen"))'] }

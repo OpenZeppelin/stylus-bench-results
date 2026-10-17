@@ -2,8 +2,6 @@
 #![allow(clippy::unused_self)]
 extern crate alloc;
 
-use alloc::vec::Vec;
-
 use openzeppelin_crypto::{
     arithmetic::uint::U256,
     field::instance::FpBN256,

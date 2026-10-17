@@ -14,6 +14,7 @@ sol!(
         function depositFor(address account, uint256[] memory tokenIds) external returns (bool);
         #[derive(Debug)]
         function withdrawTo(address account, uint256[] memory tokenIds) external returns (bool);
+        function onERC721Received(address operator, address from, uint256 tokenId, bytes memory data) external returns (bytes4);
 
 
         #[derive(Debug, PartialEq)]
@@ -21,6 +22,7 @@ sol!(
 
         error ERC721NonexistentToken(uint256 tokenId);
         error Erc721FailedOperation(address token);
+        error ERC721UnsupportedToken(address token);
     }
 
     contract Erc721 {

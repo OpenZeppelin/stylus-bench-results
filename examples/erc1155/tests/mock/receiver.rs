@@ -1,11 +1,11 @@
 #![allow(dead_code)]
-#![cfg(feature = "e2e")]
+#![cfg(feature = "devnet")]
 use alloy::{
     primitives::{aliases::B32, Address, U256},
     sol,
 };
-use e2e::Wallet;
 use stylus_sdk::{abi::Bytes, function_selector};
+use stylus_test_support::Wallet;
 
 const REC_RETVAL: B32 = B32::new(function_selector!(
     "onERC1155Received",

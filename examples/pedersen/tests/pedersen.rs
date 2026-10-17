@@ -1,8 +1,8 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "devnet")]
 
-use e2e::Account;
 use eyre::Result;
 use openzeppelin_crypto::arithmetic::uint::{from_str_hex, U256};
+use stylus_test_support::Account;
 
 use crate::abi::PedersenExample;
 
@@ -12,8 +12,10 @@ mod abi;
 // Integration Tests: Pedersen
 // ============================================================================
 
-#[e2e::test]
-async fn pedersen_works(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn pedersen_works() -> Result<()> {
+    let alice = Account::new().await?;
+
     let input_1: U256 = from_str_hex::<4>(
         "3d937c035c878245caf64531a5756109c53068da139362728feb561405371cb",
     );
@@ -31,8 +33,7 @@ async fn pedersen_works(alice: Account) -> Result<()> {
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = PedersenExample::new(contract_addr, &alice.wallet);
 
-    let PedersenExample::hashReturn { hash } =
-        contract.hash([input_1, input_2]).call().await?;
+    let hash = contract.hash([input_1, input_2]).call().await?;
 
     assert_eq!(hash, expected);
 

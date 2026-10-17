@@ -1,16 +1,16 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "devnet")]
 
 use abi::AccessControl::{
     self, AccessControlBadConfirmation, AccessControlUnauthorizedAccount,
     RoleAdminChanged, RoleGranted, RoleRevoked,
 };
 use alloy::hex;
-use e2e::{
-    constructor, receipt, send, watch, Account, Constructor, EventExt, Revert,
-    DEPLOYER_ADDRESS,
-};
 use eyre::Result;
 use stylus_sdk::alloy_primitives::{Address, U256};
+use stylus_test_support::{
+    constructor, receipt, send, watch, Account, Constructor, EventExt, Revert,
+    STYLUS_DEPLOYER,
+};
 
 mod abi;
 
@@ -28,8 +28,10 @@ fn ctr(admin: Address) -> Constructor {
 // Integration Tests: AccessControl
 // ============================================================================
 
-#[e2e::test]
-async fn constructs(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn constructs() -> Result<()> {
+    let alice = Account::new().await?;
+
     let alice_addr = alice.address();
     let receipt = alice
         .as_deployer()
@@ -40,7 +42,7 @@ async fn constructs(alice: Account) -> Result<()> {
 
     // `StylusDeployer` is the message sender, so currently it becomes the
     // `sender` in the `RoleGranted` event
-    let stylus_deployer = std::env::var(DEPLOYER_ADDRESS)?.parse()?;
+    let stylus_deployer = STYLUS_DEPLOYER;
 
     assert!(receipt.emits(RoleGranted {
         role: DEFAULT_ADMIN_ROLE.into(),
@@ -48,31 +50,31 @@ async fn constructs(alice: Account) -> Result<()> {
         sender: stylus_deployer
     }));
 
-    let AccessControl::hasRoleReturn { hasRole } =
+    let has_role =
         contract.hasRole(DEFAULT_ADMIN_ROLE.into(), alice_addr).call().await?;
-    assert!(hasRole);
+    assert!(has_role);
 
-    let AccessControl::getRoleMemberReturn { member } = contract
+    let member = contract
         .getRoleMember(DEFAULT_ADMIN_ROLE.into(), U256::ZERO)
         .call()
         .await?;
     assert_eq!(member, alice_addr);
 
-    let AccessControl::getRoleMemberCountReturn { count } =
+    let count =
         contract.getRoleMemberCount(DEFAULT_ADMIN_ROLE.into()).call().await?;
     assert_eq!(count, U256::from(1));
 
-    let AccessControl::getRoleMembersReturn { members } =
+    let members =
         contract.getRoleMembers(DEFAULT_ADMIN_ROLE.into()).call().await?;
     assert_eq!(members, vec![alice_addr]);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn other_roles_admin_is_the_default_admin_role(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn other_roles_admin_is_the_default_admin_role() -> Result<()> {
+    let alice = Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -81,15 +83,16 @@ async fn other_roles_admin_is_the_default_admin_role(
         .contract_address;
     let contract = AccessControl::new(contract_addr, &alice.wallet);
 
-    let AccessControl::getRoleAdminReturn { role } =
-        contract.getRoleAdmin(ROLE.into()).call().await?;
+    let role = contract.getRoleAdmin(ROLE.into()).call().await?;
     assert_eq!(*role, DEFAULT_ADMIN_ROLE);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn default_role_is_default_admin(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn default_role_is_default_admin() -> Result<()> {
+    let alice = Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -98,22 +101,20 @@ async fn default_role_is_default_admin(alice: Account) -> Result<()> {
         .contract_address;
     let contract = AccessControl::new(contract_addr, &alice.wallet);
 
-    let AccessControl::getRoleAdminReturn { role } =
-        contract.getRoleAdmin(ROLE.into()).call().await?;
+    let role = contract.getRoleAdmin(ROLE.into()).call().await?;
     assert_eq!(*role, DEFAULT_ADMIN_ROLE);
 
-    let AccessControl::getRoleAdminReturn { role } =
-        contract.getRoleAdmin(DEFAULT_ADMIN_ROLE.into()).call().await?;
+    let role = contract.getRoleAdmin(DEFAULT_ADMIN_ROLE.into()).call().await?;
     assert_eq!(*role, DEFAULT_ADMIN_ROLE);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_non_admin_grants_role(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn error_when_non_admin_grants_role() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -134,11 +135,11 @@ async fn error_when_non_admin_grants_role(
     Ok(())
 }
 
-#[e2e::test]
-async fn accounts_can_be_granted_roles_multiple_times(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn accounts_can_be_granted_roles_multiple_times() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -163,23 +164,22 @@ async fn accounts_can_be_granted_roles_multiple_times(
         sender: alice_addr
     }));
 
-    let AccessControl::getRoleMemberReturn { member } =
-        contract.getRoleMember(ROLE.into(), U256::ZERO).call().await?;
+    let member = contract.getRoleMember(ROLE.into(), U256::ZERO).call().await?;
     assert_eq!(member, bob_addr);
 
-    let AccessControl::getRoleMemberCountReturn { count } =
-        contract.getRoleMemberCount(ROLE.into()).call().await?;
+    let count = contract.getRoleMemberCount(ROLE.into()).call().await?;
     assert_eq!(count, U256::from(1));
 
-    let AccessControl::getRoleMembersReturn { members } =
-        contract.getRoleMembers(ROLE.into()).call().await?;
+    let members = contract.getRoleMembers(ROLE.into()).call().await?;
     assert_eq!(members, vec![bob_addr]);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn not_granted_roles_can_be_revoked(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn not_granted_roles_can_be_revoked() -> Result<()> {
+    let alice = Account::new().await?;
+
     let alice_addr = alice.address();
     let contract_addr = alice
         .as_deployer()
@@ -189,9 +189,8 @@ async fn not_granted_roles_can_be_revoked(alice: Account) -> Result<()> {
         .contract_address;
     let contract = AccessControl::new(contract_addr, &alice.wallet);
 
-    let AccessControl::hasRoleReturn { hasRole } =
-        contract.hasRole(ROLE.into(), alice_addr).call().await?;
-    assert!(!hasRole);
+    let has_role = contract.hasRole(ROLE.into(), alice_addr).call().await?;
+    assert!(!has_role);
 
     let receipt = receipt!(contract.revokeRole(ROLE.into(), alice_addr))?;
     assert!(!receipt.emits(RoleRevoked {
@@ -203,8 +202,11 @@ async fn not_granted_roles_can_be_revoked(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn admin_can_revoke_role(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn admin_can_revoke_role() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -225,22 +227,20 @@ async fn admin_can_revoke_role(alice: Account, bob: Account) -> Result<()> {
         sender: alice_addr
     }));
 
-    let AccessControl::getRoleMemberCountReturn { count } =
-        contract.getRoleMemberCount(ROLE.into()).call().await?;
+    let count = contract.getRoleMemberCount(ROLE.into()).call().await?;
     assert!(count.is_zero());
 
-    let AccessControl::getRoleMembersReturn { members } =
-        contract.getRoleMembers(ROLE.into()).call().await?;
+    let members = contract.getRoleMembers(ROLE.into()).call().await?;
     assert!(members.is_empty());
 
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_non_admin_revokes_role(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn error_when_non_admin_revokes_role() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -265,11 +265,11 @@ async fn error_when_non_admin_revokes_role(
     Ok(())
 }
 
-#[e2e::test]
-async fn roles_can_be_revoked_multiple_times(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn roles_can_be_revoked_multiple_times() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -289,19 +289,19 @@ async fn roles_can_be_revoked_multiple_times(
         sender: alice_addr
     }));
 
-    let AccessControl::getRoleMemberCountReturn { count } =
-        contract.getRoleMemberCount(ROLE.into()).call().await?;
+    let count = contract.getRoleMemberCount(ROLE.into()).call().await?;
     assert!(count.is_zero());
 
-    let AccessControl::getRoleMembersReturn { members } =
-        contract.getRoleMembers(ROLE.into()).call().await?;
+    let members = contract.getRoleMembers(ROLE.into()).call().await?;
     assert!(members.is_empty());
 
     Ok(())
 }
 
-#[e2e::test]
-async fn not_granted_roles_can_be_renounced(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn not_granted_roles_can_be_renounced() -> Result<()> {
+    let alice = Account::new().await?;
+
     let alice_addr = alice.address();
     let contract_addr = alice
         .as_deployer()
@@ -321,8 +321,11 @@ async fn not_granted_roles_can_be_renounced(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn bearer_can_renounce_role(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn bearer_can_renounce_role() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let bob_addr = bob.address();
     let contract_addr = alice
         .as_deployer()
@@ -342,21 +345,19 @@ async fn bearer_can_renounce_role(alice: Account, bob: Account) -> Result<()> {
         sender: bob_addr
     }));
 
-    let AccessControl::getRoleMemberCountReturn { count } =
-        contract.getRoleMemberCount(ROLE.into()).call().await?;
+    let count = contract.getRoleMemberCount(ROLE.into()).call().await?;
     assert!(count.is_zero());
 
-    let AccessControl::getRoleMembersReturn { members } =
-        contract.getRoleMembers(ROLE.into()).call().await?;
+    let members = contract.getRoleMembers(ROLE.into()).call().await?;
     assert!(members.is_empty());
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_the_one_renouncing_is_not_the_sender(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn error_when_the_one_renouncing_is_not_the_sender() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -378,8 +379,10 @@ async fn error_when_the_one_renouncing_is_not_the_sender(
     Ok(())
 }
 
-#[e2e::test]
-async fn roles_can_be_renounced_multiple_times(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn roles_can_be_renounced_multiple_times() -> Result<()> {
+    let alice = Account::new().await?;
+
     let alice_addr = alice.address();
     let contract_addr = alice
         .as_deployer()
@@ -400,8 +403,10 @@ async fn roles_can_be_renounced_multiple_times(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn a_roles_admin_role_can_change(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn a_roles_admin_role_can_change() -> Result<()> {
+    let alice = Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -418,18 +423,17 @@ async fn a_roles_admin_role_can_change(alice: Account) -> Result<()> {
         newAdminRole: NEW_ADMIN_ROLE.into()
     }));
 
-    let AccessControl::getRoleAdminReturn { role } =
-        contract.getRoleAdmin(ROLE.into()).call().await?;
+    let role = contract.getRoleAdmin(ROLE.into()).call().await?;
     assert_eq!(*role, NEW_ADMIN_ROLE);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn the_new_admin_can_grant_roles(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn the_new_admin_can_grant_roles() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -459,26 +463,23 @@ async fn the_new_admin_can_grant_roles(
         sender: bob_addr
     }));
 
-    let AccessControl::getRoleMemberReturn { member } =
-        contract.getRoleMember(ROLE.into(), U256::ZERO).call().await?;
+    let member = contract.getRoleMember(ROLE.into(), U256::ZERO).call().await?;
     assert_eq!(member, alice_addr);
 
-    let AccessControl::getRoleMemberCountReturn { count } =
-        contract.getRoleMemberCount(ROLE.into()).call().await?;
+    let count = contract.getRoleMemberCount(ROLE.into()).call().await?;
     assert_eq!(count, U256::from(1));
 
-    let AccessControl::getRoleMembersReturn { members } =
-        contract.getRoleMembers(ROLE.into()).call().await?;
+    let members = contract.getRoleMembers(ROLE.into()).call().await?;
     assert_eq!(members, vec![alice_addr]);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn the_new_admin_can_revoke_roles(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn the_new_admin_can_revoke_roles() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -509,22 +510,20 @@ async fn the_new_admin_can_revoke_roles(
         sender: bob_addr
     }));
 
-    let AccessControl::getRoleMemberCountReturn { count } =
-        contract.getRoleMemberCount(ROLE.into()).call().await?;
+    let count = contract.getRoleMemberCount(ROLE.into()).call().await?;
     assert!(count.is_zero());
 
-    let AccessControl::getRoleMembersReturn { members } =
-        contract.getRoleMembers(ROLE.into()).call().await?;
+    let members = contract.getRoleMembers(ROLE.into()).call().await?;
     assert!(members.is_empty());
 
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_previous_admin_grants_roles(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn error_when_previous_admin_grants_roles() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
@@ -554,11 +553,11 @@ async fn error_when_previous_admin_grants_roles(
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_previous_admin_revokes_roles(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn error_when_previous_admin_revokes_roles() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let contract_addr = alice
         .as_deployer()
         .with_constructor(ctr(alice.address()))
