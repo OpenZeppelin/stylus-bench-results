@@ -20,3 +20,5 @@
 ** xref:uups-proxy.adoc[UUPS Proxy]
 
 * xref:utilities.adoc[Utilities]
+
+* xref:upgrade.adoc[Upgrade from v0.3.0]
