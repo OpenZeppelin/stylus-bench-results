@@ -1,3 +1,9 @@
 # Opt in to the workspace-pinned Binaryen 116 / -O3 recipe for reproducible
 # cargo-stylus deploy and verify.
+[workspace]
+
+[workspace.networks]
+
 [wasm-opt]
+version = "116"
+flags = ["-O3"]
