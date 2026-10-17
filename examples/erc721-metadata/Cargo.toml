@@ -19,6 +19,7 @@ eyre.workspace = true
 rand.workspace = true
 
 [features]
+contract-client-gen = []
 e2e = []
 export-abi = ["openzeppelin-stylus/export-abi"]
 

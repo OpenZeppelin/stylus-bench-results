@@ -22,6 +22,7 @@ eyre.workspace = true
 crate-type = ["lib", "cdylib"]
 
 [features]
+contract-client-gen = []
 e2e = []
 export-abi = ["openzeppelin-stylus/export-abi"]
 

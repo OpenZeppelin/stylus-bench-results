@@ -20,6 +20,7 @@ motsu = "=0.10.0"
 arbitrary = { version = "1.4.1", features = ["derive"] }
 
 [features]
+contract-client-gen = []
 default = ["mini-alloc"]
 # stylus-sdk/export-abi will be enabled automatically.
 export-abi = ["openzeppelin-stylus/export-abi"]

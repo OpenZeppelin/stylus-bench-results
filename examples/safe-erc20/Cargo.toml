@@ -19,6 +19,7 @@ tokio.workspace = true
 e2e.workspace = true
 
 [features]
+contract-client-gen = []
 e2e = []
 export-abi = ["openzeppelin-stylus/export-abi"]
 

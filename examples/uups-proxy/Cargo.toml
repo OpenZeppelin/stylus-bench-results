@@ -23,6 +23,7 @@ uups-proxy-new-version-example = { path = "../uups-proxy-new-version" }
 crate-type = ["lib", "cdylib"]
 
 [features]
+contract-client-gen = []
 e2e = []
 export-abi = ["openzeppelin-stylus/export-abi"]
 

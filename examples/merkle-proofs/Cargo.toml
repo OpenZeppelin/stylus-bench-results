@@ -13,6 +13,7 @@ alloy-sol-types.workspace = true
 stylus-sdk.workspace = true
 
 [features]
+contract-client-gen = []
 e2e = []
 export-abi = ["stylus-sdk/export-abi"]
 
