@@ -369,3 +369,50 @@ impl<P: PoseidonParams<F>, F: PrimeField> Poseidon2<P, F> {
         self.state[0] += P::ROUND_CONSTANTS[round][0];
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Poseidon2;
+    use crate::{
+        field::instance::FpBLS12,
+        poseidon2::params::PoseidonParams,
+    };
+
+    struct UnsupportedStateSize;
+
+    impl PoseidonParams<FpBLS12> for UnsupportedStateSize {
+        const T: usize = 5;
+        const D: u8 = 5;
+        const CAPACITY: usize = 1;
+        const ROUNDS_F: usize = 8;
+        const ROUNDS_P: usize = 1;
+        const MAT_INTERNAL_DIAG_M_1: &'static [FpBLS12] = &[];
+        const ROUND_CONSTANTS: &'static [&'static [FpBLS12]] = &[];
+    }
+
+    struct CapacityExceedsRate;
+
+    impl PoseidonParams<FpBLS12> for CapacityExceedsRate {
+        const T: usize = 2;
+        const D: u8 = 5;
+        const CAPACITY: usize = 2;
+        const ROUNDS_F: usize = 8;
+        const ROUNDS_P: usize = 1;
+        const MAT_INTERNAL_DIAG_M_1: &'static [FpBLS12] = &[];
+        const ROUND_CONSTANTS: &'static [&'static [FpBLS12]] = &[];
+    }
+
+    #[test]
+    #[should_panic(expected = "unsupported Poseidon2 state size")]
+    fn rejects_unsupported_state_size_at_construction() {
+        let _ = Poseidon2::<UnsupportedStateSize, FpBLS12>::new();
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Poseidon2 capacity must be smaller than state size"
+    )]
+    fn rejects_capacity_that_leaves_no_rate() {
+        let _ = Poseidon2::<CapacityExceedsRate, FpBLS12>::new();
+    }
+}
