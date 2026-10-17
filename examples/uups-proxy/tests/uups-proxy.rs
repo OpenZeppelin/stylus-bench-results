@@ -191,9 +191,12 @@ async fn initialize_cannot_be_replayed_after_deployment() -> Result<()> {
     let proxy = Erc1967Example::new(proxy_addr, &alice.wallet);
 
     let bob_proxy = Erc1967Example::new(proxy_addr, &bob.wallet);
-    let replay = watch!(bob_proxy.initialize(bob.address()));
+    let replay_reverted = match send!(bob_proxy.initialize(bob.address())) {
+        Err(_) => true,
+        Ok(transaction) => transaction.watch().await.is_err(),
+    };
     assert_eq!(alice.address(), proxy.owner().call().await?);
-    assert!(replay.is_err(), "reinitialization must revert");
+    assert!(replay_reverted, "reinitialization must revert");
     let err = match bob_proxy.initialize(bob.address()).call().await {
         Err(err) => err,
         Ok(_) => panic!("reinitialization must revert"),
@@ -218,14 +221,43 @@ async fn initialize_cannot_be_replayed_after_upgrade() -> Result<()> {
     watch!(proxy.upgradeToAndCall(new_logic_addr, vec![].into()))?;
 
     let bob_proxy = Erc1967Example::new(proxy_addr, &bob.wallet);
-    let replay = watch!(bob_proxy.initialize(bob.address()));
+    let replay_reverted = match send!(bob_proxy.initialize(bob.address())) {
+        Err(_) => true,
+        Ok(transaction) => transaction.watch().await.is_err(),
+    };
     assert_eq!(alice.address(), proxy.owner().call().await?);
-    assert!(replay.is_err(), "reinitialization after upgrade must revert");
+    assert!(replay_reverted, "reinitialization after upgrade must revert");
     let err = match bob_proxy.initialize(bob.address()).call().await {
         Err(err) => err,
         Ok(_) => panic!("reinitialization after upgrade must revert"),
     };
     assert!(err.reverted_with(UUPSProxyErc20Example::InvalidInitialization {}));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn setting_version_before_initialization_does_not_lock_it() -> Result<()>
+{
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+    let logic_addr = alice.deploy_uups().await?.contract_address;
+
+    let proxy_addr = alice
+        .as_deployer()
+        .with_example_name("erc1967")
+        .with_constructor(constructor!(logic_addr, Bytes::new()))
+        .deploy()
+        .await?
+        .contract_address;
+
+    let bob_implementation =
+        UUPSProxyErc20Example::new(proxy_addr, &bob.wallet);
+    watch!(bob_implementation.setVersion())?;
+
+    let proxy = Erc1967Example::new(proxy_addr, &alice.wallet);
+    watch!(proxy.initialize(alice.address()))?;
+    assert_eq!(alice.address(), proxy.owner().call().await?);
 
     Ok(())
 }
