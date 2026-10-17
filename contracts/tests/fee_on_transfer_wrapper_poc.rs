@@ -44,7 +44,7 @@ fn mock_balance(vm: &TestVM, token: Address, account: Address, balance: U256) {
 }
 
 #[test]
-fn fee_on_transfer_deposit_preserves_wrapper_backing() {
+fn fee_on_transfer_deposit_mints_nominal_wrapper_shares() {
     let vm = TestVM::new();
     let wrapper_address = Address::with_last_byte(1);
     let underlying = Address::with_last_byte(2);
@@ -90,11 +90,13 @@ fn fee_on_transfer_deposit_preserves_wrapper_backing() {
         .expect("balanceOf should succeed");
     let shares = contract.erc20.total_supply();
 
-    assert_eq!(shares, assets, "wrapper shares should remain backed");
+    assert_eq!(shares, requested);
+    assert_eq!(assets, received);
+    assert!(shares > assets, "fee-on-transfer deposits are unsupported");
 }
 
 #[test]
-fn fee_on_transfer_vault_deposit_preserves_share_backing() {
+fn fee_on_transfer_vault_deposit_mints_nominal_shares() {
     let vm = TestVM::new();
     let vault_address = Address::with_last_byte(4);
     let underlying = Address::with_last_byte(5);
@@ -129,5 +131,7 @@ fn fee_on_transfer_vault_deposit_preserves_share_backing() {
         contract.vault.total_assets().expect("balanceOf should succeed");
     let shares = contract.erc20.total_supply();
 
-    assert_eq!(shares, assets, "vault shares should remain backed");
+    assert_eq!(shares, requested);
+    assert_eq!(assets, received);
+    assert!(shares > assets, "fee-on-transfer assets are unsupported");
 }
