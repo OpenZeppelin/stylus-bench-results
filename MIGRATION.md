@@ -180,7 +180,7 @@ remains installed.
 | `cargo +1.91.0 check --locked --workspace --all-targets` | Pass |
 | `cargo +1.91.0 clippy --locked --workspace --all-targets -- -D warnings` | Pass |
 | `cargo +1.91.0 test --locked --workspace --all-targets` | Pass: 126 targets, 738 passed, 0 failed, 0 ignored |
-| `cargo +1.91.0 test --locked --workspace --doc` | Pass |
+| `cargo +1.91.0 test --locked --workspace --doc` | Pass: 19 runnable doctests; 14 snippet fences remain marked `ignore` |
 | `cargo +1.91.0 check --locked --workspace --all-features` | Pass for non-test targets; emits 66 missing-doc warnings from SDK-generated `#[public]` items |
 | Template check/test/clippy, format, and ABI export | Pass; 5 template unit tests passed; all-features check has the same generated-item warnings |
 | `./scripts/check-abi.sh` | Pass: 35 ABI projects |
