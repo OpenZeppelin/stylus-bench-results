@@ -21,9 +21,8 @@
 use alloc::{vec, vec::Vec};
 
 use alloy_primitives::{
-    Address, B256, U8, U256,
     aliases::{B32, U96},
-    uint,
+    uint, Address, B256, U256, U8,
 };
 use stylus_sdk::{abi::Bytes, prelude::*, storage::StorageU8};
 
@@ -41,7 +40,7 @@ use crate::{
         structs::{
             bitmap::BitMap,
             checkpoints::{
-                self, CheckpointUnorderedInsertion, S160, Size, Trace,
+                self, CheckpointUnorderedInsertion, Size, Trace, S160,
             },
         },
     },
@@ -927,9 +926,9 @@ use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
     use crate::test_support::{
-        TestContract as TestVMContract, mock_code, test_address,
+        mock_code, test_address, TestContract as TestVMContract,
     };
-    use alloy_primitives::{Address, U256, uint};
+    use alloy_primitives::{uint, Address, U256};
 
     use super::*;
 

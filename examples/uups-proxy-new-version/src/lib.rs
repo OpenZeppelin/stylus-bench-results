@@ -5,21 +5,23 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 
-use alloy_primitives::{U32, uint};
+use alloy_primitives::{uint, U32};
 use alloy_sol_types::SolCall;
 use openzeppelin_stylus::{
     access::ownable::{self, IOwnable, Ownable},
     proxy::{
         erc1967::{
-            self, Erc1967Utils,
+            self,
             utils::{ERC1967InvalidImplementation, IMPLEMENTATION_SLOT},
+            Erc1967Utils,
         },
         utils::{
             erc1822::{Erc1822ProxiableInterface, IErc1822Proxiable},
             uups_upgradeable::{
-                self, IUUPSUpgradeable, InvalidVersion, LOGIC_FLAG_SLOT,
-                UPGRADE_INTERFACE_VERSION, UUPSUnauthorizedCallContext,
-                UUPSUnsupportedProxiableUUID, UUPSUpgradeableInterface,
+                self, IUUPSUpgradeable, InvalidVersion,
+                UUPSUnauthorizedCallContext, UUPSUnsupportedProxiableUUID,
+                UUPSUpgradeableInterface, LOGIC_FLAG_SLOT,
+                UPGRADE_INTERFACE_VERSION,
             },
         },
     },

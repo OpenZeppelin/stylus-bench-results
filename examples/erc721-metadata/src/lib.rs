@@ -6,17 +6,18 @@ use alloc::{string::String, vec::Vec};
 use openzeppelin_stylus::access::ownable::{self, IOwnable, Ownable};
 use openzeppelin_stylus::{
     token::erc721::{
-        self, Erc721, IErc721,
+        self,
         extensions::{
             Erc721Metadata, Erc721UriStorage, IErc721Burnable, IErc721Metadata,
             IErc721UriStorage,
         },
+        Erc721, IErc721,
     },
     utils::introspection::erc165::IErc165,
 };
 use stylus_sdk::{
     abi::Bytes,
-    alloy_primitives::{Address, U256, aliases::B32},
+    alloy_primitives::{aliases::B32, Address, U256},
     prelude::*,
     storage::StorageBool,
 };

@@ -3,7 +3,7 @@
 mod devnet_test_support;
 
 use crate::devnet_test_support::{
-    Account, Constructor, EventExt, Revert, constructor, receipt, send, watch,
+    constructor, receipt, send, watch, Account, Constructor, EventExt, Revert,
 };
 use abi::Erc1155;
 use alloy::primitives::U256;
@@ -90,10 +90,8 @@ async fn uri_returns_concatenated_base_uri_and_token_uri() -> eyre::Result<()> {
     let receipt =
         receipt!(contract.setTokenURI(token_id, token_uri.to_owned()))?;
 
-    assert!(
-        receipt
-            .emits(Erc1155::URI { value: expected_uri.clone(), id: token_id })
-    );
+    assert!(receipt
+        .emits(Erc1155::URI { value: expected_uri.clone(), id: token_id }));
 
     let uri = contract.uri(token_id).call().await?;
 
@@ -122,10 +120,8 @@ async fn uri_returns_token_uri_when_base_uri_is_empty() -> eyre::Result<()> {
     let receipt =
         receipt!(contract.setTokenURI(token_id, token_uri.to_owned()))?;
 
-    assert!(
-        receipt
-            .emits(Erc1155::URI { value: token_uri.to_owned(), id: token_id })
-    );
+    assert!(receipt
+        .emits(Erc1155::URI { value: token_uri.to_owned(), id: token_id }));
 
     let uri = contract.uri(token_id).call().await?;
 
@@ -157,10 +153,8 @@ async fn uri_ignores_metadata_uri_when_token_uri_is_set() -> eyre::Result<()> {
     let receipt =
         receipt!(contract.setTokenURI(token_id, token_uri.to_owned()))?;
 
-    assert!(
-        receipt
-            .emits(Erc1155::URI { value: expected_uri.clone(), id: token_id })
-    );
+    assert!(receipt
+        .emits(Erc1155::URI { value: expected_uri.clone(), id: token_id }));
 
     let uri = contract.uri(token_id).call().await?;
 
@@ -185,10 +179,10 @@ async fn unauthorized_account_cannot_change_token_uris() -> eyre::Result<()> {
     let contract_bob = Erc1155::new(contract_addr, &bob.wallet);
     let token_id = U256::from(1);
 
-    let err = send!(
-        contract_bob.setTokenURI(token_id, "attacker/metadata.json".to_owned())
-    )
-    .expect_err("an unrelated account must not replace a token URI");
+    let err =
+        send!(contract_bob
+            .setTokenURI(token_id, "attacker/metadata.json".to_owned()))
+        .expect_err("an unrelated account must not replace a token URI");
     assert!(err.reverted_with(Erc1155::OwnableUnauthorizedAccount {
         account: bob.address(),
     }));

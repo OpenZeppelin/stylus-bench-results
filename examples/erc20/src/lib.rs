@@ -6,16 +6,17 @@ use alloc::vec::Vec;
 use openzeppelin_stylus::{
     access::ownable::{self, IOwnable, Ownable},
     token::erc20::{
-        self, Erc20, IErc20,
+        self,
         extensions::{
-            Capped, Erc20Metadata, ICapped, IErc20Burnable, IErc20Metadata,
-            capped,
+            capped, Capped, Erc20Metadata, ICapped, IErc20Burnable,
+            IErc20Metadata,
         },
+        Erc20, IErc20,
     },
-    utils::{IPausable, Pausable, introspection::erc165::IErc165, pausable},
+    utils::{introspection::erc165::IErc165, pausable, IPausable, Pausable},
 };
 use stylus_sdk::{
-    alloy_primitives::{Address, U8, U256, aliases::B32, uint},
+    alloy_primitives::{aliases::B32, uint, Address, U256, U8},
     prelude::*,
     storage::StorageBool,
 };

@@ -7,12 +7,12 @@ use alloc::vec::Vec;
 
 use openzeppelin_stylus::{
     access::ownable::{self, IOwnable, Ownable},
-    token::erc1155::{self, Erc1155, IErc1155, extensions::IErc1155Burnable},
+    token::erc1155::{self, extensions::IErc1155Burnable, Erc1155, IErc1155},
     utils::introspection::erc165::IErc165,
 };
 use stylus_sdk::{
     abi::Bytes,
-    alloy_primitives::{Address, U256, aliases::B32},
+    alloy_primitives::{aliases::B32, Address, U256},
     prelude::*,
     storage::StorageBool,
 };

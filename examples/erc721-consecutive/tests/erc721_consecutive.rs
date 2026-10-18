@@ -3,8 +3,8 @@
 mod devnet_test_support;
 
 use crate::devnet_test_support::{
-    Account, Constructor, ContractInitializationError, EventExt, Revert,
-    receipt, send, watch,
+    receipt, send, watch, Account, Constructor, ContractInitializationError,
+    EventExt, Revert,
 };
 use alloy::primitives::{Address, U256};
 use alloy_primitives::{aliases::U96, uint};
@@ -272,8 +272,8 @@ async fn burns() -> eyre::Result<()> {
 }
 
 #[tokio::test]
-async fn unauthorized_burn_reverts_and_preserves_consecutive_token()
--> eyre::Result<()> {
+async fn unauthorized_burn_reverts_and_preserves_consecutive_token(
+) -> eyre::Result<()> {
     let alice = Account::new().await?;
     let bob = Account::new().await?;
 
