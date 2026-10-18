@@ -201,7 +201,8 @@ ordinary `_mint` after deployment.
 == Security behavior changes
 
 The migration includes security and correctness fixes that preserve the public
-ABI but intentionally reject or correct behavior that v0.3.0 accepted:
+ABI in the library, while intentionally rejecting or correcting behavior that
+v0.3.0 accepted. The ERC-721 wrapper example has the ABI change listed below:
 
 * The EdDSA verifier rejects identity and small-order public keys or `R`
   points. The example's ABI decoder also rejects non-canonical coordinate and
@@ -217,6 +218,15 @@ ABI but intentionally reject or correct behavior that v0.3.0 accepted:
   version. Consumer initializers must likewise guard their own privileged state;
   `set_version()` only tracks implementation versions and is not an owner-init
   guard.
+* The ERC-721 wrapper example removes `burn(uint256)` from its public ABI. In
+  v0.3.0 this method called unauthenticated `_burn`, allowing any account to
+  destroy another user's wrapped receipt and strand the escrowed NFT. Use
+  `withdraw_to` to burn a receipt and return its underlying token atomically.
+  Existing proxies retain the same storage layout, and intact positions remain
+  redeemable after upgrade. Underlying tokens whose receipts were already
+  burned cannot be attributed or redeemed by this change. A directly deployed
+  v0.3.0 example cannot have its ABI changed; migrate intact positions to a new
+  wrapper before retiring it.
 * Token, approval, permit, burn, vault withdrawal, and flash-loan repayment
   helpers validate local failure conditions before committing local state.
   Their successful ABI behavior and error types remain the same. When a helper

@@ -6,7 +6,7 @@ use alloc::{vec, vec::Vec};
 use openzeppelin_stylus::{
     token::erc721::{
         self,
-        extensions::{wrapper, Erc721Wrapper, IErc721Burnable, IErc721Wrapper},
+        extensions::{wrapper, Erc721Wrapper, IErc721Wrapper},
         receiver::IErc721Receiver,
         Erc721, IErc721,
     },
@@ -26,7 +26,7 @@ struct Erc721WrapperExample {
 }
 
 #[public]
-#[implements(IErc721<Error = erc721::Error>, IErc721Burnable<Error = erc721::Error>, IErc721Wrapper<Error = wrapper::Error>, IErc165, IErc721Receiver)]
+#[implements(IErc721<Error = erc721::Error>, IErc721Wrapper<Error = wrapper::Error>, IErc165, IErc721Receiver)]
 impl Erc721WrapperExample {
     #[constructor]
     fn constructor(&mut self, underlying_token: Address) {
@@ -96,15 +96,6 @@ impl IErc721 for Erc721WrapperExample {
 
     fn is_approved_for_all(&self, owner: Address, operator: Address) -> bool {
         self.erc721.is_approved_for_all(owner, operator)
-    }
-}
-
-#[public]
-impl IErc721Burnable for Erc721WrapperExample {
-    type Error = erc721::Error;
-
-    fn burn(&mut self, token_id: U256) -> Result<(), erc721::Error> {
-        self.erc721._burn(token_id)
     }
 }
 

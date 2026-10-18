@@ -5,7 +5,7 @@ mod devnet_test_support;
 use crate::devnet_test_support::{
     constructor, receipt, send, watch, Account, Constructor, EventExt, Revert,
 };
-use abi::{Erc721, Erc721Wrapper};
+use abi::{Erc721, Erc721Wrapper, LegacyErc721WrapperBurn};
 use alloy::primitives::{uint, Address};
 use eyre::Result;
 
@@ -121,13 +121,10 @@ async fn unapproved_operator_cannot_burn_wrapped_token() -> Result<()> {
     watch!(asset.approve(contract_addr, token_id))?;
     watch!(wrapper.depositFor(alice_addr, vec![token_id]))?;
 
-    let attacker_wrapper = Erc721Wrapper::new(contract_addr, &bob.wallet);
-    let error = send!(attacker_wrapper.burn(token_id))
-        .expect_err("an unapproved operator must not burn a wrapped token");
-    assert!(error.reverted_with(Erc721Wrapper::ERC721InsufficientApproval {
-        operator: bob.address(),
-        tokenId: token_id,
-    }));
+    let attacker_wrapper =
+        LegacyErc721WrapperBurn::new(contract_addr, &bob.wallet);
+    send!(attacker_wrapper.burn(token_id))
+        .expect_err("the wrapper must not expose standalone burn");
 
     assert_eq!(alice_addr, wrapper.ownerOf(token_id).call().await?);
     assert_eq!(contract_addr, asset.ownerOf(token_id).call().await?);

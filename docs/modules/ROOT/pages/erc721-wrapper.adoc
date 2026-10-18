@@ -5,6 +5,11 @@ Extension of the ERC-721 token contract to support token wrapping.
 Users can deposit and withdraw "underlying tokens" and receive a matching number of "wrapped tokens".
 This is useful in conjunction with other modules.
 
+The wrapped token represents a claim on the escrowed underlying token. This
+example does not expose a standalone `burn(uint256)` entrypoint: burning only
+the wrapped token would leave its underlying asset locked in the wrapper. Use
+`withdraw_to` to burn the receipt and return the underlying token in one call.
+
 
 [[usage]]
 == Usage
