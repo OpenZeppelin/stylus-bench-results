@@ -1049,7 +1049,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        arithmetic::uint::{U256, U512, U64},
+        arithmetic::uint::{U128, U256, U512, U64},
         field::{
             fp::{Fp64, FpParams, LIMBS_64},
             group::AdditiveGroup,
@@ -1065,6 +1065,14 @@ mod tests {
     }
 
     const MODULUS: i128 = 1000003; // Prime number
+
+    type Field128 = Fp128<Fp128Param>;
+    struct Fp128Param;
+    impl FpParams<2> for Fp128Param {
+        const GENERATOR: Field128 = fp_from_num!("2");
+        const MODULUS: U128 =
+            from_num!("170141183460469231731687303715884105727"); // 2^127 - 1, a Mersenne prime
+    }
 
     #[test]
     fn add() {
@@ -1336,5 +1344,40 @@ mod tests {
         let mut erased = value;
         zeroize::Zeroize::zeroize(&mut erased);
         assert!(erased.is_zero());
+    }
+
+    #[test]
+    fn prime_field_and_parameter_conversions_cover_wide_and_overflow_inputs() {
+        let repr = U64::from(42u64);
+        let via_params = <Fp64Param as FpParams<LIMBS_64>>::from_bigint(repr);
+        assert_eq!(
+            <Fp64Param as FpParams<LIMBS_64>>::into_bigint(via_params),
+            repr,
+        );
+
+        let via_prime_field = <Field64 as PrimeField>::from_bigint(repr);
+        assert_eq!(via_prime_field, via_params);
+        assert_eq!(<Field64 as PrimeField>::into_bigint(via_prime_field), repr,);
+        let round_trip_uint: U64 = via_prime_field.into();
+        assert_eq!(round_trip_uint, repr);
+
+        let too_wide = Field128::from(U128::new([0, 1]));
+        assert!(
+            std::panic::catch_unwind(|| Field64::from_fp(too_wide)).is_err()
+        );
+
+        assert_eq!(-Field64::zero(), Field64::zero());
+        assert!(std::panic::catch_unwind(|| u8::from(Field64::from(256u64)))
+            .is_err());
+        assert!(std::panic::catch_unwind(|| i8::from(Field64::from(128u64)))
+            .is_err());
+
+        let zero = Field64::zero();
+        assert!(std::panic::catch_unwind(|| Field64::one() / zero).is_err());
+        let mut quotient = Field64::one();
+        assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            quotient /= &zero;
+        },))
+        .is_err());
     }
 }

@@ -22,7 +22,7 @@ use super::{
         },
         Affine as TEAffine, Projective as TEProjective, TECurveConfig,
     },
-    AffineRepr, CurveGroup,
+    AffineRepr, CurveConfig, CurveGroup, PrimeGroup,
 };
 use crate::field::{group::AdditiveGroup, Field};
 
@@ -332,4 +332,221 @@ fn twisted_edwards_batch_normalization_rejects_zero_z() {
         BabyJubjubFq::ZERO,
     );
     let _ = TEProjective::<BabyJubjubConfig>::normalize_batch(&[malformed]);
+}
+
+fn std_hash<T: std::hash::Hash>(value: &T) -> u64 {
+    use std::hash::Hasher as _;
+
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    value.hash(&mut hasher);
+    hasher.finish()
+}
+
+#[test]
+#[allow(clippy::op_ref)]
+fn short_weierstrass_affine_and_projective_traits_cover_edges() {
+    let identity = SWAffine::<Secp256k1Config>::default();
+    let projective_identity = SWProjective::<Secp256k1Config>::default();
+    assert_eq!(identity, SWAffine::<Secp256k1Config>::zero());
+    assert!(identity.is_zero());
+    assert!(identity.is_on_curve());
+    assert_eq!(identity.xy(), None);
+    assert_eq!(identity.x(), None);
+    assert_eq!(identity.y(), None);
+    assert_eq!(format!("{identity}"), "infinity");
+    assert_eq!(format!("{identity:?}"), "infinity");
+    assert_eq!(format!("{projective_identity}"), "infinity");
+    assert_eq!(format!("{projective_identity:?}"), "infinity");
+    assert!(projective_identity.is_zero());
+    assert_eq!(std_hash(&projective_identity), std_hash(&identity));
+
+    let generator = SWAffine::<Secp256k1Config>::generator();
+    assert_eq!(
+        SWAffine::<Secp256k1Config>::from(projective_identity),
+        identity
+    );
+    assert!(generator.is_on_curve());
+    assert_eq!(generator.x(), Some(generator.x));
+    assert_eq!(generator.y(), Some(generator.y));
+    assert_eq!(generator.xy(), Some((generator.x, generator.y)));
+    assert_eq!(
+        format!("{generator}"),
+        format!("({}, {})", generator.x, generator.y)
+    );
+    assert_eq!(
+        format!("{generator:?}"),
+        format!("({}, {})", generator.x, generator.y)
+    );
+    assert!(!SWAffine::<Secp256k1Config>::new_unchecked(
+        Secp256k1Fq::ZERO,
+        Secp256k1Fq::ZERO,
+    )
+    .is_on_curve());
+
+    let doubled = generator.mul_bigint(2u64).into_affine();
+    let doubled_group = doubled.into_group();
+    let tripled = generator.mul_bigint(3u64);
+    assert_eq!(generator + generator, doubled_group);
+    assert_eq!(generator - generator, SWProjective::<Secp256k1Config>::zero());
+    assert_eq!(generator + doubled, tripled);
+    assert_eq!(generator + doubled_group, tripled);
+    assert_eq!(generator + &doubled_group, tripled);
+    assert_eq!(generator - doubled_group, -generator.into_group());
+    assert_eq!(generator - &doubled_group, -generator.into_group());
+    assert_eq!(generator, generator.into_group());
+    assert_eq!(generator.into_group(), generator);
+    assert_ne!(generator.into_group(), doubled);
+
+    let scalar: <Secp256k1Config as CurveConfig>::ScalarField = 3u64.into();
+    assert_eq!(generator * scalar, tripled);
+    assert_eq!(generator * &scalar, tripled);
+
+    let projective_generator = SWProjective::<Secp256k1Config>::generator();
+    assert_eq!(projective_generator, generator.into_group());
+    assert_eq!(format!("{projective_generator}"), format!("{generator}"));
+    assert!(format!("{projective_generator:?}").starts_with('('));
+
+    let scaled = SWProjective::<Secp256k1Config>::new_unchecked(
+        projective_generator.x * Secp256k1Fq::from(4u64).square(),
+        projective_generator.y
+            * Secp256k1Fq::from(4u64).square()
+            * Secp256k1Fq::from(4u64),
+        projective_generator.z * Secp256k1Fq::from(4u64),
+    );
+    assert_eq!(scaled, projective_generator);
+    assert_eq!(std_hash(&scaled), std_hash(&generator));
+
+    let mut erased_affine = generator;
+    zeroize::Zeroize::zeroize(&mut erased_affine);
+    assert!(erased_affine.x.is_zero());
+    assert!(erased_affine.y.is_zero());
+    assert!(!erased_affine.infinity);
+    let mut erased_projective = projective_generator;
+    zeroize::Zeroize::zeroize(&mut erased_projective);
+    assert!(erased_projective.x.is_zero());
+    assert!(erased_projective.y.is_zero());
+    assert!(erased_projective.z.is_zero());
+}
+
+#[test]
+#[allow(clippy::op_ref)]
+fn twisted_edwards_affine_and_projective_traits_cover_edges() {
+    let identity = TEAffine::<BabyJubjubConfig>::default();
+    let projective_identity = TEProjective::<BabyJubjubConfig>::default();
+    assert_eq!(identity, TEAffine::<BabyJubjubConfig>::zero());
+    assert!(identity.is_zero());
+    assert!(identity.is_on_curve());
+    assert_eq!(identity.xy(), None);
+    assert_eq!(identity.x(), None);
+    assert_eq!(identity.y(), None);
+    assert_eq!(format!("{identity}"), "infinity");
+    assert_eq!(format!("{identity:?}"), "infinity");
+    assert_eq!(format!("{projective_identity}"), "infinity");
+    assert!(format!("{projective_identity:?}").starts_with("Projective {"));
+    assert!(projective_identity.is_zero());
+    assert_eq!(std_hash(&projective_identity), std_hash(&identity));
+
+    let generator = TEAffine::<BabyJubjubConfig>::generator();
+    assert_eq!(
+        TEAffine::<BabyJubjubConfig>::from(projective_identity),
+        identity
+    );
+    assert!(generator.is_on_curve());
+    assert_eq!(generator.x(), Some(generator.x));
+    assert_eq!(generator.y(), Some(generator.y));
+    assert_eq!(generator.xy(), Some((generator.x, generator.y)));
+    assert_eq!(
+        format!("{generator}"),
+        format!("({}, {})", generator.x, generator.y)
+    );
+    assert_eq!(
+        format!("{generator:?}"),
+        format!("({}, {})", generator.x, generator.y)
+    );
+    assert!(!TEAffine::<BabyJubjubConfig>::new_unchecked(
+        BabyJubjubFq::ZERO,
+        BabyJubjubFq::ZERO,
+    )
+    .is_on_curve());
+
+    let doubled = generator.mul_bigint(2u64).into_affine();
+    let doubled_group = doubled.into_group();
+    let tripled = generator.mul_bigint(3u64);
+    assert_eq!(generator + generator, doubled_group);
+    assert_eq!(generator - generator, TEProjective::<BabyJubjubConfig>::zero());
+    assert_eq!(generator + doubled, tripled);
+    assert_eq!(generator + doubled_group, tripled);
+    assert_eq!(generator + &doubled_group, tripled);
+    assert_eq!(generator - doubled_group, -generator.into_group());
+    assert_eq!(generator - &doubled_group, -generator.into_group());
+    assert_eq!(generator, generator.into_group());
+    assert_eq!(generator.into_group(), generator);
+    assert_ne!(generator.into_group(), doubled);
+
+    let scalar: <BabyJubjubConfig as CurveConfig>::ScalarField = 3u64.into();
+    assert_eq!(generator * scalar, tripled);
+    assert_eq!(generator * &scalar, tripled);
+
+    let projective_generator = TEProjective::<BabyJubjubConfig>::generator();
+    assert_eq!(projective_generator, generator.into_group());
+    assert_eq!(format!("{projective_generator}"), format!("{generator}"));
+    assert!(format!("{projective_generator:?}").starts_with("Projective {"));
+
+    let scale = BabyJubjubFq::from(4u64);
+    let scaled = TEProjective::<BabyJubjubConfig>::new_unchecked(
+        projective_generator.x * scale,
+        projective_generator.y * scale,
+        projective_generator.t * scale,
+        projective_generator.z * scale,
+    );
+    assert_eq!(scaled, projective_generator);
+    assert_eq!(std_hash(&scaled), std_hash(&generator));
+
+    let mut erased_affine = generator;
+    zeroize::Zeroize::zeroize(&mut erased_affine);
+    assert!(erased_affine.x.is_zero());
+    assert!(erased_affine.y.is_zero());
+    let mut erased_projective = projective_generator;
+    zeroize::Zeroize::zeroize(&mut erased_projective);
+    assert!(erased_projective.x.is_zero());
+    assert!(erased_projective.y.is_zero());
+    assert!(erased_projective.t.is_zero());
+    assert!(erased_projective.z.is_zero());
+}
+
+#[test]
+fn prime_group_bits_and_cofactor_helpers_match_scalar_multiplication() {
+    let bits = [false, false, true, false, true]; // 5 in big-endian.
+
+    let sw_affine = SWAffine::<Secp256k1Config>::generator();
+    let sw_projective = SWProjective::<Secp256k1Config>::generator();
+    assert_eq!(
+        sw_projective.mul_bits_be(bits.iter().copied()),
+        sw_projective.mul_bigint(5u64)
+    );
+    assert!(sw_projective.mul_bits_be(core::iter::empty()).is_zero());
+    assert!(sw_projective.mul_bits_be([false; 4].into_iter()).is_zero());
+    assert_eq!(sw_affine.clear_cofactor(), sw_affine);
+    assert_eq!(sw_affine.mul_by_cofactor(), sw_affine);
+    assert_eq!(sw_affine.mul_by_cofactor_to_group(), sw_projective);
+    assert_eq!(sw_affine.mul_by_cofactor_inv(), sw_affine);
+    assert!(Secp256k1Config::cofactor_is_one());
+
+    let te_affine = TEAffine::<BabyJubjubConfig>::generator();
+    let te_projective = TEProjective::<BabyJubjubConfig>::generator();
+    assert_eq!(
+        te_projective.mul_bits_be(bits.iter().copied()),
+        te_projective.mul_bigint(5u64)
+    );
+    assert!(te_projective.mul_bits_be(core::iter::empty()).is_zero());
+    assert!(te_projective.mul_bits_be([false; 4].into_iter()).is_zero());
+    let cofactor_group = te_affine.mul_by_cofactor_to_group();
+    assert_eq!(
+        cofactor_group,
+        te_affine.mul_bigint(BabyJubjubConfig::COFACTOR)
+    );
+    assert_eq!(te_affine.mul_by_cofactor(), cofactor_group.into_affine());
+    assert_eq!(te_affine.clear_cofactor().into_group(), cofactor_group);
+    assert_eq!(te_affine.mul_by_cofactor_inv().mul_by_cofactor(), te_affine);
+    assert!(!BabyJubjubConfig::cofactor_is_one());
 }

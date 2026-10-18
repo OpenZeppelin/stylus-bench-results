@@ -1609,5 +1609,43 @@ mod test {
         assert_eq!(Uint::<1>::from_u128(u128::from(u64::MAX)), U64::MAX);
         assert!(std::panic::catch_unwind(|| Uint::<1>::from_u128(u128::MAX))
             .is_err());
+        assert!(std::panic::catch_unwind(
+            || U256::new([256, 0, 0, 0]).into_u8()
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn default_wide_integer_and_byte_trait_edges() {
+        assert_eq!(U256::default(), U256::ZERO);
+
+        let value = U256::new([1, 2, 3, 4]);
+        assert!(value.is_odd());
+        assert!(!value.is_even());
+        assert_eq!(
+            value.cmp(&U256::new([1, 2, 3, 5])),
+            core::cmp::Ordering::Less
+        );
+        let bytes = BigInteger::into_bytes_le(value);
+        assert_eq!(bytes.len(), U256::BYTES);
+        assert_eq!(<U256 as BigInteger>::from_bytes_le(&bytes), value);
+
+        let wide = WideUint::<4>::new(U256::ZERO, U256::ONE);
+        assert_eq!(wide.num_bits(), U256::BITS + 1);
+        assert!(wide.get_bit(U256::BITS));
+        assert!(!wide.get_bit(U256::BITS - 1));
+        assert!(!wide.get_bit(U256::BITS * 2));
+
+        assert!(
+            std::panic::catch_unwind(|| U256::from_le_slice(&[0; 31])).is_err()
+        );
+        assert!(
+            std::panic::catch_unwind(|| from_str_radix::<4>("", 10)).is_err()
+        );
+        assert!(
+            std::panic::catch_unwind(|| from_str_radix::<4>("2", 1)).is_err()
+        );
+        assert!(std::panic::catch_unwind(|| from_str_hex::<4>("g")).is_err());
+        assert!(std::panic::catch_unwind(|| from_str_hex::<4>("é")).is_err());
     }
 }
