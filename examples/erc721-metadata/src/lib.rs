@@ -121,7 +121,7 @@ impl IErc721Burnable for Erc721MetadataExample {
     type Error = erc721::Error;
 
     fn burn(&mut self, token_id: U256) -> Result<(), erc721::Error> {
-        self.erc721._burn(token_id)
+        self.erc721.burn(token_id)
     }
 }
 
