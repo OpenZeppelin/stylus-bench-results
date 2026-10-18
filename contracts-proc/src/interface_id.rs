@@ -21,6 +21,8 @@ pub(crate) fn interface_id(
     let unsafety = input.unsafety;
     let mut selectors_map =
         HashMap::<String, (String, proc_macro2::TokenStream)>::new();
+    let mut function_selectors =
+        Vec::<(String, String, proc_macro2::TokenStream)>::new();
 
     for item in &mut input.items {
         let TraitItem::Fn(func) = item else {
@@ -61,7 +63,9 @@ pub(crate) fn interface_id(
         let signature =
             format!("{}({})", solidity_fn_name, type_strings.join(","));
 
-        let selector = quote! { alloy_primitives::aliases::B32::new(stylus_sdk::function_selector!(#solidity_fn_name #(, #arg_types )*)) };
+        let selector = quote! {
+            stylus_sdk::function_selector!(#solidity_fn_name #(, #arg_types )*)
+        };
 
         // Store selector expression from every function in the trait.
         match selectors_map.get(&signature) {
@@ -74,7 +78,22 @@ pub(crate) fn interface_id(
                     signature,
                 );
             }
-            None => selectors_map.insert(signature, (rust_fn_name, selector)),
+            None => {
+                function_selectors.push((
+                    rust_fn_name.clone(),
+                    signature.clone(),
+                    selector.clone(),
+                ));
+                selectors_map.insert(
+                    signature,
+                    (
+                        rust_fn_name,
+                        quote! {
+                            alloy_primitives::aliases::B32::new(#selector)
+                        },
+                    ),
+                )
+            }
         };
     }
 
@@ -84,6 +103,65 @@ pub(crate) fn interface_id(
     let trait_items = input.items;
     let generics = input.generics.clone();
     let where_clause = &generics.where_clause;
+
+    // Use module-level const assertions whenever selector types are concrete,
+    // so collisions are diagnosed even if the generated interface_id method is
+    // never called. Generic and associated types must instead be checked in
+    // that method's const context, where the type parameters are in scope.
+    let module_level_checks = generics.params.is_empty()
+        && input.supertraits.is_empty()
+        && !trait_items.iter().any(|item| matches!(item, TraitItem::Type(_)))
+        && function_selectors
+            .iter()
+            .all(|(_, _, selector)| !selector.to_string().contains("Self"));
+
+    // The proc macro cannot compute selectors itself: their concrete bytes are
+    // produced by the SDK's const-evaluable `function_selector!` macro. Compare
+    // every pair in const context so distinct signatures with identical 4-byte
+    // selectors are rejected when the trait is compiled.
+    let collision_assertions: Vec<_> = function_selectors
+        .iter()
+        .enumerate()
+        .flat_map(|(index, (name_a, signature_a, selector_a))| {
+            function_selectors[index + 1..]
+                .iter()
+                .map(move |(name_b, signature_b, selector_b)| {
+                    let message = format!(
+                        "Stylus interface_id: selector collision between `{name_a}` ({signature_a}) and `{name_b}` ({signature_b})"
+                    );
+                    quote! {
+                        assert!(
+                            u32::from_be_bytes(#selector_a)
+                                != u32::from_be_bytes(#selector_b),
+                            #message
+                        );
+                    }
+                })
+        })
+        .collect();
+
+    let module_collision_checks: Vec<_> = if module_level_checks {
+        collision_assertions
+            .iter()
+            .map(|assertion| {
+                quote! {
+                    const _: () = { #assertion };
+                }
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    let method_collision_checks = if module_level_checks {
+        quote! {}
+    } else {
+        quote! {
+            const {
+                #(#collision_assertions)*
+            }
+        }
+    };
 
     let supertrait_tokens = if input.supertraits.is_empty() {
         quote! {}
@@ -97,6 +175,8 @@ pub(crate) fn interface_id(
     // Keep the same trait with an additional associated function
     // `interface_id`.
     quote! {
+        #(#module_collision_checks)*
+
         #(#attrs)*
         #vis #unsafety trait #name #generics #supertrait_tokens #where_clause {
             #(#trait_items)*
@@ -107,6 +187,7 @@ pub(crate) fn interface_id(
             where
                 Self: Sized,
             {
+                #method_collision_checks
                 #(#selectors)^*
             }
         }
