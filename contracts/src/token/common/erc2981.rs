@@ -152,7 +152,6 @@ pub trait IErc2981: IErc165 {
     /// # Panics
     ///
     /// * If `sale_price` * `royalty_fraction` overflows.
-    /// * If [`Erc2981::_fee_denominator()`] is zero.
     fn royalty_info(&self, token_id: U256, sale_price: U256)
         -> (Address, U256);
 }
@@ -209,15 +208,20 @@ impl Erc2981 {
     /// in [`Self::_set_token_royalty`] and [`Self::_set_default_royalty`] as a
     /// fraction of the sale price.
     ///
-    /// Defaults to 10000 so fees are expressed in basis points, but
-    /// may be customized in the constructor.
+    /// Defaults to 10000 so fees are expressed in basis points. A zero value
+    /// in storage means the constructor did not set a custom denominator.
     ///
     /// # Arguments
     ///
     /// * `&self` - Read access to the contract's state.
     #[must_use]
     pub fn _fee_denominator(&self) -> U96 {
-        self.fee_denominator.get()
+        let denominator = self.fee_denominator.get();
+        if denominator.is_zero() {
+            U96::from(10_000)
+        } else {
+            denominator
+        }
     }
 
     /// Sets the royalty information that all ids in this contract
@@ -746,8 +750,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic = "division by zero in `royalty_amount` calculation."]
-    fn royalty_info_reverts_on_division_by_zero_in_default_royalty() {
+    fn zero_storage_denominator_uses_default_for_default_royalty() {
         let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
         let bob = test_address(stringify!(bob));
 
@@ -758,8 +761,10 @@ mod tests {
             ._set_default_royalty(bob, U96::ZERO)
             .expect("should set default royalty");
 
-        // should revert on division by zero.
-        _ = contract.sender(bob).royalty_info(TOKEN_ID, SALE_PRICE);
+        assert_eq!(
+            contract.sender(bob).royalty_info(TOKEN_ID, SALE_PRICE),
+            (bob, U256::ZERO),
+        );
     }
 
     #[test]
@@ -779,8 +784,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic = "division by zero in `royalty_amount` calculation."]
-    fn royalty_info_reverts_on_division_by_zero_in_token_royalty() {
+    fn zero_storage_denominator_uses_default_for_token_royalty() {
         let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
         let bob = test_address(stringify!(bob));
 
@@ -791,8 +795,10 @@ mod tests {
             ._set_token_royalty(TOKEN_ID, bob, U96::ZERO)
             .expect("should set default royalty");
 
-        // should revert on division by zero.
-        _ = contract.sender(bob).royalty_info(TOKEN_ID, SALE_PRICE);
+        assert_eq!(
+            contract.sender(bob).royalty_info(TOKEN_ID, SALE_PRICE),
+            (bob, U256::ZERO),
+        );
     }
 
     #[test]

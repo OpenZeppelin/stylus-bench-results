@@ -2,6 +2,10 @@
 
 ERC-2981 offers a way to keep track of NFT royalties across different platforms.
 
+The royalty denominator defaults to 10,000, so a numerator is expressed in
+basis points. A contract can choose a different nonzero denominator when it
+initializes `Erc2981` state.
+
 Royalty is the amount of money given to the owner of a particular asset (NFT in this case). Full definition: https://en.wikipedia.org/wiki/Royalty_payment [royalty].
 
 This makes ERC-2981 useful for keeping track of royalty information across different platforms. It ensures that users don't have to specify this information on every platform, and the information remains transparent on the blockchain.
