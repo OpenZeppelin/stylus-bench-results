@@ -373,7 +373,8 @@ impl Erc20Wrapper {
 mod tests {
     use crate::test_support::*;
     use alloy_primitives::{aliases::B32, uint};
-    use alloy_sol_types::{SolCall, SolType, SolValue};
+    use alloy_sol_types::{SolCall, SolError, SolType, SolValue};
+    use stylus_sdk::stylus_core::calls::errors::MethodError;
     use stylus_sdk::testing::TestVM;
 
     use super::*;
@@ -560,6 +561,28 @@ mod tests {
             contract.sender(alice).decimals(),
             U8::from(DUMMY_TEST_DECIMALS)
         );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn dummy_metadata_implements_erc20_metadata_and_erc165(
+        metadata: Contract<DummyErc20Metadata>,
+        alice: Address,
+    ) {
+        assert_eq!(
+            metadata.sender(alice).name(),
+            String::from("DummyErc20Metadata")
+        );
+        assert_eq!(metadata.sender(alice).symbol(), String::from("TTK"));
+        assert_eq!(
+            metadata.sender(alice).decimals(),
+            U8::from(DUMMY_TEST_DECIMALS)
+        );
+        assert!(metadata.sender(alice).supports_interface(
+            <DummyErc20Metadata as IErc20Metadata>::interface_id()
+        ));
+        assert!(metadata.sender(alice).supports_interface(
+            <DummyErc20Metadata as IErc165>::interface_id()
+        ));
     }
 
     #[openzeppelin_stylus_proc::vm_test]
@@ -1200,5 +1223,15 @@ mod tests {
         let actual = <Erc20WrapperTestExample as IErc20Wrapper>::interface_id();
         let expected: B32 = 0x511f913e_u32.into();
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn error_encodes_invalid_underlying_abi() {
+        let token = Address::ZERO;
+        let encoded = <Error as MethodError>::encode(
+            ERC20InvalidUnderlying { token }.into(),
+        );
+        let expected = ERC20InvalidUnderlying { token }.abi_encode();
+        assert_eq!(encoded, expected);
     }
 }

@@ -671,8 +671,10 @@ impl IErc165 for SafeErc20 {
 mod tests {
     use crate::test_support::*;
     use alloy_primitives::{aliases::B32, uint, Address};
-    use alloy_sol_types::{SolCall, SolValue};
-    use stylus_sdk::testing::TestVM;
+    use alloy_sol_types::{SolCall, SolError, SolValue};
+    use stylus_sdk::{
+        stylus_core::calls::errors::MethodError, testing::TestVM,
+    };
 
     use super::*;
     use crate::{
@@ -915,6 +917,33 @@ mod tests {
             .sender(alice)
             .try_safe_transfer_from(token, alice, bob, value);
         assert!(result);
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn safe_transfer_from_succeeds_for_canonical_true(
+        contract: Contract<SafeErc20Example>,
+        erc20: Contract<Erc20>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let token = erc20.address();
+        let value = U256::from(7);
+        mock_transfer_from(contract.vm(), token, alice, bob, value);
+
+        contract
+            .sender(alice)
+            .safe_transfer_from(token, alice, bob, value)
+            .expect("canonical true confirms transferFrom");
+    }
+
+    #[test]
+    fn error_encodes_safe_operation_failure_abi() {
+        let token = Address::ZERO;
+        let encoded = <Error as MethodError>::encode(
+            SafeErc20FailedOperation { token }.into(),
+        );
+        let expected = SafeErc20FailedOperation { token }.abi_encode();
+        assert_eq!(encoded, expected);
     }
 
     #[openzeppelin_stylus_proc::vm_test]

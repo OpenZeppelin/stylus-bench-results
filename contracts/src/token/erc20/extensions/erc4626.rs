@@ -1201,13 +1201,15 @@ impl Erc4626 {
 mod tests {
     use crate::test_support::*;
     use alloy_primitives::{address, aliases::B32, Address, U256, U8};
-    use alloy_sol_types::{SolCall, SolType, SolValue};
-    use stylus_sdk::prelude::*;
+    use alloy_sol_types::{SolCall, SolError, SolType, SolValue};
+    use stylus_sdk::{prelude::*, stylus_core::calls::errors::MethodError};
 
     use super::*;
     use crate::{
         token::erc20::{
-            extensions::{Erc20Metadata, IErc20Metadata},
+            extensions::{
+                metadata::DEFAULT_DECIMALS, Erc20Metadata, IErc20Metadata,
+            },
             Erc20, IErc20,
         },
         utils::introspection::erc165::IErc165,
@@ -1476,6 +1478,47 @@ mod tests {
         let actual = <Erc4626TestExample as IErc4626>::interface_id();
         let expected: B32 = 0x87dfe5a0_u32.into();
         assert_eq!(actual, expected);
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn forwards_asset_metadata_and_composes_interface_support(
+        contract: Contract<Erc4626TestExample>,
+        alice: Address,
+    ) {
+        let asset = address!("DeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF");
+        let name = String::from("Vault Share");
+        let symbol = String::from("vSHARE");
+        contract.sender(alice).erc4626.asset.set(asset);
+        contract
+            .sender(alice)
+            .metadata
+            .constructor(name.clone(), symbol.clone());
+
+        assert_eq!(contract.sender(alice).asset(), asset);
+        assert_eq!(contract.sender(alice).name(), name);
+        assert_eq!(contract.sender(alice).symbol(), symbol);
+        assert_eq!(contract.sender(alice).decimals(), DEFAULT_DECIMALS);
+        assert!(contract.sender(alice).supports_interface(
+            <Erc4626TestExample as IErc4626>::interface_id()
+        ));
+        assert!(contract
+            .sender(alice)
+            .supports_interface(<Erc20 as IErc20>::interface_id()));
+        assert!(contract.sender(alice).supports_interface(
+            <Erc20Metadata as IErc20Metadata>::interface_id()
+        ));
+        assert!(contract
+            .sender(alice)
+            .supports_interface(<Erc20 as IErc165>::interface_id()));
+        assert!(!contract.sender(alice).supports_interface(B32::ZERO));
+    }
+
+    #[test]
+    fn error_encodes_invalid_asset_abi() {
+        let error = Error::InvalidAsset(InvalidAsset { asset: Address::ZERO });
+        let encoded = <Error as MethodError>::encode(error);
+        let expected = InvalidAsset { asset: Address::ZERO }.abi_encode();
+        assert_eq!(encoded, expected);
     }
 
     #[openzeppelin_stylus_proc::vm_test]

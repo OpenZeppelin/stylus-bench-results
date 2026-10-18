@@ -267,8 +267,10 @@ impl<T: IEip712 + StorageType> Erc20Permit<T> {
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{b256, Address, B256, U256};
-    use alloy_sol_types::SolValue;
-    use stylus_sdk::{prelude::*, testing::TestVM};
+    use alloy_sol_types::{SolError, SolValue};
+    use stylus_sdk::{
+        prelude::*, stylus_core::calls::errors::MethodError, testing::TestVM,
+    };
 
     use super::*;
     use crate::{
@@ -312,6 +314,50 @@ mod tests {
 
     impl PermitExample {
         #[allow(clippy::too_many_arguments)]
+        fn permit(
+            &mut self,
+            owner: Address,
+            spender: Address,
+            value: U256,
+            deadline: U256,
+            v: u8,
+            r: B256,
+            s: B256,
+        ) -> Result<(), Error> {
+            self.permit.permit(
+                owner,
+                spender,
+                value,
+                deadline,
+                v,
+                r,
+                s,
+                &mut self.erc20,
+                &mut self.nonces,
+            )
+        }
+    }
+
+    #[public]
+    #[implements(INonces, IErc20Permit<Error = Error>)]
+    impl PermitExample {}
+
+    #[public]
+    impl INonces for PermitExample {
+        fn nonces(&self, owner: Address) -> U256 {
+            self.nonces.nonces(owner)
+        }
+    }
+
+    #[public]
+    impl IErc20Permit for PermitExample {
+        type Error = Error;
+
+        #[selector(name = "DOMAIN_SEPARATOR")]
+        fn domain_separator(&self) -> B256 {
+            self.permit.domain_separator()
+        }
+
         fn permit(
             &mut self,
             owner: Address,
@@ -381,6 +427,23 @@ mod tests {
             spender: bob,
             value,
         });
+    }
+
+    #[test]
+    fn interface_id_includes_domain_separator_nonces_and_permit() {
+        let actual = <PermitExample as IErc20Permit>::interface_id();
+        let expected: B32 = 0x9d8ff7da_u32.into();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn error_encodes_expired_signature_abi() {
+        let deadline = U256::from(99);
+        let encoded = <Error as MethodError>::encode(
+            ERC2612ExpiredSignature { deadline }.into(),
+        );
+        let expected = ERC2612ExpiredSignature { deadline }.abi_encode();
+        assert_eq!(encoded, expected);
     }
 
     #[openzeppelin_stylus_proc::vm_test]
