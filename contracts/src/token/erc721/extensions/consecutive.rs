@@ -48,6 +48,11 @@ use crate::{
 
 type StorageU96 = <S160 as Size>::KeyStorage;
 
+// Stylus SDK deploys constructor-bearing contracts through this helper, which
+// calls `stylus_constructor` after the contract code has been installed.
+const STYLUS_DEPLOYER: Address =
+    alloy_primitives::address!("0xcEcba2F1DC234f70Dd89F2041029807F8D03A990");
+
 pub use sol::*;
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -382,7 +387,10 @@ impl Erc721Consecutive {
 
         // Minting a batch of size 0 is a no-op.
         if batch_size > U96::ZERO {
-            if self.vm().code_size(self.vm().contract_address()) > 0 {
+            let vm = self.vm();
+            if vm.code_size(vm.contract_address()) > 0
+                && vm.msg_sender() != STYLUS_DEPLOYER
+            {
                 return Err(ERC721ForbiddenBatchMint {}.into());
             }
 
@@ -989,6 +997,7 @@ mod tests {
         contract.constructor();
 
         vm.set_code(vm.contract_address(), vec![0x00]);
+        vm.set_sender(Address::from([2; 20]));
 
         let err = contract
             ._mint_consecutive(Address::from([1; 20]), uint!(1_U96))
