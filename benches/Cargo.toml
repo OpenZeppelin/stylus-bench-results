@@ -14,7 +14,6 @@ stylus-sdk.workspace = true
 tokio.workspace = true
 futures.workspace = true
 eyre.workspace = true
-e2e.workspace = true
 serde = "1.0.203"
 keccak-const = "0.2.0"
 itertools = "0.13.0"
