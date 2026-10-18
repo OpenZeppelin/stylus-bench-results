@@ -12,9 +12,15 @@ alloy-primitives.workspace = true
 alloy-sol-types.workspace = true
 stylus-sdk.workspace = true
 
+[dev-dependencies]
+alloy.workspace = true
+eyre.workspace = true
+stylus-tools.workspace = true
+tokio.workspace = true
+
 [features]
 contract-client-gen = []
-integration-tests = []
+integration-tests = ["stylus-tools/integration-tests"]
 export-abi = ["stylus-sdk/export-abi"]
 
 [lib]
