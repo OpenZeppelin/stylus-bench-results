@@ -8,6 +8,7 @@
 //! [curve25519-dalek]: https://github.com/dalek-cryptography/curve25519-dalek
 
 #![allow(non_snake_case)]
+use num_traits::Zero;
 use sha2::{digest::Digest, Sha512};
 use static_assertions::const_assert;
 use zeroize::ZeroizeOnDrop;
@@ -345,6 +346,10 @@ impl VerifyingKey {
     /// Verify a signature on a message with this keypair's public key.
     #[must_use]
     pub fn is_valid(&self, message: &[u8], signature: &Signature) -> bool {
+        if self.point.is_zero() || signature.R.is_zero() {
+            return false;
+        }
+
         let expected_r = self.compute_R(signature, message);
         expected_r == signature.R
     }
