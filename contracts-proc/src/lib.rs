@@ -95,6 +95,18 @@ mod interface_id;
 ///     fn store(&self, value: B128);
 /// }
 /// ```
+///
+/// Generic ABI parameter types can be used in interfaces:
+///
+/// ```
+/// use openzeppelin_stylus_proc::interface_id;
+/// use stylus_sdk::abi::AbiType;
+///
+/// #[interface_id]
+/// trait GenericInterface<T: AbiType> {
+///     fn ping(&self, value: T);
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn interface_id(attr: TokenStream, input: TokenStream) -> TokenStream {
     interface_id::interface_id(&attr, input)
