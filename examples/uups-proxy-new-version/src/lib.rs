@@ -5,23 +5,21 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 
-use alloy_primitives::{uint, U32};
+use alloy_primitives::{U32, uint};
 use alloy_sol_types::SolCall;
 use openzeppelin_stylus::{
     access::ownable::{self, IOwnable, Ownable},
     proxy::{
         erc1967::{
-            self,
+            self, Erc1967Utils,
             utils::{ERC1967InvalidImplementation, IMPLEMENTATION_SLOT},
-            Erc1967Utils,
         },
         utils::{
             erc1822::{Erc1822ProxiableInterface, IErc1822Proxiable},
             uups_upgradeable::{
-                self, IUUPSUpgradeable, InvalidVersion,
-                UUPSUnauthorizedCallContext, UUPSUnsupportedProxiableUUID,
-                UUPSUpgradeableInterface, LOGIC_FLAG_SLOT,
-                UPGRADE_INTERFACE_VERSION,
+                self, IUUPSUpgradeable, InvalidVersion, LOGIC_FLAG_SLOT,
+                UPGRADE_INTERFACE_VERSION, UUPSUnauthorizedCallContext,
+                UUPSUnsupportedProxiableUUID, UUPSUpgradeableInterface,
             },
         },
     },
@@ -122,8 +120,9 @@ impl UUPSProxyErc20ExampleNewVersion {
         Ok(())
     }
 
-    fn mint(&mut self, to: Address, value: U256) -> Result<(), erc20::Error> {
-        self.erc20._mint(to, value)
+    fn mint(&mut self, to: Address, value: U256) -> Result<(), Vec<u8>> {
+        self.ownable.only_owner()?;
+        self.erc20._mint(to, value).map_err(Into::into)
     }
 
     fn initialize(&mut self, owner: Address) -> Result<(), Error> {
