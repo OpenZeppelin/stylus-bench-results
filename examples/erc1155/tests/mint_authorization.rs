@@ -13,12 +13,8 @@ mod abi;
 #[tokio::test]
 async fn constructor_assigns_ownership_to_deployment_signer() -> Result<()> {
     let alice = Account::new().await?;
-    let contract_address = alice
-        .as_deployer()
-        .with_signer(&alice)
-        .deploy()
-        .await?
-        .contract_address;
+    let contract_address =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155::new(contract_address, &alice.wallet);
 
     assert_eq!(alice.address(), contract.owner().call().await?);
@@ -30,12 +26,8 @@ async fn constructor_assigns_ownership_to_deployment_signer() -> Result<()> {
 async fn non_deployer_cannot_mint() -> Result<()> {
     let alice = Account::new().await?;
     let bob = Account::new().await?;
-    let contract_address = alice
-        .as_deployer()
-        .with_signer(&alice)
-        .deploy()
-        .await?
-        .contract_address;
+    let contract_address =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155::new(contract_address, &bob.wallet);
     let id = U256::from(7);
 
@@ -50,12 +42,8 @@ async fn non_deployer_cannot_mint() -> Result<()> {
 async fn non_deployer_cannot_mint_batch() -> Result<()> {
     let alice = Account::new().await?;
     let bob = Account::new().await?;
-    let contract_address = alice
-        .as_deployer()
-        .with_signer(&alice)
-        .deploy()
-        .await?
-        .contract_address;
+    let contract_address =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155::new(contract_address, &bob.wallet);
     let ids = vec![U256::from(7), U256::from(8)];
 

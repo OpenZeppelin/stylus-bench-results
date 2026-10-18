@@ -37,7 +37,7 @@ async fn constructs() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(
             "https://github.com/OpenZeppelin/rust-contracts-stylus",
         ))
@@ -66,7 +66,7 @@ async fn error_when_checking_token_uri_for_nonexistent_token(
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(""))
         .deploy()
         .await?
@@ -95,7 +95,7 @@ async fn return_empty_token_uri_when_without_base_uri_and_token_uri(
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(""))
         .deploy()
         .await?
@@ -123,7 +123,7 @@ async fn return_token_uri_with_base_uri_and_without_token_uri(
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(base_uri))
         .deploy()
         .await?
@@ -149,7 +149,7 @@ async fn return_token_uri_with_base_uri_and_token_uri() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(base_uri))
         .deploy()
         .await?
@@ -184,7 +184,7 @@ async fn set_token_uri_before_mint() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(base_uri))
         .deploy()
         .await?
@@ -228,7 +228,7 @@ async fn unauthorized_account_cannot_change_token_uri() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(""))
         .deploy()
         .await?
@@ -269,7 +269,7 @@ async fn return_token_uri_after_burn_and_remint() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(base_uri))
         .deploy()
         .await?
@@ -323,7 +323,7 @@ async fn unauthorized_burn_reverts_and_preserves_token() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(""))
         .deploy()
         .await?
@@ -355,7 +355,7 @@ async fn supports_interface() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(
             "https://github.com/OpenZeppelin/rust-contracts-stylus",
         ))

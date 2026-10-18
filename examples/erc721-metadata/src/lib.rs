@@ -41,8 +41,9 @@ impl Erc721MetadataExample {
         name: String,
         symbol: String,
         base_uri: String,
+        initial_owner: Address,
     ) -> Result<(), Vec<u8>> {
-        self.ownable.constructor(self.vm().msg_sender())?;
+        self.ownable.constructor(initial_owner)?;
         self.owner_initialized.set(true);
         self.metadata.constructor(name, symbol);
         self.metadata.base_uri.set_str(base_uri);

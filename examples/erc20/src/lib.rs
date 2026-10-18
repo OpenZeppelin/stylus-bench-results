@@ -105,8 +105,9 @@ impl Erc20Example {
         name: String,
         symbol: String,
         cap: U256,
+        initial_owner: Address,
     ) -> Result<(), Error> {
-        self.ownable.constructor(self.vm().msg_sender())?;
+        self.ownable.constructor(initial_owner)?;
         self.owner_initialized.set(true);
         self.metadata.constructor(name, symbol);
         self.capped.constructor(cap)?;

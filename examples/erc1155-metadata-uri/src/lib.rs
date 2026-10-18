@@ -37,8 +37,12 @@ struct Erc1155MetadataUriExample {
 #[implements(IErc1155<Error = erc1155::Error>, IErc1155MetadataUri, IErc165, IOwnable)]
 impl Erc1155MetadataUriExample {
     #[constructor]
-    fn constructor(&mut self, uri: String) -> Result<(), Vec<u8>> {
-        self.ownable.constructor(self.vm().msg_sender())?;
+    fn constructor(
+        &mut self,
+        uri: String,
+        initial_owner: Address,
+    ) -> Result<(), Vec<u8>> {
+        self.ownable.constructor(initial_owner)?;
         self.owner_initialized.set(true);
         self.metadata_uri.constructor(uri);
         Ok(())

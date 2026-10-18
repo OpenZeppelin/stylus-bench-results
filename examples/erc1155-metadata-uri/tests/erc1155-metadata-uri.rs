@@ -28,7 +28,7 @@ async fn uri_returns_metadata_uri_when_token_uri_is_not_set() -> eyre::Result<()
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(URI))
         .deploy()
         .await?
@@ -50,7 +50,7 @@ async fn uri_returns_empty_string_when_no_uri_is_set() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(""))
         .deploy()
         .await?
@@ -73,7 +73,7 @@ async fn uri_returns_concatenated_base_uri_and_token_uri() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(""))
         .deploy()
         .await?
@@ -106,7 +106,7 @@ async fn uri_returns_token_uri_when_base_uri_is_empty() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(""))
         .deploy()
         .await?
@@ -136,7 +136,7 @@ async fn uri_ignores_metadata_uri_when_token_uri_is_set() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(URI))
         .deploy()
         .await?
@@ -170,7 +170,7 @@ async fn unauthorized_account_cannot_change_token_uris() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(URI))
         .deploy()
         .await?

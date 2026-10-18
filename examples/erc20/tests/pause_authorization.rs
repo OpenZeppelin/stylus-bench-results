@@ -20,7 +20,7 @@ async fn non_admin_cannot_pause() -> Result<()> {
     let bob = Account::new().await?;
     let contract_address = admin
         .as_deployer()
-        .with_signer(&admin)
+        .with_owner(&admin)
         .with_constructor(deploy_args())
         .deploy()
         .await?
@@ -39,7 +39,7 @@ async fn non_admin_cannot_unpause() -> Result<()> {
     let bob = Account::new().await?;
     let contract_address = admin
         .as_deployer()
-        .with_signer(&admin)
+        .with_owner(&admin)
         .with_constructor(deploy_args())
         .deploy()
         .await?

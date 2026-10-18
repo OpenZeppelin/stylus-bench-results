@@ -32,9 +32,10 @@ impl Erc1967BeaconRollbackExample {
     pub fn constructor(
         &mut self,
         implementation: Address,
+        initial_owner: Address,
     ) -> Result<(), Vec<u8>> {
         self.implementation.set(implementation);
-        self.ownable.constructor(self.vm().msg_sender())?;
+        self.ownable.constructor(initial_owner)?;
         self.owner_initialized.set(true);
         Ok(())
     }

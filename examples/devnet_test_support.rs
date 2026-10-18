@@ -134,6 +134,7 @@ impl Account {
             constructor: None,
             example_name: None,
             signer: None,
+            initial_owner: None,
         }
     }
 }
@@ -373,6 +374,7 @@ pub struct Deployer {
     constructor: Option<Constructor>,
     example_name: Option<String>,
     signer: Option<PrivateKeySigner>,
+    initial_owner: Option<Address>,
 }
 
 impl Deployer {
@@ -390,11 +392,11 @@ impl Deployer {
         self
     }
 
-    /// Deploy using this account's signer, for tests that initialize an
-    /// administrator from the deployment sender.
+    /// Deploy with this account as the constructor's explicit owner argument.
     #[must_use]
-    pub fn with_signer(mut self, account: &Account) -> Self {
+    pub fn with_owner(mut self, account: &Account) -> Self {
         self.signer = Some(account.signer.clone());
+        self.initial_owner = Some(account.address());
         self
     }
 
@@ -414,9 +416,10 @@ impl Deployer {
         static NEXT_SALT: AtomicU64 = AtomicU64::new(1);
 
         // By default, cargo-stylus uses a fresh signer so its transaction
-        // cannot desynchronize a test account's cached nonce. Tests may opt
-        // into an account signer when ownership derives from msg.sender; that
-        // account must not have sent transactions through its wallet yet.
+        // cannot desynchronize a test account's cached nonce. Tests that need
+        // the deployer account to own the contract opt into its signer and
+        // pass that owner explicitly to the constructor. The account must not
+        // have sent transactions through its wallet yet.
         let deployer =
             self.signer.clone().unwrap_or_else(PrivateKeySigner::random);
         fund_address(&self.rpc_url, deployer.address(), DEPLOYER_FUNDING_WEI)
@@ -443,8 +446,16 @@ impl Deployer {
             .args(["--deployer-salt", &salt])
             .env("CARGO_TERM_COLOR", "never");
 
-        if let Some(constructor) = &self.constructor {
-            command.arg("--constructor-args").args(&constructor.args);
+        let mut constructor_args = self
+            .constructor
+            .as_ref()
+            .map(|constructor| constructor.args.clone())
+            .unwrap_or_default();
+        if let Some(owner) = self.initial_owner {
+            constructor_args.push(owner.to_string());
+        }
+        if !constructor_args.is_empty() {
+            command.arg("--constructor-args").args(&constructor_args);
         }
 
         let temporary_directory = workspace.join("target/stylus-tmp");

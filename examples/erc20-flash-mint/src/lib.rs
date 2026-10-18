@@ -31,8 +31,8 @@ struct Erc20FlashMintExample {
 #[implements(IErc20<Error = flash_mint::Error>, IErc3156FlashLender<Error = flash_mint::Error>, IErc165, IOwnable)]
 impl Erc20FlashMintExample {
     #[constructor]
-    fn constructor(&mut self) -> Result<(), Vec<u8>> {
-        self.ownable.constructor(self.vm().msg_sender())?;
+    fn constructor(&mut self, initial_owner: Address) -> Result<(), Vec<u8>> {
+        self.ownable.constructor(initial_owner)?;
         self.owner_initialized.set(true);
         Ok(())
     }

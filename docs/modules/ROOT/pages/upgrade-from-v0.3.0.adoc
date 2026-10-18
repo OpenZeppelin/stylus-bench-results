@@ -278,13 +278,12 @@ v0.3.0 accepted. The ERC-721 wrapper example has the ABI change listed below:
   `erc1155-supply`, and `erc721` examples now restrict their mint methods to
   the owner. ERC-20 `pause()` and `unpause()` are owner-only. ERC-1155
   `mintBatch` follows the same owner check as `mint`. These examples expose
-  `IOwnable` and a one-time `initializeOwner(address)`; their constructors set
-  the owner to the deployer for new deployments.
+  `IOwnable` and a one-time `initializeOwner(address)`; their constructors
+  accept an explicit final `initial_owner` argument for new deployments.
 * The `uups-proxy` V1 and V2 implementations restrict their example mint
   methods to the proxy owner. The `erc1967-beacon-rollback` fixture now
-  restricts `upgrade_beacon_to_and_call(address,bytes)` to its owner; its
-  constructor arguments and selector are unchanged. It exposes `IOwnable`
-  and `initializeOwner(address)` for old proxy state.
+  restricts `upgrade_beacon_to_and_call(address,bytes)` to its owner. It
+  exposes `IOwnable` and `initializeOwner(address)` for old proxy state.
 * Token, approval, permit, burn, vault withdrawal, and flash-loan repayment
   helpers validate local failure conditions before committing local state.
   Their successful ABI behavior and error types remain the same. When a helper
@@ -298,8 +297,27 @@ after their existing storage fields; no previous field is reordered. This
 applies to `basic/token`, `erc20`, `erc20-permit`, `erc1155`,
 `erc1155-supply`, `erc721`, `erc721-consecutive`, `erc721-metadata`,
 `erc1155-metadata-uri`, `erc20-flash-mint`, and
-`erc1967-beacon-rollback`. The UUPS examples already stored an owner. New
-deployments initialize owner state in their constructors. For an existing
+`erc1967-beacon-rollback`. The UUPS examples already stored an owner. SDK
+0.10 runs the Stylus constructor through the configured deployer contract, so
+`msg.sender()` there is the deployer contract rather than the EOA that signed
+the deployment transaction. These constructors take an explicit final
+`initial_owner` argument, preserving earlier constructor arguments in their
+original order:
+
+[cols="1,2",options="header"]
+|===
+|Example |Constructor arguments in the new version
+|`basic/token` |`name, symbol, initial_owner`
+|`erc20` |`name, symbol, cap, initial_owner`
+|`erc20-permit`, `erc1155`, `erc1155-supply`, `erc721`, `erc20-flash-mint` |`initial_owner`
+|`erc721-consecutive` |`receivers, amounts, first_consecutive_id, max_batch_size, initial_owner`
+|`erc721-metadata` |`name, symbol, base_uri, initial_owner`
+|`erc1155-metadata-uri` |`uri, initial_owner`
+|`erc1967-beacon-rollback` |`implementation, initial_owner`
+|===
+
+For an existing
+proxy
 proxy using one of these examples, invoke `initializeOwner(address)` through
 the proxy atomically with the implementation upgrade and pass the intended
 owner. The initializer is deliberately first-caller-wins and can be called

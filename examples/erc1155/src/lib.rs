@@ -29,8 +29,8 @@ struct Erc1155Example {
 #[implements(IErc1155<Error = erc1155::Error>, IErc1155Burnable<Error = erc1155::Error>, IErc165, IOwnable)]
 impl Erc1155Example {
     #[constructor]
-    fn constructor(&mut self) -> Result<(), Vec<u8>> {
-        self.ownable.constructor(self.vm().msg_sender())?;
+    fn constructor(&mut self, initial_owner: Address) -> Result<(), Vec<u8>> {
+        self.ownable.constructor(initial_owner)?;
         self.owner_initialized.set(true);
         Ok(())
     }

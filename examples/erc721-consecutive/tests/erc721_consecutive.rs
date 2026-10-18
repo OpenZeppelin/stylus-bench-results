@@ -44,6 +44,7 @@ async fn constructs() -> eyre::Result<()> {
     let amounts = vec![uint!(10_U96)];
     let receipt = alice
         .as_deployer()
+        .with_owner(&alice)
         .with_constructor(ctr(&receivers, &amounts))
         .deploy()
         .await?;
@@ -63,6 +64,7 @@ async fn sdk_constructor_route_mints_multiple_batches() -> eyre::Result<()> {
     let amounts = vec![uint!(2_U96), uint!(3_U96)];
     let receipt = alice
         .as_deployer()
+        .with_owner(&alice)
         .with_constructor(ctr(&receivers, &amounts))
         .deploy()
         .await?;
@@ -90,7 +92,7 @@ async fn mints() -> eyre::Result<()> {
     let amounts = vec![batch_size];
     let receipt = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(&receivers, &amounts))
         .deploy()
         .await?;
@@ -123,6 +125,7 @@ async fn error_when_to_is_zero() -> eyre::Result<()> {
     let amounts = vec![uint!(10_U96)];
     let err = alice
         .as_deployer()
+        .with_owner(&alice)
         .with_constructor(ctr(&receivers, &amounts))
         .deploy()
         .await
@@ -144,6 +147,7 @@ async fn error_when_exceed_batch_size() -> eyre::Result<()> {
     let amounts = vec![MAX_BATCH_SIZE + uint!(1_U96)];
     let err = alice
         .as_deployer()
+        .with_owner(&alice)
         .with_constructor(ctr(&receivers, &amounts))
         .deploy()
         .await
@@ -167,7 +171,7 @@ async fn transfers_from() -> eyre::Result<()> {
     // Deploy and mint batches of 1000 tokens to Alice and Bob.
     let receipt = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(&receivers, &amounts))
         .deploy()
         .await?;
@@ -213,7 +217,7 @@ async fn burns() -> eyre::Result<()> {
     // Mint batch of 1000 tokens to Alice.
     let receipt = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(&receivers, &amounts))
         .deploy()
         .await?;
@@ -281,6 +285,7 @@ async fn unauthorized_burn_reverts_and_preserves_consecutive_token(
     let amounts = vec![uint!(1_U96)];
     let contract_addr = alice
         .as_deployer()
+        .with_owner(&alice)
         .with_constructor(ctr(&receivers, &amounts))
         .deploy()
         .await?

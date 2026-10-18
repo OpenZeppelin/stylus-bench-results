@@ -35,8 +35,9 @@ impl Erc20Example {
         &mut self,
         name: String,
         symbol: String,
+        initial_owner: Address,
     ) -> Result<(), Vec<u8>> {
-        self.ownable.constructor(self.vm().msg_sender())?;
+        self.ownable.constructor(initial_owner)?;
         self.owner_initialized.set(true);
         self.metadata.constructor(name, symbol);
         Ok(())

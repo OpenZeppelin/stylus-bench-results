@@ -99,8 +99,8 @@ struct Erc721Example {
 #[implements(IErc721<Error = Error>, IErc721Burnable<Error = Error>, IErc721Enumerable<Error = Error>, IErc165, IOwnable)]
 impl Erc721Example {
     #[constructor]
-    fn constructor(&mut self) -> Result<(), Vec<u8>> {
-        self.ownable.constructor(self.vm().msg_sender())?;
+    fn constructor(&mut self, initial_owner: Address) -> Result<(), Vec<u8>> {
+        self.ownable.constructor(initial_owner)?;
         self.owner_initialized.set(true);
         Ok(())
     }

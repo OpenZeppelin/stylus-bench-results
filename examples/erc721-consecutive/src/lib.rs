@@ -37,8 +37,9 @@ impl Erc721ConsecutiveExample {
         amounts: Vec<U96>,
         first_consecutive_id: U96,
         max_batch_size: U96,
+        initial_owner: Address,
     ) -> Result<(), Vec<u8>> {
-        self.ownable.constructor(self.vm().msg_sender())?;
+        self.ownable.constructor(initial_owner)?;
         self.owner_initialized.set(true);
         self.erc721.first_consecutive_id.set(first_consecutive_id);
         self.erc721.max_batch_size.set(max_batch_size);

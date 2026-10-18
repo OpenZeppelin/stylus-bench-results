@@ -19,6 +19,7 @@ async fn invalid_beacon_implementation_reverts_and_preserves_beacon_slot(
     // This fixture has code and can serve as a valid implementation target.
     let implementation = alice
         .as_deployer()
+        .with_owner(&alice)
         .with_constructor(constructor!(no_code_address))
         .deploy()
         .await?
@@ -27,19 +28,21 @@ async fn invalid_beacon_implementation_reverts_and_preserves_beacon_slot(
     // The valid beacon points at code; the second fixture returns an EOA.
     let valid_beacon_address = alice
         .as_deployer()
+        .with_owner(&alice)
         .with_constructor(constructor!(implementation))
         .deploy()
         .await?
         .contract_address;
     let invalid_beacon_address = alice
         .as_deployer()
+        .with_owner(&alice)
         .with_constructor(constructor!(no_code_address))
         .deploy()
         .await?
         .contract_address;
     let target_address = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(constructor!(implementation))
         .deploy()
         .await?

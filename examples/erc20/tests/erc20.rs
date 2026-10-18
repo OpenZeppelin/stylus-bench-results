@@ -35,7 +35,7 @@ async fn constructs() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -65,7 +65,7 @@ async fn mints() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -101,7 +101,7 @@ async fn mints_rejects_invalid_receiver() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -135,7 +135,7 @@ async fn mints_rejects_overflow() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(max_cap))
         .deploy()
         .await?
@@ -173,7 +173,7 @@ async fn transfers() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -218,7 +218,7 @@ async fn transfer_rejects_insufficient_balance() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -262,7 +262,7 @@ async fn transfer_rejects_invalid_receiver() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -307,7 +307,7 @@ async fn approves() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -376,7 +376,7 @@ async fn approve_rejects_invalid_spender() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -430,7 +430,7 @@ async fn transfers_from() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -486,7 +486,7 @@ async fn transfer_from_reverts_insufficient_balance() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -542,7 +542,7 @@ async fn transfer_from_rejects_insufficient_allowance() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -598,7 +598,7 @@ async fn transfer_from_rejects_invalid_receiver() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -658,7 +658,7 @@ async fn burns() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -697,7 +697,7 @@ async fn burn_rejects_insufficient_balance() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -737,7 +737,7 @@ async fn burns_from() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -792,7 +792,7 @@ async fn burn_from_reverts_insufficient_balance() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -848,7 +848,7 @@ async fn burn_from_rejects_insufficient_allowance() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -907,7 +907,7 @@ async fn mint_rejects_exceeding_cap() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -947,7 +947,7 @@ async fn mint_rejects_when_cap_reached() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -987,7 +987,7 @@ async fn should_not_deploy_capped_with_invalid_cap() -> Result<()> {
     let invalid_cap = U256::ZERO;
     let err = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(invalid_cap))
         .deploy()
         .await
@@ -1013,7 +1013,7 @@ async fn pauses() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -1037,7 +1037,7 @@ async fn pause_reverts_in_paused_state() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -1061,7 +1061,7 @@ async fn unpauses() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -1087,7 +1087,7 @@ async fn unpause_reverts_in_unpaused_state() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -1113,7 +1113,7 @@ async fn error_when_burn_in_paused_state() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -1151,7 +1151,7 @@ async fn error_when_burn_from_in_paused_state() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -1203,7 +1203,7 @@ async fn error_when_mint_in_paused_state() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -1238,7 +1238,7 @@ async fn error_when_transfer_in_paused_state() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -1280,7 +1280,7 @@ async fn error_when_transfer_from() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?
@@ -1336,7 +1336,7 @@ async fn supports_interface() -> Result<()> {
 
     let contract_addr = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(default_ctr())
         .deploy()
         .await?

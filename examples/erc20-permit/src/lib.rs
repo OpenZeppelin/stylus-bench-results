@@ -42,8 +42,8 @@ impl IEip712 for Eip712 {
 #[implements(IErc20<Error = permit::Error>, INonces, IErc20Permit<Error = permit::Error>, IErc165, IOwnable)]
 impl Erc20PermitExample {
     #[constructor]
-    fn constructor(&mut self) -> Result<(), Vec<u8>> {
-        self.ownable.constructor(self.vm().msg_sender())?;
+    fn constructor(&mut self, initial_owner: Address) -> Result<(), Vec<u8>> {
+        self.ownable.constructor(initial_owner)?;
         self.owner_initialized.set(true);
         Ok(())
     }

@@ -20,7 +20,7 @@ async fn non_deployer_cannot_mint() -> Result<()> {
     let bob = Account::new().await?;
     let contract_address = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(deploy_args())
         .deploy()
         .await?

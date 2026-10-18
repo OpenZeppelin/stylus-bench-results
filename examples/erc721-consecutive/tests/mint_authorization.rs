@@ -40,7 +40,7 @@ async fn non_owner_cannot_mint() -> Result<()> {
     let amounts = vec![uint!(1_U96)];
     let contract_address = alice
         .as_deployer()
-        .with_signer(&alice)
+        .with_owner(&alice)
         .with_constructor(ctr(&receivers, &amounts))
         .deploy()
         .await?
