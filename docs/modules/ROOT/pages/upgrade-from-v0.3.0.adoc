@@ -58,9 +58,10 @@ access, testing, and deployment:
   checks. Keep selectors unique across the complete contract. Use
   concrete error types in public implementation signatures where ABI
   generation requires them.
-* ABI decoding validates input and rejects malformed encodings. Callers should
-  encode canonical Solidity ABI values rather than depend on permissive
-  decoding of malformed data.
+* ABI decoding uses validating variants and rejects malformed encodings,
+  including trailing bytes that the old decoding variants could ignore.
+  Callers should encode canonical Solidity ABI values and remove trailing
+  calldata and return bytes rather than depend on permissive decoding.
 * Large Wasm modules can deploy in fragments, including constructor execution.
   `cargo stylus deploy --wasm-file` can deploy a prebuilt artifact. The SDK
   tooling also fixes verification of fragmented deployments and supports
@@ -174,11 +175,12 @@ intend to deploy before submitting a proxy upgrade.
 `Erc721Enumerable` now records each owner's token count at the reserved inner
 mapping key `U256::MAX`; valid owner indices are always smaller than this key.
 This avoids adding a storage field that would change the surrounding contract's
-layout. The original zero-token sentinel bug is fixed. If a live v0.3.0
-enumerable proxy already owns token ID zero, its old mapping does not contain
-the new count metadata. Reconcile that owner's count during your application
-migration before relying on owner-index enumeration for token ID zero. Other
-stored token IDs remain readable without this count.
+layout. The original zero-token sentinel bug is fixed. The v0.3.0 layout did
+not store an owner count, so every owner who already held tokens when upgrading
+needs a count backfill before `token_of_owner_by_index` can be used. This also
+applies to owners whose tokens are all nonzero: the new implementation reads
+the count sentinel to validate every index. `token_by_index` continues to work
+because global enumeration already stores its length in `all_tokens`.
 
 UUPS example initializers reject repeat initialization while `set_version()`
 remains idempotent for existing upgrade flows. Consumer initializers must guard
