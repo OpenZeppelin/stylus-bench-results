@@ -7,11 +7,15 @@ sections before upgrading a live proxy.
 == Toolchain and dependencies
 
 Use stable Rust 1.91.0, the `wasm32-unknown-unknown` target, and Stylus SDK
-0.10.10. Keep Alloy primitive and Solidity ABI crates aligned with the SDK's
-Alloy 1.5.7 types; mixing versions can make ABI and storage types incompatible.
+0.10.10. The SDK's `alloy` facade is 1.7.3 and its primitive and Solidity ABI
+types are 1.5.7. Keep direct Alloy dependencies aligned with those versions;
+mixing primitive versions can make ABI and storage types incompatible.
 
-Add a workspace-level `Stylus.toml` and pin the optimizer recipe so local builds,
-deployment, and verification use the same artifact:
+Keep the workspace-level `Stylus.toml` as the source of optimizer defaults.
+Add an empty `[wasm-opt]` table to every contract crate's `Stylus.toml` to opt
+that crate in; without the contract-level table, SDK 0.10.10 does not run the
+optimizer for that contract. Pin the recipe so local builds, deployment, and
+verification use the same artifact:
 
 [source,toml]
 ----
@@ -22,8 +26,16 @@ version = "116"
 flags = ["--enable-bulk-memory", "-O3"]
 ----
 
-SDK 0.10.9 and later include this recipe in the project hash. Use the same
-configuration for every crate in a Cargo workspace.
+In each contract's `Stylus.toml`, the opt-in can inherit those workspace
+defaults:
+
+[source,toml]
+----
+[wasm-opt]
+----
+
+SDK 0.10.9 and later include the effective recipe in the project hash. Keep
+the optimizer settings consistent across contracts in a Cargo workspace.
 
 == SDK changes from 0.9.0 to 0.10.10
 
@@ -39,7 +51,11 @@ access, testing, and deployment:
   examples no longer use global host accessors.
 * Public routing traits use `#[public]`. The SDK now supports pure trait
   methods, nested structs and tuples in return values, associated types in ABI
-  export, and compile-time selector and constructor collision checks. Use
+  export, and compile-time selector and constructor collision checks. The
+  selector check compares actual four-byte selectors within one `#[public]`
+  block. It does not check collisions across separate public blocks or methods
+  inherited through `#[implements]`; client-generation builds also skip router
+  checks. Keep selectors unique across the complete contract. Use
   concrete error types in public implementation signatures where ABI
   generation requires them.
 * ABI decoding validates input and rejects malformed encodings. Callers should
@@ -49,22 +65,44 @@ access, testing, and deployment:
   `cargo stylus deploy --wasm-file` can deploy a prebuilt artifact. The SDK
   tooling also fixes verification of fragmented deployments and supports
   reproducible workspace builds in Docker.
-* `contract-client-gen` can generate typed clients from a public contract.
-  Enable a feature with that name on the contract crate and on the dependency
-  in the consumer crate when generated clients are useful.
+* SDK 0.10.10 detects when Stylus activation is paused on the target chain and
+  reports an `ActivationsPaused` error. Treat this as a chain deployment
+  condition and retry after activations resume; it is not a contract error.
+* Declare a package-level `contract-client-gen = []` feature on a contract
+  crate whose public API should be callable as a client, then enable that
+  feature on the dependency in the consumer's manifest. This build mode
+  replaces the contract entrypoint/router with client stubs, so do not deploy
+  an artifact built with this feature.
 * Storage cache flushing around high-level external calls provides storage
-  coherence across reentrancy. SDK 0.10.5 deprecated the `reentrant` feature
-  and `deny_reentrant` entrypoint guard. Remove the guard from consumer
-  contracts; it is not a replacement for checks-effects-interactions or
-  application-specific reentrancy protection.
+  coherence across reentrancy. SDK 0.10.5 deprecated its `reentrant` feature
+  and entrypoint guard, but SDK 0.10.10 still rejects reentrant entrypoint
+  calls unless the feature is enabled. For flows that require callbacks into
+  the contract, enable `openzeppelin-stylus`'s `reentrant` feature on the
+  consumer dependency. The FlashMint example does this because its borrower
+  approves repayment during the callback. Leave the feature disabled when a
+  contract does not need reentrant calls, and keep checks-effects-interactions
+  and application-specific reentrancy protection; cache flushing only keeps
+  storage coherent across external calls.
 * Mini-alloc is maintained as a separate crate. Keep the SDK's default
   allocator unless the contract deliberately supplies a different allocator.
-* The toolchain baseline is Rust 1.91.0. Keep `ruint` at 1.17.1 or later and
-  align Alloy primitive and ABI types with the SDK.
+  Several SDK host I/O helpers call `Vec::set_len` on fresh buffers, which is
+  sound only when their memory is zeroed. A custom allocator must zero new pages
+  or audit every SDK `set_len` call site for initialization safety.
+* The toolchain baseline is Rust 1.91.0. Keep `ruint` at 1.17.1 or later with
+  default features disabled so `std` does not leak into Wasm, and align Alloy
+  primitive and ABI types with the SDK.
+* SDK 0.10.2 pins `keccak` to 0.1.6 or later to avoid resolving the broken
+  0.1.5 release. Refresh and retain a lockfile at a compatible version. SDK
+  0.9.2 also fixed an Alloy Keccak test segfault relevant to crypto tests.
+* SDK 0.10.0 also added `cargo stylus codehash-keepalive` for contracts that
+  need their code hash kept available on-chain. This is an operator action for
+  deployed contracts, so the library does not invoke it during builds or tests.
 
-The SDK changelog has the release-by-release list, including storage-slot and
-codehash-keepalive tooling added in 0.10.0. Those features do not change this
-library's existing storage layout or runtime behavior. See the
+The SDK changelog has the release-by-release list, including custom storage
+slots and codehash-keepalive tooling added in 0.10.0. The storage-slot support
+is used by the library's typed proxy utilities; the keepalive command is an
+operator action. Neither changes this library's existing storage layout or
+runtime behavior. See the
 https://github.com/OffchainLabs/stylus-sdk-rs/blob/v0.10.10/CHANGELOG.md[SDK
 0.10.10 changelog] for the complete release history.
 
@@ -112,16 +150,19 @@ are valid. Do not expose delegation to an untrusted implementation address.
 
 == Testing
 
-Replace `motsu` tests with the SDK's `stylus-test` `TestVM`. Create contracts
-with `TestVMContract::<Contract>::new(...)`, set callers with `.sender(...)`,
-and use `.vm()` to configure host results, code, call mocks, and block values.
+Replace v0.3.0 mock-framework tests with the SDK's `stylus-test` `TestVM`.
+Create contracts with `TestVMContract::<Contract>::new(...)`, set callers with
+`.sender(...)`, and use `.vm()` to configure host results, code, call mocks,
+and block values.
 Add `stylus-test = "=0.10.10"` as a development dependency when tests use it.
 
-TestVM does not execute implementation bytecode through a delegate call. Keep
-unit tests for component logic, but test proxy fallback, UUPS upgrade, and
-constructor behavior against a Nitro devnode. The old `lib/e2e` and
-`lib/e2e-proc` crates have been removed. The examples use Tokio, Alloy, and
-`cargo stylus deploy` against the SDK devnet started by `scripts/devnet.sh`.
+TestVM does not execute implementation bytecode through a delegate call, and
+it does not emulate EVM transaction rollback when a method returns an error.
+Keep unit tests for component logic, but test proxy fallback, UUPS upgrade,
+constructor behavior, and state rollback against a Nitro devnode. The old
+`lib/e2e` and `lib/e2e-proc` crates have been removed. The examples use Tokio,
+Alloy, and `cargo stylus deploy` against the SDK devnet started by
+`scripts/devnet.sh`.
 
 == Storage and proxy upgrades
 
@@ -155,6 +196,37 @@ contract has no deployed code. A runtime call returns
 constructor; upgrades are runtime calls and cannot use this mint path. Use
 ordinary `_mint` after deployment.
 
+== Security behavior changes
+
+The migration includes security and correctness fixes that preserve the public
+ABI but intentionally reject or correct behavior that v0.3.0 accepted:
+
+* The EdDSA verifier rejects identity and small-order public keys or `R`
+  points. The example's ABI decoder also rejects non-canonical coordinate and
+  scalar encodings, including scalars at or above the Ed25519 subgroup order.
+  Consumers that decode their own key and signature formats should apply the
+  same checks before constructing verifier inputs.
+* ERC-721 enumeration now returns token ID zero correctly. Existing proxies
+  which minted token ID zero before upgrading need the owner's new enumeration
+  count initialized as described in the storage section below.
+* `_mint_consecutive` now returns `ERC721ForbiddenBatchMint` after deployment.
+  Move post-deployment minting to `_mint` and emit ordinary `Transfer` events.
+* The UUPS example rejects a second initializer call for the same implementation
+  version. Consumer initializers must likewise guard their own privileged state;
+  `set_version()` only tracks implementation versions and is not an owner-init
+  guard.
+* Token, approval, permit, burn, vault withdrawal, and flash-loan repayment
+  helpers validate local failure conditions before committing local state.
+  Their successful ABI behavior and error types remain the same. When a helper
+  invokes a receiver, callback, or external token, propagate its error so the
+  EVM rolls back the entire call; catching that error can still preserve earlier
+  writes across contracts.
+
+No storage field was added or reordered in the library or examples. The
+ERC-721 enumerable count uses an otherwise unused key in the existing nested
+mapping; the live-proxy migration note above is the only state reconciliation
+required by these fixes.
+
 == Build, deploy, and verify
 
 Use the pinned SDK tools and the workspace scripts:
@@ -181,8 +253,33 @@ exposure in the consuming contract, and route token policy through the shared
 update path. Like Solidity's `_update` hooks and Cairo's composable components,
 this keeps balance changes in one path. Rust consumers choose which storage
 components and public traits to compose; pause and mint permissions remain
-explicit application decisions. The SDK's `contract-client-gen` feature can
-generate typed clients from public contract crates.
+explicit application decisions. A contract crate's package-level
+`contract-client-gen` feature can generate typed clients from its public API;
+artifacts built with it are client stubs and must not be deployed.
+
+This composition model also reflects the useful parts of the other
+OpenZeppelin contract libraries while keeping Rust's storage and trait rules
+visible to consumers. Solidity centralizes token balance changes in
+`_update` hooks and composes behavior through inheritance;
+https://docs.openzeppelin.com/contracts/5.x/api/token/erc20[its ERC20
+extensions] are the reference for the shared update path. Cairo uses explicit
+storage components assembled into a contract with `component!`; see the
+https://docs.openzeppelin.com/contracts-cairo/3.x/components[Cairo component
+model]. Stellar Pausable uses an attribute macro to place checks around
+contract methods; see the
+https://docs.openzeppelin.com/stellar-contracts/utils/pausable[Stellar
+Pausable pattern]. Sui Move packages use objects and capabilities to make
+authority explicit; see
+https://docs.openzeppelin.com/contracts-sui/1.x/api/access[Sui access
+control].
+
+For this library, storage-bearing extensions remain ordinary Rust components
+and their public interfaces remain explicitly composed traits. Shared token
+state changes go through `_update`; extension policy checks belong before that
+write path. Authorization and entrypoint exposure stay in the consumer, so
+including a storage component cannot silently expose a privileged ABI method.
+This keeps composition inspectable in Rust and avoids hiding storage or
+authorization behavior behind inheritance or method attributes.
 
 As in Solidity, pause and unpause methods are not exposed by the Pausable
 component itself. A consumer must expose them and add its own authorization.
