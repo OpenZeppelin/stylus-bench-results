@@ -40,6 +40,9 @@ openzeppelin-stylus = "=0.3.0-rc.1"
 export-abi = ["openzeppelin-stylus/export-abi"]
 ```
 
+If you need typed Rust clients for calls to this contract from another Rust
+contract, enable `contract-client-gen` on the contract package.
+
 ## 🧱 `no_std` Projects
 
 This library is designed for `no_std` environments to reduce Wasm size.
@@ -101,7 +104,7 @@ impl IErc20 for Erc20Example {
         &mut self,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer(to, value)
     }
 
@@ -122,13 +125,16 @@ impl IErc20 for Erc20Example {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer_from(from, to, value)
     }
 }
 ```
 
 For a working demo with deployment and queries, check out the [basic] example.
+
+When upgrading an existing v0.3.0 contract, see the
+[upgrade guide](docs/modules/ROOT/pages/upgrade-from-v0.3.0.adoc).
 
 ## 📚 Resources
 

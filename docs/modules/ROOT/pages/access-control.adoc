@@ -64,11 +64,11 @@ impl IOwnable for MyContract {
     fn transfer_ownership(
         &mut self,
         new_owner: Address,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         Ok(self.ownable.transfer_ownership(new_owner)?)
     }
 
-    fn renounce_ownership(&mut self) -> Result<(), Self::Error> {
+    fn renounce_ownership(&mut self) -> Result<(), Error> {
         Ok(self.ownable.renounce_ownership()?)
     }
 }
@@ -188,7 +188,7 @@ impl IErc20 for Example {
         &mut self,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, Error> {
         Ok(self.erc20.transfer(to, value)?)
     }
 
@@ -200,7 +200,7 @@ impl IErc20 for Example {
         &mut self,
         spender: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, Error> {
         Ok(self.erc20.approve(spender, value)?)
     }
 
@@ -209,7 +209,7 @@ impl IErc20 for Example {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, Error> {
         Ok(self.erc20.transfer_from(from, to, value)?)
     }
 }
@@ -222,7 +222,7 @@ impl IAccessControl for Example {
         self.access.has_role(role, account)
     }
 
-    fn only_role(&self, role: B256) -> Result<(), Self::Error> {
+    fn only_role(&self, role: B256) -> Result<(), Error> {
         Ok(self.access.only_role(role)?)
     }
 
@@ -234,7 +234,7 @@ impl IAccessControl for Example {
         &mut self,
         role: B256,
         account: Address,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         Ok(self.access.grant_role(role, account)?)
     }
 
@@ -242,7 +242,7 @@ impl IAccessControl for Example {
         &mut self,
         role: B256,
         account: Address,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         Ok(self.access.revoke_role(role, account)?)
     }
 
@@ -250,7 +250,7 @@ impl IAccessControl for Example {
         &mut self,
         role: B256,
         confirmation: Address,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         Ok(self.access.renounce_role(role, confirmation)?)
     }
 }

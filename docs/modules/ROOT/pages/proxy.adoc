@@ -26,11 +26,15 @@ The `IProxy` trait provides the core functionality for implementing proxy patter
 [source,rust]
 ----
 use openzeppelin_stylus::proxy::IProxy;
-use stylus_sdk::prelude::*;
+use stylus_sdk::{
+    host::VM,
+    prelude::*,
+    stylus_core::calls::errors::Error,
+};
 
-pub unsafe trait IProxy: TopLevelStorage + Sized {
+pub unsafe trait IProxy: TopLevelStorage + HostAccess<Host = VM> + Sized {
     /// Delegates the current call to a specific implementation
-    fn delegate(
+    unsafe fn delegate(
         &mut self,
         implementation: Address,
         calldata: &[u8],
@@ -40,7 +44,7 @@ pub unsafe trait IProxy: TopLevelStorage + Sized {
     fn implementation(&self) -> Result<Address, Vec<u8>>;
 
     /// Fallback function that delegates calls to the implementation
-    fn do_fallback(&mut self, calldata: &[u8]) -> Result<Vec<u8>, Vec<u8>>;
+    unsafe fn do_fallback(&mut self, calldata: &[u8]) -> Result<Vec<u8>, Vec<u8>>;
 }
 ----
 
@@ -78,7 +82,7 @@ impl MyProxy {
     }
 }
 
-impl IProxy for MyProxy {
+unsafe impl IProxy for MyProxy {
     fn implementation(&self) -> Result<Address, Vec<u8>> {
         Ok(self.implementation.get())
     }
@@ -97,7 +101,7 @@ use openzeppelin_stylus::proxy::IProxy;
 use stylus_sdk::{
     alloy_primitives::Address,
     prelude::*,
-    storage::{StorageAddress, StorageBool},
+    storage::StorageAddress,
     ArbResult,
 };
 
@@ -140,11 +144,11 @@ impl MyUpgradeableProxy {
     /// Fallback function that delegates all calls to the implementation
     #[fallback]
     fn fallback(&mut self, calldata: &[u8]) -> ArbResult {
-        self.do_fallback(calldata)
+        unsafe { self.do_fallback(calldata) }
     }
 }
 
-impl IProxy for MyUpgradeableProxy {
+unsafe impl IProxy for MyUpgradeableProxy {
     fn implementation(&self) -> Result<Address, Vec<u8>> {
         let impl_addr = self.implementation.get();
         if impl_addr == Address::ZERO {
