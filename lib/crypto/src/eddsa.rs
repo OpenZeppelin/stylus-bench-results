@@ -420,6 +420,17 @@ mod test {
     }
 
     #[test]
+    fn rejects_identity_public_key_with_identity_signature() {
+        let verifying_key = VerifyingKey::from_affine(AffinePoint::zero());
+        let signature = Signature::from_affine_R_s(
+            AffinePoint::zero(),
+            Scalar::from_bigint(U256::ZERO),
+        );
+
+        assert!(!verifying_key.is_valid(b"any message", &signature));
+    }
+
+    #[test]
     fn sign_and_verify() {
         proptest!(|(secret_key: SecretKey, message: String, wrong_message: String)| {
             let signing_key = SigningKey::from_bytes(&secret_key);
