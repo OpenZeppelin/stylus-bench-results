@@ -1540,15 +1540,18 @@ async fn safe_mint_preserves_owner_enumeration_during_reentrancy(
     )
     .await?;
 
-    receipt!(contract.safeMint(
-        receiver_address,
-        outer_token_id,
-        Bytes::new()
-    ))?;
-
+    receipt!(contract.transferOwnership(receiver_address))?;
     let receiver_contract =
         receiver::ReentrantReceiver::new(receiver_address, &alice.wallet);
-    assert!(receiver_contract.nestedCallSucceeded().call().await?);
+    receipt!(receiver_contract.startMint(outer_token_id))?;
+    let nested_call_succeeded =
+        receiver_contract.nestedCallSucceeded().call().await?;
+    let nested_call_error = receiver_contract.nestedCallError().call().await?;
+    assert!(
+        nested_call_succeeded,
+        "nested mint failed: 0x{}",
+        alloy::hex::encode(nested_call_error)
+    );
 
     assert_eq!(
         uint!(2_U256),

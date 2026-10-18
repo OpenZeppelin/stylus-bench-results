@@ -1,19 +1,33 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.24;
 
-interface IERC721Minter {
-    function mint(address to, uint256 tokenId) external;
+interface IERC721Mint {
+    function safeMint(address to, uint256 tokenId, bytes calldata data) external;
 }
 
-contract ReentrantReceiver {
-    IERC721Minter private immutable token;
-    uint256 private immutable reentrantTokenId;
-    bool private entered;
-    bool public nestedCallSucceeded;
+interface IERC721Receiver {
+    function onERC721Received(
+        address operator,
+        address from,
+        uint256 tokenId,
+        bytes calldata data
+    ) external returns (bytes4);
+}
 
-    constructor(address token_, uint256 reentrantTokenId_) {
-        token = IERC721Minter(token_);
-        reentrantTokenId = reentrantTokenId_;
+contract ReentrantReceiver is IERC721Receiver {
+    IERC721Mint private immutable _token;
+    uint256 private immutable _reentrantTokenId;
+    bool public nestedCallSucceeded;
+    bytes public nestedCallError;
+    bool private _entered;
+
+    constructor(address token, uint256 reentrantTokenId) {
+        _token = IERC721Mint(token);
+        _reentrantTokenId = reentrantTokenId;
+    }
+
+    function startMint(uint256 tokenId) external {
+        _token.safeMint(address(this), tokenId, "");
     }
 
     function onERC721Received(
@@ -22,14 +36,15 @@ contract ReentrantReceiver {
         uint256,
         bytes calldata
     ) external returns (bytes4) {
-        if (!entered) {
-            entered = true;
-            try token.mint(address(this), reentrantTokenId) {
+        require(msg.sender == address(_token), "unexpected caller");
+        if (!_entered) {
+            _entered = true;
+            try _token.safeMint(address(this), _reentrantTokenId, "") {
                 nestedCallSucceeded = true;
-            } catch {
-                nestedCallSucceeded = false;
+            } catch (bytes memory reason) {
+                nestedCallError = reason;
             }
         }
-        return 0x150b7a02;
+        return IERC721Receiver.onERC721Received.selector;
     }
 }
