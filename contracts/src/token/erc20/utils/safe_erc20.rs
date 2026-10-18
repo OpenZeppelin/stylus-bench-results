@@ -12,7 +12,7 @@
 use alloc::{vec, vec::Vec};
 
 use alloy_primitives::{aliases::B32, Address, U256};
-use alloy_sol_types::{sol_data::Bool, SolCall, SolType};
+use alloy_sol_types::SolCall;
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
 use stylus_sdk::{
@@ -107,6 +107,7 @@ unsafe impl TopLevelStorage for SafeErc20 {}
 
 /// Required interface of a [`SafeErc20`] utility contract.
 #[interface_id]
+#[allow(missing_docs)]
 #[public]
 pub trait ISafeErc20 {
     /// The error type associated to this trait implementation.
@@ -370,7 +371,7 @@ impl ISafeErc20 for SafeErc20 {
         token: Address,
         to: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let call = IERC20::transferCall { to, value };
 
         self.call_optional_return(token, &call)
@@ -382,7 +383,7 @@ impl ISafeErc20 for SafeErc20 {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let call = IERC20::transferFromCall { from, to, value };
 
         self.call_optional_return(token, &call)
@@ -412,7 +413,7 @@ impl ISafeErc20 for SafeErc20 {
         token: Address,
         spender: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let current_allowance = self.allowance(token, spender)?;
         let new_allowance = current_allowance
             .checked_add(value)
@@ -425,7 +426,7 @@ impl ISafeErc20 for SafeErc20 {
         token: Address,
         spender: Address,
         requested_decrease: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let current_allowance = self.allowance(token, spender)?;
 
         if current_allowance < requested_decrease {
@@ -449,7 +450,7 @@ impl ISafeErc20 for SafeErc20 {
         token: Address,
         spender: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let approve_call = IERC20::approveCall { spender, value };
 
         // Try performing the approval with the desired value.
@@ -471,7 +472,7 @@ impl ISafeErc20 for SafeErc20 {
         to: Address,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         if self.vm().code_size(to) == 0 {
             return self.safe_transfer(token, to, value);
         }
@@ -506,7 +507,7 @@ impl ISafeErc20 for SafeErc20 {
         to: Address,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         if self.vm().code_size(to) == 0 {
             return self.safe_transfer_from(token, from, to, value);
         }
@@ -541,7 +542,7 @@ impl ISafeErc20 for SafeErc20 {
         spender: Address,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         if self.vm().code_size(spender) == 0 {
             return self.force_approve(token, spender, value);
         }
@@ -604,12 +605,7 @@ impl SafeErc20 {
         };
 
         match result {
-            Ok(data)
-                if data.is_empty()
-                    || Bool::abi_decode(&data).is_ok_and(|success| success) =>
-            {
-                Ok(())
-            }
+            Ok(data) if data.is_empty() || is_canonical_true(&data) => Ok(()),
             _ => Err(SafeErc20FailedOperation { token }.into()),
         }
     }
@@ -652,6 +648,16 @@ impl SafeErc20 {
     }
 }
 
+/// Whether return data is the canonical ABI encoding of `true`.
+///
+/// ABI boolean decoding may treat any nonzero word as `true`; token calls must
+/// return exactly the ABI word `1` to be accepted.
+fn is_canonical_true(data: &[u8]) -> bool {
+    data.len() == BOOL_TYPE_SIZE
+        && data[..BOOL_TYPE_SIZE - 1].iter().all(|byte| *byte == 0)
+        && data[BOOL_TYPE_SIZE - 1] == 1
+}
+
 #[public]
 impl IErc165 for SafeErc20 {
     fn supports_interface(&self, interface_id: B32) -> bool {
@@ -689,7 +695,7 @@ mod tests {
             token: Address,
             to: Address,
             value: U256,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), Error> {
             self.safe_erc20.safe_transfer(token, to, value)
         }
 
@@ -699,7 +705,7 @@ mod tests {
             from: Address,
             to: Address,
             value: U256,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), Error> {
             self.safe_erc20.safe_transfer_from(token, from, to, value)
         }
 
@@ -727,7 +733,7 @@ mod tests {
             token: Address,
             spender: Address,
             value: U256,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), Error> {
             self.safe_erc20.safe_increase_allowance(token, spender, value)
         }
 
@@ -736,7 +742,7 @@ mod tests {
             token: Address,
             spender: Address,
             requested_decrease: U256,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), Error> {
             self.safe_erc20.safe_decrease_allowance(
                 token,
                 spender,
@@ -749,7 +755,7 @@ mod tests {
             token: Address,
             spender: Address,
             value: U256,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), Error> {
             self.safe_erc20.force_approve(token, spender, value)
         }
 
@@ -759,7 +765,7 @@ mod tests {
             to: Address,
             value: U256,
             data: Bytes,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), Error> {
             self.safe_erc20.transfer_and_call_relaxed(token, to, value, data)
         }
 
@@ -770,7 +776,7 @@ mod tests {
             to: Address,
             value: U256,
             data: Bytes,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), Error> {
             self.safe_erc20
                 .transfer_from_and_call_relaxed(token, from, to, value, data)
         }
@@ -781,12 +787,13 @@ mod tests {
             spender: Address,
             value: U256,
             data: Bytes,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), Error> {
             self.safe_erc20
                 .approve_and_call_relaxed(token, spender, value, data)
         }
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn mock_transfer(vm: TestVM, token: Address, to: Address, value: U256) {
         let call = IERC20::transferCall { to, value };
         vm.mock_call(
@@ -797,6 +804,7 @@ mod tests {
         );
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn mock_transfer_from(
         vm: TestVM,
         token: Address,
