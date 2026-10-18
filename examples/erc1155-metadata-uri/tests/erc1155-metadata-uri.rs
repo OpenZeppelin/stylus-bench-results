@@ -3,7 +3,7 @@
 mod devnet_test_support;
 
 use crate::devnet_test_support::{
-    constructor, receipt, watch, Account, Constructor, EventExt,
+    constructor, receipt, send, watch, Account, Constructor, EventExt, Revert,
 };
 use abi::Erc1155;
 use alloy::primitives::U256;
@@ -154,6 +154,40 @@ async fn uri_ignores_metadata_uri_when_token_uri_is_set() -> eyre::Result<()> {
     let uri = contract.uri(token_id).call().await?;
 
     assert_eq!(expected_uri, uri);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn unauthorized_account_cannot_change_token_uris() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr = alice
+        .as_deployer()
+        .with_constructor(ctr(URI))
+        .deploy()
+        .await?
+        .contract_address;
+    let contract_alice = Erc1155::new(contract_addr, &alice.wallet);
+    let contract_bob = Erc1155::new(contract_addr, &bob.wallet);
+    let token_id = U256::from(1);
+
+    let err =
+        send!(contract_bob
+            .setTokenURI(token_id, "attacker/metadata.json".to_owned()))
+        .expect_err("an unrelated account must not replace a token URI");
+    assert!(err.reverted_with(Erc1155::OwnableUnauthorizedAccount {
+        account: bob.address(),
+    }));
+
+    let err =
+        send!(contract_bob.setBaseURI("https://attacker.invalid/".to_owned()))
+            .expect_err("an unrelated account must not replace the base URI");
+    assert!(err.reverted_with(Erc1155::OwnableUnauthorizedAccount {
+        account: bob.address(),
+    }));
+    assert_eq!(contract_alice.uri(token_id).call().await?, URI);
 
     Ok(())
 }
