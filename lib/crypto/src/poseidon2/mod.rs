@@ -395,6 +395,35 @@ mod tests {
         },
     };
 
+    static T16_DIAG: [FpBLS12; 16] = [FpBLS12::ONE; 16];
+    static T16_ROUND: [FpBLS12; 16] = [FpBLS12::ZERO; 16];
+    static T16_ROUNDS: [&[FpBLS12]; 3] = [&T16_ROUND, &T16_ROUND, &T16_ROUND];
+    static T20_DIAG: [FpBLS12; 20] = [FpBLS12::ONE; 20];
+    static T20_ROUND: [FpBLS12; 20] = [FpBLS12::ZERO; 20];
+    static T20_ROUNDS: [&[FpBLS12]; 3] = [&T20_ROUND, &T20_ROUND, &T20_ROUND];
+
+    struct SupportedStateSize16;
+    impl PoseidonParams<FpBLS12> for SupportedStateSize16 {
+        const T: usize = 16;
+        const D: u8 = 1;
+        const CAPACITY: usize = 1;
+        const ROUNDS_F: usize = 2;
+        const ROUNDS_P: usize = 1;
+        const MAT_INTERNAL_DIAG_M_1: &'static [FpBLS12] = &T16_DIAG;
+        const ROUND_CONSTANTS: &'static [&'static [FpBLS12]] = &T16_ROUNDS;
+    }
+
+    struct SupportedStateSize20;
+    impl PoseidonParams<FpBLS12> for SupportedStateSize20 {
+        const T: usize = 20;
+        const D: u8 = 1;
+        const CAPACITY: usize = 1;
+        const ROUNDS_F: usize = 2;
+        const ROUNDS_P: usize = 1;
+        const MAT_INTERNAL_DIAG_M_1: &'static [FpBLS12] = &T20_DIAG;
+        const ROUND_CONSTANTS: &'static [&'static [FpBLS12]] = &T20_ROUNDS;
+    }
+
     struct UnsupportedStateSize;
 
     impl PoseidonParams<FpBLS12> for UnsupportedStateSize {
@@ -471,6 +500,21 @@ mod tests {
         let individual_output: Vec<_> =
             (0..20).map(|_| individual.squeeze()).collect();
         assert_eq!(batch_output, individual_output);
+    }
+
+    #[test]
+    fn supported_wide_state_sizes_run_external_and_internal_matrices() {
+        fn exercise<P: PoseidonParams<FpBLS12>>() {
+            let mut sponge = Poseidon2::<P, FpBLS12>::new();
+            sponge.absorb(&FpBLS12::from(9u64));
+            sponge.permute();
+
+            assert_eq!(sponge.state.len(), P::T);
+            assert!(sponge.state.iter().any(|value| *value != FpBLS12::ZERO));
+        }
+
+        exercise::<SupportedStateSize16>();
+        exercise::<SupportedStateSize20>();
     }
 
     #[test]

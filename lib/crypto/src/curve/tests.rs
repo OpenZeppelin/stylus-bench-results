@@ -403,8 +403,23 @@ fn short_weierstrass_affine_and_projective_traits_cover_edges() {
 
     let projective_generator = SWProjective::<Secp256k1Config>::generator();
     assert_eq!(projective_generator, generator.into_group());
+    assert_ne!(projective_generator, projective_identity);
+    assert_ne!(projective_identity, projective_generator);
     assert_eq!(format!("{projective_generator}"), format!("{generator}"));
     assert!(format!("{projective_generator:?}").starts_with('('));
+    assert_eq!(
+        projective_generator - generator,
+        SWProjective::<Secp256k1Config>::zero()
+    );
+    assert_eq!(
+        projective_generator - &generator,
+        SWProjective::<Secp256k1Config>::zero()
+    );
+    assert_eq!(
+        projective_generator - &projective_generator,
+        SWProjective::<Secp256k1Config>::zero()
+    );
+    assert_eq!(projective_generator - &doubled_group, -projective_generator);
 
     let scaled = SWProjective::<Secp256k1Config>::new_unchecked(
         projective_generator.x * Secp256k1Fq::from(4u64).square(),

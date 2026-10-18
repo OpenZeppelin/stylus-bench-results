@@ -1271,6 +1271,10 @@ mod tests {
         assert_eq!(sum, a);
         sum += &b_mut;
         assert_eq!(sum, expected_sum);
+        sum -= &b_mut;
+        assert_eq!(sum, a);
+        sum += &mut b_mut;
+        assert_eq!(sum, expected_sum);
         sum -= &mut b_mut;
         assert_eq!(sum, a);
 

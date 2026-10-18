@@ -1645,7 +1645,64 @@ mod test {
         assert!(
             std::panic::catch_unwind(|| from_str_radix::<4>("2", 1)).is_err()
         );
+        assert!(std::panic::catch_unwind(|| from_str_hex::<4>("")).is_err());
         assert!(std::panic::catch_unwind(|| from_str_hex::<4>("g")).is_err());
         assert!(std::panic::catch_unwind(|| from_str_hex::<4>("é")).is_err());
+    }
+
+    #[test]
+    fn ordering_and_checked_conversions_cover_limb_and_empty_bounds() {
+        // The low limb says `left > right`, but the high limb decides the
+        // numeric ordering. This checks that comparisons keep scanning limbs.
+        let left = Uint::<2>::new([u64::MAX, 0]);
+        let right = Uint::<2>::new([0, 1]);
+        assert!(left.lt(&right));
+        assert!(left.le(&right));
+        assert!(!left.gt(&right));
+        assert!(!left.ge(&right));
+        assert!(right.gt(&left));
+        assert!(right.ge(&left));
+        assert!(!right.lt(&left));
+        assert!(!right.le(&left));
+
+        assert_eq!(Uint::<2>::MAX.wrapping_add(&Uint::<2>::ONE), Uint::ZERO);
+        assert!(std::panic::catch_unwind(|| {
+            Uint::<2>::MAX.add(&Uint::<2>::ONE)
+        })
+        .is_err());
+        assert!(std::panic::catch_unwind(|| {
+            Uint::<2>::MAX.mul(&Uint::<2>::from_u64(2))
+        })
+        .is_err());
+
+        let value = Uint::<2>::from_u128((1u128 << 64) | 3);
+        assert_eq!(value.into_u128(), (1u128 << 64) | 3);
+
+        let no_limbs = Uint::<0>::new([]);
+        assert!(std::panic::catch_unwind(|| Uint::<0>::from_u8(1)).is_err());
+        assert!(std::panic::catch_unwind(|| Uint::<0>::from_u128(1)).is_err());
+        assert!(std::panic::catch_unwind(|| no_limbs.into_u8()).is_err());
+        assert!(std::panic::catch_unwind(|| no_limbs.into_u128()).is_err());
+    }
+
+    #[test]
+    fn bigint_trait_methods_and_hex_formatting_match_inherent_operations() {
+        let value = U256::new([1, 2, 3, 4]);
+        assert!(<U256 as BigInteger>::is_odd(&value));
+        assert!(!<U256 as BigInteger>::is_even(&value));
+        assert!(!<U256 as BigInteger>::is_zero(&value));
+        assert_eq!(<U256 as BigInteger>::num_bits(&value), value.num_bits());
+        assert_eq!(<U256 as BigInteger>::get_bit(&value, 0), value.get_bit(0));
+        assert_eq!(
+            <U256 as BigInteger>::get_bit(&value, U256::BITS),
+            value.get_bit(U256::BITS)
+        );
+        assert!(<U256 as BigInteger>::is_zero(&U256::ZERO));
+        assert!(<U256 as BigInteger>::is_even(&U256::ZERO));
+
+        let one_limb = Uint::<1>::new([0xabc]);
+        assert_eq!(format!("{one_limb:X}"), "0000000000000ABC");
+        assert_eq!(format!("{one_limb}"), "0000000000000ABC");
+        assert_eq!(format!("{one_limb:?}"), "0000000000000ABC");
     }
 }
