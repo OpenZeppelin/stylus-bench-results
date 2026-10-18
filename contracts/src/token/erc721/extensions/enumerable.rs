@@ -11,7 +11,7 @@
 
 use alloc::{vec, vec::Vec};
 
-use alloy_primitives::{aliases::B32, uint, Address, U256};
+use alloy_primitives::{uint, Address, U256};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
 use stylus_sdk::{
@@ -20,10 +20,7 @@ use stylus_sdk::{
     stylus_core::calls::errors::MethodError,
 };
 
-use crate::{
-    token::erc721::{self, IErc721},
-    utils::introspection::erc165::IErc165,
-};
+use crate::token::erc721::{self, Erc721, IErc721};
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -77,14 +74,11 @@ pub struct Erc721Enumerable {
     pub(crate) all_tokens: StorageVec<StorageU256>,
     /// Maps indices at `all_tokens` to tokens ids.
     pub(crate) all_tokens_index: StorageMap<U256, StorageU256>,
-    /// Tracks the initialized length of each owner's enumeration.
-    ///
-    /// This field is appended to preserve the layout of existing fields.
-    pub(crate) owned_tokens_count: StorageMap<Address, StorageU256>,
 }
 
 /// This is the interface of the optional `Enumerable` extension
-/// of the ERC-721 standard.
+/// of the ERC-721 standard. Implement it on the composed contract and forward
+/// `token_of_owner_by_index` with that contract's [`Erc721`] component.
 #[interface_id]
 #[allow(missing_docs)]
 #[public]
@@ -140,58 +134,46 @@ pub trait IErc721Enumerable {
     fn token_by_index(&self, index: U256) -> Result<U256, Self::Error>;
 }
 
-#[public]
-#[implements(IErc721Enumerable<Error = Error>, IErc165)]
-impl Erc721Enumerable {}
-
-#[public]
-impl IErc721Enumerable for Erc721Enumerable {
-    type Error = Error;
-
-    fn token_of_owner_by_index(
+impl Erc721Enumerable {
+    /// Returns the token at an owner index using the core ERC-721 balance as
+    /// the list length. The core reference keeps token ID zero distinguishable
+    /// from an unset mapping slot without adding storage or transfer writes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::OutOfBoundsIndex`] when `owner` has no token at
+    /// `index`.
+    pub fn token_of_owner_by_index(
         &self,
+        core: &Erc721,
         owner: Address,
         index: U256,
     ) -> Result<U256, Error> {
-        let token_count = self.owned_tokens_count.get(owner);
-        let token = self.owned_tokens.getter(owner).get(index);
-
-        let is_out_of_bounds = if token_count.is_zero() {
-            // A zero count is also the default value for contracts deployed
-            // before this length was tracked. Preserve their non-zero entries.
-            token.is_zero()
-        } else {
-            index >= token_count
-        };
-
-        if is_out_of_bounds {
-            Err(ERC721OutOfBoundsIndex { owner, index }.into())
-        } else {
-            Ok(token)
+        if index >= core.balances.get(owner) {
+            return Err(ERC721OutOfBoundsIndex { owner, index }.into());
         }
+
+        Ok(self.owned_tokens.getter(owner).get(index))
     }
 
-    fn total_supply(&self) -> U256 {
-        let tokens_length = self.all_tokens.len();
-        U256::from(tokens_length)
+    /// Returns the number of tokens in the global enumeration.
+    #[must_use]
+    pub fn total_supply(&self) -> U256 {
+        U256::from(self.all_tokens.len())
     }
 
-    fn token_by_index(&self, index: U256) -> Result<U256, Error> {
+    /// Returns the token at `index` in the global enumeration.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::OutOfBoundsIndex`] when `index` is outside the token
+    /// list.
+    pub fn token_by_index(&self, index: U256) -> Result<U256, Error> {
         self.all_tokens.get(index).ok_or(
             ERC721OutOfBoundsIndex { owner: Address::ZERO, index }.into(),
         )
     }
-}
 
-#[public]
-impl IErc165 for Erc721Enumerable {
-    fn supports_interface(&self, interface_id: B32) -> bool {
-        <Self as IErc721Enumerable>::interface_id() == interface_id
-            || <Self as IErc165>::interface_id() == interface_id
-    }
-}
-
-impl Erc721Enumerable {
     /// Function to add a token to this extension's
     /// ownership-tracking data structures.
     ///
@@ -216,7 +198,6 @@ impl Erc721Enumerable {
         let length = erc721.balance_of(to)? - uint!(1_U256);
         self.owned_tokens.setter(to).setter(length).set(token_id);
         self.owned_tokens_index.setter(token_id).set(length);
-        self.owned_tokens_count.setter(to).set(length + U256::ONE);
 
         Ok(())
     }
@@ -287,7 +268,6 @@ impl Erc721Enumerable {
         // This also deletes the contents at the last position of the array.
         self.owned_tokens_index.delete(token_id);
         owned_tokens_by_owner.delete(last_token_index);
-        self.owned_tokens_count.setter(from).set(last_token_index);
 
         Ok(())
     }
@@ -366,6 +346,8 @@ impl Erc721Enumerable {
 #[cfg(test)]
 mod tests {
     use crate::test_support::*;
+    use crate::utils::introspection::erc165::IErc165;
+    use alloy_primitives::aliases::B32;
     use stylus_sdk::prelude::*;
 
     use super::*;
@@ -398,7 +380,7 @@ mod tests {
             owner: Address,
             index: U256,
         ) -> Result<U256, Error> {
-            self.enumerable.token_of_owner_by_index(owner, index)
+            self.enumerable.token_of_owner_by_index(&self.erc721, owner, index)
         }
     }
 
@@ -649,11 +631,16 @@ mod tests {
     }
 
     #[openzeppelin_stylus_proc::vm_test]
-    fn reads_legacy_owner_entries_without_a_count(
+    fn reads_legacy_owner_entries_after_upgrade(
         contract: Contract<Erc721EnumerableTestExample>,
         alice: Address,
     ) {
         let token_id = uint!(42_U256);
+        contract
+            .sender(alice)
+            .erc721
+            ._mint(alice, token_id)
+            .expect("should mint a token for the legacy owner");
         contract
             .sender(alice)
             .enumerable
@@ -807,7 +794,8 @@ mod tests {
 
     #[openzeppelin_stylus_proc::vm_test]
     fn interface_id() {
-        let actual = <Erc721Enumerable as IErc721Enumerable>::interface_id();
+        let actual =
+            <Erc721EnumerableTestExample as IErc721Enumerable>::interface_id();
         let expected: B32 = 0x780e9d63_u32.into();
         assert_eq!(actual, expected);
     }
@@ -817,12 +805,12 @@ mod tests {
         contract: Contract<Erc721EnumerableTestExample>,
         alice: Address,
     ) {
-        assert!(contract.sender(alice).enumerable.supports_interface(
-            <Erc721Enumerable as IErc721Enumerable>::interface_id()
+        assert!(contract.sender(alice).supports_interface(
+            <Erc721EnumerableTestExample as IErc721Enumerable>::interface_id()
         ));
-        assert!(contract
-            .sender(alice)
-            .supports_interface(<Erc721Enumerable as IErc165>::interface_id()));
+        assert!(contract.sender(alice).supports_interface(
+            <Erc721EnumerableTestExample as IErc165>::interface_id()
+        ));
 
         let fake_interface_id: B32 = 0x12345678_u32.into();
         assert!(!contract.sender(alice).supports_interface(fake_interface_id));

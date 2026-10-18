@@ -267,7 +267,11 @@ impl IErc721Enumerable for Erc721Example {
         owner: Address,
         index: U256,
     ) -> Result<U256, Error> {
-        Ok(self.enumerable.token_of_owner_by_index(owner, index)?)
+        Ok(self.enumerable.token_of_owner_by_index(
+            &self.erc721,
+            owner,
+            index,
+        )?)
     }
 }
 
@@ -275,6 +279,6 @@ impl IErc721Enumerable for Erc721Example {
 impl IErc165 for Erc721Example {
     fn supports_interface(&self, interface_id: B32) -> bool {
         self.erc721.supports_interface(interface_id)
-            || self.enumerable.supports_interface(interface_id)
+            || <Self as IErc721Enumerable>::interface_id() == interface_id
     }
 }
