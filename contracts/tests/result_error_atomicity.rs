@@ -4,6 +4,8 @@
 //! public entry point. In that case the Stylus call does not revert those
 //! earlier storage writes, so library methods must validate before mutating.
 
+extern crate alloc;
+
 use alloy_primitives::{Address, B256, U256, address, keccak256, uint};
 use alloy_sol_types::{SolType, SolValue, sol};
 use openzeppelin_stylus::token::{
@@ -40,7 +42,6 @@ impl IEip712 for TestEip712 {
     const VERSION: &'static str = "1";
 }
 
-#[entrypoint]
 #[storage]
 struct TestPermitContract {
     erc20: Erc20,
