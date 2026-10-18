@@ -19,8 +19,12 @@ pub(crate) fn interface_id(
     let mut input = parse_macro_input!(input as ItemTrait);
 
     let unsafety = input.unsafety;
-    let mut selectors_map =
-        HashMap::<String, (String, proc_macro2::TokenStream)>::new();
+    let mut selectors_map = HashMap::<String, String>::new();
+    let mut selectors = Vec::<(
+        String,
+        proc_macro2::TokenStream,
+        proc_macro2::TokenStream,
+    )>::new();
 
     for item in &mut input.items {
         let TraitItem::Fn(func) = item else {
@@ -61,20 +65,29 @@ pub(crate) fn interface_id(
         let signature =
             format!("{}({})", solidity_fn_name, type_strings.join(","));
 
-        let selector = quote! { alloy_primitives::aliases::B32::new(stylus_sdk::function_selector!(#solidity_fn_name #(, #arg_types )*)) };
+        let selector_bytes = quote! {
+            stylus_sdk::function_selector!(#solidity_fn_name #(, #arg_types )*)
+        };
+        let selector = quote! {
+            alloy_primitives::aliases::B32::new(#selector_bytes)
+        };
+        let selector_value = quote! { u32::from_be_bytes(#selector_bytes) };
 
         // Store selector expression from every function in the trait.
         match selectors_map.get(&signature) {
-            Some((existing_rust_fn_name, _)) => {
+            Some(existing_rust_fn_name) => {
                 error!(
                     existing_rust_fn_name,
-                    "selector collision detected: function '{}' has the same selector as function '{}': {}",
+                    "duplicate Solidity signature: function '{}' has the same signature as function '{}': {}",
                     rust_fn_name,
                     existing_rust_fn_name,
                     signature,
                 );
             }
-            None => selectors_map.insert(signature, (rust_fn_name, selector)),
+            None => {
+                selectors_map.insert(signature, rust_fn_name.clone());
+                selectors.push((rust_fn_name, selector, selector_value));
+            }
         };
     }
 
@@ -92,11 +105,30 @@ pub(crate) fn interface_id(
         quote! { : #supertraits }
     };
 
-    let selectors = selectors_map.values().map(|(_, tokens)| tokens);
+    let selector_checks = selectors.iter().enumerate().flat_map(
+        |(left_index, (left_name, _, left_selector))| {
+            selectors.iter().skip(left_index + 1).map(
+                move |(right_name, _, right_selector)| {
+                    let message = format!(
+                        "selector collision detected between functions '{}' and '{}'",
+                        left_name, right_name
+                    );
+                    quote! {
+                        assert!(#left_selector != #right_selector, #message);
+                    }
+                },
+            )
+        },
+    );
+    let interface_id_selectors = selectors.iter().map(|(_, selector, _)| selector);
 
     // Keep the same trait with an additional associated function
     // `interface_id`.
     quote! {
+        const _: () = {
+            #(#selector_checks)*
+        };
+
         #(#attrs)*
         #vis #unsafety trait #name #generics #supertrait_tokens #where_clause {
             #(#trait_items)*
@@ -111,7 +143,7 @@ pub(crate) fn interface_id(
             where
                 Self: Sized,
             {
-                #(#selectors)^*
+                #(#interface_id_selectors)^*
             }
         }
     }
