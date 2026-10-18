@@ -8,12 +8,12 @@ Stylus enables high-performance smart contracts in Rust, compiled to WebAssembly
 
 - Security-first contracts, ported from the [`openzeppelin-contracts`] library.
 - Full support for `no_std` Rust environments.
-- Ready-to-use [unit] and [integration] testing helpers, used in our own tests.
+- Ready-to-use [SDK unit testing] and [local devnet testing] workflows, used in our own tests.
 - Familiar, well-documented contract APIs.
 
 [`openzeppelin-contracts`]: https://github.com/OpenZeppelin/openzeppelin-contracts
-[unit]: https://github.com/OpenZeppelin/stylus-test-helpers
-[integration]: ./lib/e2e/README.md
+[SDK unit testing]: https://docs.rs/stylus-test/0.10.10/stylus_test/vm/struct.TestVM.html
+[local devnet testing]: https://developer.arbitrum.io/stylus/fundamentals/testing-contracts
 
 ## 🚀 Usage
 
@@ -47,25 +47,20 @@ Ensure your dependencies also avoid the standard library:
 
 > ```toml
 > [dependencies]
-> alloy-primitives = { version = "=0.8.20", default-features = false }
-> stylus-sdk = "=0.9.0"
+> alloy-primitives = { version = "=1.5.7", default-features = false }
+> stylus-sdk = "=0.10.10"
 > ```
 
-## 🦀 Rust Nightly & WASM Builds
+## 🦀 Stable Rust & WASM Builds
 
-This library requires the **Rust nightly toolchain**, due to unstable flags used during compilation to reduce the Wasm size of Stylus contracts.
+This release uses stable Rust 1.91.0 and Stylus SDK 0.10.10. Install the `wasm32-unknown-unknown` target before building contracts.
 
-> ⚠️ Note: While nightly is pinned in this repository via [`rust-toolchain.toml`](./rust-toolchain.toml), this only affects local development **within this repo**.
-> We also include a [`config.toml`](./.cargo/config.toml) to define platform-specific compiler flags.
-
-End-users of the crate must **set their own nightly toolchain** when compiling projects that use `openzeppelin-stylus`.
+The example contracts pin Binaryen 116 and the optimizer recipe in `Stylus.toml`. `cargo-stylus` applies this recipe during deployment and verification.
 
 To compile contracts for Arbitrum Stylus, run:
 
 ```sh
-cargo build --release --target wasm32-unknown-unknown \
-  -Z build-std=std,panic_abort \
-  -Z build-std-features=panic_immediate_abort
+cargo build --release --target wasm32-unknown-unknown
 ```
 
 ## 🧪 Example: ERC20 Token
