@@ -1,4 +1,4 @@
-//! Regression PoCs for ERC-4626 decimal offsets that make a vault unusable.
+//! Regression `PoCs` for ERC-4626 decimal offsets that make a vault unusable.
 
 use alloy_primitives::{Address, U8};
 use openzeppelin_stylus::token::erc20::extensions::Erc4626;
@@ -23,8 +23,9 @@ fn constructor_does_not_store_offset_that_overflows_pow10() {
     let (_vm, mut vault) = vault_with_asset_decimals(18);
     let asset = Address::from([0x11; 20]);
 
-    let _ = vault.constructor(asset, U8::from(78));
+    let result = vault.constructor(asset, U8::from(78));
 
+    assert!(result.is_err());
     assert_eq!(U8::ZERO, vault._decimals_offset());
 }
 
@@ -33,7 +34,8 @@ fn constructor_does_not_store_offset_that_overflows_share_decimals() {
     let (_vm, mut vault) = vault_with_asset_decimals(u8::MAX);
     let asset = Address::from([0x11; 20]);
 
-    let _ = vault.constructor(asset, U8::from(1));
+    let result = vault.constructor(asset, U8::from(1));
 
+    assert!(result.is_err());
     assert_eq!(U8::ZERO, vault._decimals_offset());
 }

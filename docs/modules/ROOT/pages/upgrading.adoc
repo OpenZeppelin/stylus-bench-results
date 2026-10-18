@@ -12,17 +12,25 @@ Use stable Rust 1.91.0 and pin the SDK and command line tools to 0.10.10:
 ----
 [dependencies]
 stylus-sdk = "=0.10.10"
+alloy-primitives = "=1.5.7"
+alloy-sol-types = "=1.5.7"
 
 [dev-dependencies]
 stylus-tools = { version = "=0.10.10", features = ["integration-tests"] }
 ----
 
+The migration updates Alloy from 0.7 to 1.7 and its exposed primitive and
+Solidity ABI types from 0.8 to 1.5. Since contract APIs expose `Address`,
+`U256`, and Alloy-generated types, update any direct Alloy dependencies and
+`sol!` imports together. The workspace also requires `ruint` 1.17.1 or newer.
+
 The workspace now uses Cargo-aware `stylus-tools` projects. Each deployable
 example has its own `Stylus.toml`; add one to a consumer contract and use it for
-local activation and deployment. Binaryen optimization is pinned per project
-with `[wasm-opt]` so builds and verification use the same optimizer version and
-flags. If you copy an example configuration, keep the configured Binaryen
-version available in your build environment.
+local activation and deployment. SDK 0.10.9 added pinned Binaryen optimization
+recipes, but the SDK 0.10.10 devnet's Nitro parser rejects the `DataCountSection`
+emitted by Binaryen 116. The examples therefore leave `[wasm-opt]` unset and
+deploy the Rust compiler's Wasm output. Verify a pinned optimizer against the
+exact Nitro version used for deployment before adding it to a project.
 
 == VM accessors
 
@@ -35,12 +43,33 @@ with the corresponding method on `self.vm()`:
 
 |`msg::sender()` |`self.vm().msg_sender()`
 |`msg::value()` |`self.vm().msg_value()`
+|`contract::address()` |`self.vm().contract_address()`
+|`contract::balance()` |`self.vm().balance(self.vm().contract_address())`
+|`block::timestamp()` |`self.vm().block_timestamp()`
+|`block::number()` |`self.vm().block_number()`
+|`block::chainid()` |`self.vm().chain_id()`
+|`block::basefee()` |`self.vm().block_basefee()`
+|`block::coinbase()` |`self.vm().block_coinbase()`
+|`block::gaslimit()` |`self.vm().block_gas_limit()`
+|`tx::origin()` |`self.vm().tx_origin()`
+|`tx::gasprice()` |`self.vm().tx_gas_price()`
 |`evm::log(event)` |`self.vm().log(event)`
 |`Address::has_code()` |`self.vm().code_size(address) > 0`
 |===
 
 This makes the host dependency explicit and allows the same contract logic to
 run against the SDK `TestVM`.
+
+Traits that read VM state now require a host-aware contract context. `IEip712`
+inherits `HostAccess`; its `chain_id` and `contract_address` methods are
+instance methods, so replace `MyContract::chain_id()` and
+`MyContract::contract_address()` with `contract.chain_id()` and
+`contract.contract_address()`. `IProxy` now also requires
+`HostAccess<Host = VM>`, so update downstream unsafe implementations and pass
+the context to the ERC-1967 helpers that previously used static methods.
+`get_implementation`, `get_admin`, `get_beacon`, and `change_admin` take a
+context; `upgrade_to_and_call` and `upgrade_beacon_to_and_call` require their
+context type to implement `HostAccess<Host = VM>`.
 
 == Typed contract calls
 
@@ -119,15 +148,43 @@ on-chain contract.
 
 The old `lib/e2e` and `lib/e2e-proc` harnesses have been removed. Integration
 tests use the SDK's `stylus-tools` devnet runner. Run the repository E2E script
-to build, activate, and exercise the scenarios against the local devnet. When
-porting a consumer's own E2E tests, preserve both success and revert cases and
-deploy all participating contracts to the same devnet.
+to build, activate, and exercise the scenarios against the local devnet:
 
-SDK 0.10.5 deprecated the `reentrant` and `deny_reentrant` features. Remove
-those feature flags from Cargo manifests. Review any use of those macros
-individually: cache flushing preserves storage coherence, but it is not a
-reentrancy guard. Keep explicit checks-effects-interactions ordering and
-authorization for callbacks.
+[source,sh]
+----
+./scripts/e2e-tests.sh
+----
+
+The SDK runner starts a Nitro devnet through Docker/Testcontainers and may need
+to download its container image. Keep Docker running and allow image access.
+When porting a consumer's own E2E tests, preserve both success and revert cases
+and deploy all participating contracts to the same devnet. The test projects
+declare `contract-client-gen = []` so the SDK's generated-client feature cfg is
+recognized by Cargo; keep this feature declaration in copied templates.
+
+Use the repository scripts to check Wasm size and compare gas measurements:
+
+[source,sh]
+----
+./scripts/check-wasm.sh
+./scripts/bench.sh
+----
+
+Install `cargo-stylus` 0.10.10 for reproducible builds and local devnet
+activation. SDK 0.10.9 includes an optional optimizer version and flags in the
+project hash and uses the same recipe for deployment and verification; the
+examples omit that recipe because its Binaryen 116 output is rejected by the
+Nitro version bundled with SDK 0.10.10's devnet. SDK 0.10.10 reports paused
+Stylus activations as a distinct error; wait for activations to resume before
+running deployment or devnet activation checks.
+
+SDK 0.10.5 deprecated the `reentrant` and `deny_reentrant` features because
+SDK calls now flush the storage cache around external calls. New contracts do
+not need these flags or macros. The library keeps a compatibility feature for
+downstream manifests, but consumers should remove the flag when they migrate.
+Cache flushing preserves storage coherence; it does not block reentrant calls.
+Keep checks-effects-interactions ordering and callback authorization wherever
+the contract's invariants require them.
 
 == Storage layout changes
 
@@ -147,16 +204,55 @@ admin, and beacon values remain in their standard hashed slots.
 
 The ERC-721 consecutive extension now rejects `_mint_consecutive` after
 deployment with `ERC721ForbiddenBatchMint`, as required for constructor-only
-consecutive minting. Move batch mint calls into the constructor. This changes
-the error behavior for contracts that previously exposed this internal helper
-after deployment; it does not change the ABI of the standard ERC-721 functions.
+consecutive minting. The SDK installs code before invoking the constructor, so
+the extension also recognizes the SDK's canonical `StylusDeployer` caller as
+the construction context. Move batch mint calls into the constructor. This
+changes the error behavior for contracts that previously exposed this internal
+helper after deployment; it does not change the ABI of standard ERC-721
+functions.
 
 == ABI and behavior
 
-The migration keeps the token and proxy public selectors and event layouts,
-except where consumers intentionally adopt SDK selector changes. New error
-selectors are added for post-deployment consecutive mint rejection. The
-enumerable length tracking is internal storage and does not change ERC-721 ABI.
-Test wrapper and proxy integrations against the deployed implementation before
-upgrading, especially if application contracts override public methods or rely
-on malformed external ABI responses.
+Standard token and proxy selectors and event layouts remain unchanged. The
+SDK's selector collision checks may reject an application that previously
+compiled; resolve the collision without changing selectors that deployed
+clients rely on.
+
+The following observable behavior changes are intentional:
+
+* ERC-2981 uses a 10,000 denominator when fresh storage contains zero and uses
+  full-precision `sale_price * numerator / denominator` arithmetic. Queries
+  that previously divided by zero or overflowed now return a floored royalty.
+* Vesting schedules use full-precision multiplication and division, so large
+  representable allocations that previously overflowed now vest normally.
+* The ERC-721 wrapper rejects an underlying address with no code using
+  `ERC721UnsupportedToken` before deposits or withdrawals. Configure the
+  wrapper with a deployed ERC-721 contract.
+* ERC-20 wrapper and ERC-4626 deposits assume exact-transfer underlying tokens.
+  Fee-on-transfer and deflationary assets can leave shares underbacked and are
+  unsupported; choose an exact-transfer token before deploying a wrapper or
+  vault. This follows the same asset compatibility requirement as the
+  Solidity ERC-4626 implementation.
+* ERC-4626 construction now rejects decimal offsets when `10^offset` exceeds
+  `U256` or when asset decimals plus the offset exceeds `U8`, returning
+  `ERC4626InvalidDecimalsOffset`. Offsets above 77 are always invalid. This
+  guard applies when a constructor runs; it does not rewrite or validate the
+  stored offset of an existing proxy. Check existing vault storage before an
+  upgrade, and add a project-specific migration if it contains an invalid
+  offset.
+* When `Erc20Wrapper::_recover` cannot query the underlying token, the
+  `ERC20InvalidUnderlying` error now identifies the configured underlying
+  address in its argument. The error selector is unchanged.
+* EdDSA verification rejects identity or otherwise invalid public keys. Review
+  any consumer that accepted those keys under the old behavior.
+* `_mint_consecutive` after deployment now returns
+  `ERC721ForbiddenBatchMint`, as described above.
+* ERC-4626 conversions continue to follow the standard rounding direction and
+  can return zero shares for a small deposit. `previewDeposit` is only a
+  quotation; applications that require a minimum output must check a
+  caller-supplied share bound atomically with the deposit.
+
+The enumerable length tracking is internal storage and does not change ERC-721
+ABI. Test wrapper and proxy integrations against the deployed implementation
+before upgrading, especially if application contracts override public methods
+or rely on malformed external ABI responses.

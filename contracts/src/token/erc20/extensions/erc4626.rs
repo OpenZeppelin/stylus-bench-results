@@ -12,6 +12,15 @@
 //! deflationary assets are unsupported: deposits calculate shares from the
 //! requested amount even if the vault receives less, and withdrawals may
 //! deliver less than requested. Use an exact-transfer underlying asset.
+//!
+//! Do not combine [`Erc4626`] with [`super::Erc20FlashMint`] shares. Conversion
+//! math uses share `total_supply`, so flash-minted shares can temporarily
+//! change conversion prices during a callback without a matching change in
+//! vault assets. If a contract customizes a public max, preview, or conversion
+//! method, it must also implement the related operation so reported values and
+//! executed values stay consistent. The [`Erc4626::_deposit`] and
+//! [`Erc4626::_withdraw`] helpers support custom workflows while preserving
+//! the standard transfer, allowance, mint/burn, and event handling.
 
 use alloc::{vec, vec::Vec};
 
@@ -107,6 +116,12 @@ mod sol {
         #[derive(Debug)]
         #[allow(missing_docs)]
         error InvalidAsset(address asset);
+
+        /// The decimal offset cannot be represented by the vault's share
+        /// decimals or virtual share amount.
+        #[derive(Debug)]
+        #[allow(missing_docs)]
+        error ERC4626InvalidDecimalsOffset(uint8 offset, uint8 assetDecimals);
     }
 }
 
@@ -127,6 +142,9 @@ pub enum Error {
     ExceededMaxRedeem(ERC4626ExceededMaxRedeem),
     /// The address is not a valid ERC-20 token.
     InvalidAsset(InvalidAsset),
+    /// The decimal offset cannot be represented by the vault's share decimals
+    /// or virtual share amount.
+    InvalidDecimalsOffset(ERC4626InvalidDecimalsOffset),
     /// An operation with an ERC-20 token failed.
     SafeErc20FailedOperation(safe_erc20::SafeErc20FailedOperation),
     /// Indicates a failed [`ISafeErc20::safe_decrease_allowance`] request.
@@ -207,6 +225,7 @@ unsafe impl TopLevelStorage for Erc4626 {}
 
 /// ERC-4626 Tokenized Vault Standard Interface
 #[interface_id]
+#[allow(missing_docs)]
 #[public]
 pub trait IErc4626: IErc20Metadata {
     /// The error type associated to the trait implementation.
@@ -878,15 +897,39 @@ impl Erc4626 {
     ///
     /// * `&mut self` - Write access to the contract's state.
     /// * `asset` - The underlying vault asset.
-    /// * `decimals_offset` - The decimal offset of the vault shares.
+    /// * `decimals_offset` - The decimal offset of the vault shares. It must
+    ///   keep the share decimals within `u8` and `10^decimals_offset` within
+    ///   `U256`.
+    ///
+    /// # Errors
+    ///
+    /// * [`Error::InvalidDecimalsOffset`] - If the offset cannot be
+    ///   represented by the share decimals or virtual share amount.
     #[constructor]
-    pub fn constructor(&mut self, asset: Address, decimals_offset: U8) {
+    pub fn constructor(
+        &mut self,
+        asset: Address,
+        decimals_offset: U8,
+    ) -> Result<(), Error> {
         let underlying_decimals =
             self.try_get_asset_decimals(asset).unwrap_or(18);
+        let offset = decimals_offset.to::<u8>();
+        let share_decimals = underlying_decimals.checked_add(offset);
+        let virtual_shares = TEN.checked_pow(U256::from(offset));
+
+        if share_decimals.is_none() || virtual_shares.is_none() {
+            return Err(Error::InvalidDecimalsOffset(
+                ERC4626InvalidDecimalsOffset {
+                    offset,
+                    assetDecimals: underlying_decimals,
+                },
+            ));
+        }
 
         self.underlying_decimals.set(U8::from(underlying_decimals));
         self.asset.set(asset);
         self.decimals_offset.set(decimals_offset);
+        Ok(())
     }
 }
 
@@ -1154,11 +1197,10 @@ impl Erc4626 {
 //     }
 // }
 
-// TODO: Add missing tests once `motsu` supports calling external contracts.
 #[cfg(test)]
 mod tests {
+    use crate::test_support::*;
     use alloy_primitives::{address, aliases::B32, Address, U256, U8};
-    use motsu::prelude::*;
     use stylus_sdk::prelude::*;
 
     use super::*;
@@ -1189,15 +1231,15 @@ mod tests {
             self.erc4626.asset()
         }
 
-        fn total_assets(&self) -> Result<U256, Self::Error> {
+        fn total_assets(&self) -> Result<U256, Error> {
             self.erc4626.total_assets()
         }
 
-        fn convert_to_shares(&self, assets: U256) -> Result<U256, Self::Error> {
+        fn convert_to_shares(&self, assets: U256) -> Result<U256, Error> {
             self.erc4626.convert_to_shares(assets, &self.erc20)
         }
 
-        fn convert_to_assets(&self, shares: U256) -> Result<U256, Self::Error> {
+        fn convert_to_assets(&self, shares: U256) -> Result<U256, Error> {
             self.erc4626.convert_to_assets(shares, &self.erc20)
         }
 
@@ -1205,7 +1247,7 @@ mod tests {
             self.erc4626.max_deposit(receiver)
         }
 
-        fn preview_deposit(&self, assets: U256) -> Result<U256, Self::Error> {
+        fn preview_deposit(&self, assets: U256) -> Result<U256, Error> {
             self.erc4626.preview_deposit(assets, &self.erc20)
         }
 
@@ -1213,7 +1255,7 @@ mod tests {
             &mut self,
             assets: U256,
             receiver: Address,
-        ) -> Result<U256, Self::Error> {
+        ) -> Result<U256, Error> {
             self.erc4626.deposit(assets, receiver, &mut self.erc20)
         }
 
@@ -1221,7 +1263,7 @@ mod tests {
             self.erc4626.max_mint(receiver)
         }
 
-        fn preview_mint(&self, shares: U256) -> Result<U256, Self::Error> {
+        fn preview_mint(&self, shares: U256) -> Result<U256, Error> {
             self.erc4626.preview_mint(shares, &self.erc20)
         }
 
@@ -1229,15 +1271,15 @@ mod tests {
             &mut self,
             shares: U256,
             receiver: Address,
-        ) -> Result<U256, Self::Error> {
+        ) -> Result<U256, Error> {
             self.erc4626.mint(shares, receiver, &mut self.erc20)
         }
 
-        fn max_withdraw(&self, owner: Address) -> Result<U256, Self::Error> {
+        fn max_withdraw(&self, owner: Address) -> Result<U256, Error> {
             self.erc4626.max_withdraw(owner, &self.erc20)
         }
 
-        fn preview_withdraw(&self, assets: U256) -> Result<U256, Self::Error> {
+        fn preview_withdraw(&self, assets: U256) -> Result<U256, Error> {
             self.erc4626.preview_withdraw(assets, &self.erc20)
         }
 
@@ -1246,7 +1288,7 @@ mod tests {
             assets: U256,
             receiver: Address,
             owner: Address,
-        ) -> Result<U256, Self::Error> {
+        ) -> Result<U256, Error> {
             self.erc4626.withdraw(assets, receiver, owner, &mut self.erc20)
         }
 
@@ -1254,7 +1296,7 @@ mod tests {
             self.erc4626.max_redeem(owner, &self.erc20)
         }
 
-        fn preview_redeem(&self, shares: U256) -> Result<U256, Self::Error> {
+        fn preview_redeem(&self, shares: U256) -> Result<U256, Error> {
             self.erc4626.preview_redeem(shares, &self.erc20)
         }
 
@@ -1263,7 +1305,7 @@ mod tests {
             shares: U256,
             receiver: Address,
             owner: Address,
-        ) -> Result<U256, Self::Error> {
+        ) -> Result<U256, Error> {
             self.erc4626.redeem(shares, receiver, owner, &mut self.erc20)
         }
     }
@@ -1294,26 +1336,26 @@ mod tests {
 
     unsafe impl TopLevelStorage for Erc4626TestExample {}
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn asset_works(contract: Contract<Erc4626TestExample>, alice: Address) {
         let asset = address!("DeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF");
         contract.sender(alice).erc4626.asset.set(asset);
         assert_eq!(contract.sender(alice).erc4626.asset(), asset);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn max_deposit(contract: Contract<Erc4626TestExample>, alice: Address) {
         let max_deposit = contract.sender(alice).max_deposit(alice);
         assert_eq!(max_deposit, U256::MAX);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn max_mint(contract: Contract<Erc4626TestExample>, alice: Address) {
         let max_mint = contract.sender(alice).max_mint(alice);
         assert_eq!(max_mint, U256::MAX);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn max_redeem_works(
         contract: Contract<Erc4626TestExample>,
         alice: Address,
@@ -1323,12 +1365,12 @@ mod tests {
             .sender(alice)
             .erc20
             ._mint(alice, assets)
-            .motsu_expect("should mint assets");
+            .expect("should mint assets");
         let max_redeem = contract.sender(alice).max_redeem(alice);
         assert_eq!(assets, max_redeem);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn decimals_offset(contract: Contract<Erc4626TestExample>, alice: Address) {
         let decimals_offset = contract.sender(alice).erc4626._decimals_offset();
         assert_eq!(decimals_offset, U8::ZERO);
@@ -1340,7 +1382,7 @@ mod tests {
         assert_eq!(decimals_offset, new_decimal_offset);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn decimals(contract: Contract<Erc4626TestExample>, alice: Address) {
         let underlying_decimals = U8::from(17);
         contract
@@ -1358,7 +1400,7 @@ mod tests {
         assert_eq!(decimals, underlying_decimals + new_decimal_offset);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn interface_id() {
         let actual = <Erc4626TestExample as IErc4626>::interface_id();
         let expected: B32 = 0x87dfe5a0_u32.into();
