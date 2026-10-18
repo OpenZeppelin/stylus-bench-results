@@ -37,6 +37,37 @@ async fn constructs() -> Result<()> {
 }
 
 #[tokio::test]
+async fn unauthorized_account_cannot_change_flash_fee_configuration(
+) -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+    let contract_alice = Erc20FlashMint::new(contract_addr, &alice.wallet);
+    let contract_bob = Erc20FlashMint::new(contract_addr, &bob.wallet);
+    watch!(contract_alice.setFlashFeeReceiver(FEE_RECEIVER))?;
+    watch!(contract_alice.setFlashFeeValue(FLASH_FEE_VALUE))?;
+
+    let err = send!(contract_bob.setFlashFeeReceiver(bob.address()))
+        .expect_err("an unrelated account must not redirect flash fees");
+    assert!(err.reverted_with(Erc20FlashMint::OwnableUnauthorizedAccount {
+        account: bob.address(),
+    }));
+
+    let err = send!(contract_bob.setFlashFeeValue(U256::ZERO))
+        .expect_err("an unrelated account must not change flash fees");
+    assert!(err.reverted_with(Erc20FlashMint::OwnableUnauthorizedAccount {
+        account: bob.address(),
+    }));
+    assert_eq!(
+        contract_alice.flashFee(contract_addr, U256::from(1)).call().await?,
+        FLASH_FEE_VALUE
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn max_flash_loan() -> Result<()> {
     let alice = Account::new().await?;
 
