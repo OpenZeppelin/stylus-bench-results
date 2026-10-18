@@ -39,7 +39,13 @@ fn allows_consecutive_mint_during_construction() {
     contract
         ._mint_consecutive_batches([(RECIPIENT, uint!(1_U96))])
         .expect("constructor consecutive batch should succeed");
-    assert_eq!(contract.erc721.balance_of(RECIPIENT), uint!(1_U256));
+    assert_eq!(
+        contract
+            .erc721
+            .balance_of(RECIPIENT)
+            .expect("recipient balance query should succeed"),
+        uint!(1_U256)
+    );
 
     let expected = consecutive::ConsecutiveTransfer {
         from_token_id: U256::ZERO,
