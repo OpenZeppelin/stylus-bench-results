@@ -159,6 +159,9 @@ stop_devnet() {
   if [[ -z "${DEVNET_EXPLICIT_RPC_URL}" && "${RPC_URL:-}" == "${DEVNET_RPC_URL}" ]]; then
     unset RPC_URL
   fi
+  if [[ -z "${DEVNET_EXPLICIT_RPC_URL}" ]]; then
+    DEVNET_RPC_URL=""
+  fi
   unset DEVNET_PID
   DEVNET_STARTED_BY_CALLER=0
 }

@@ -18,15 +18,16 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-start_clean_devnet
-
 E2E_PACKAGES=()
 while IFS= read -r package; do
   E2E_PACKAGES+=("${package}")
 done < <(
   find examples -name Cargo.toml -print0 |
     while IFS= read -r -d '' manifest; do
-      if grep -Eq '^e2e[[:space:]]*=[[:space:]]*\[\]' "${manifest}"; then
+      if grep -Eq '^e2e[[:space:]]*=[[:space:]]*\[\]' "${manifest}" &&
+        [[ -d "$(dirname "${manifest}")/tests" ]] &&
+        find "$(dirname "${manifest}")/tests" -maxdepth 1 \
+          -type f -name '*.rs' -print -quit | grep -q .; then
         awk '
           /^\[package\]/ { package = 1; next }
           /^\[/ { package = 0 }
@@ -45,14 +46,18 @@ if [[ ${#E2E_PACKAGES[@]} -eq 0 ]]; then
   exit 1
 fi
 
-PACKAGE_ARGS=()
-for package in "${E2E_PACKAGES[@]}"; do
-  PACKAGE_ARGS+=(--package "${package}")
-done
-
 if [[ $# -eq 0 ]]; then
-  CARGO_PROFILE_DEV_PANIC=unwind cargo test --locked --features e2e \
-    "${PACKAGE_ARGS[@]}" --test '*' -- --test-threads=1
+  # Each example gets a fresh SDK-managed Nitro node. Long suites otherwise
+  # inherit fee-pricing state from earlier packages, which can make Stylus
+  # activation estimates nondeterministic for fragmented contracts.
+  for package in "${E2E_PACKAGES[@]}"; do
+    printf '\nRunning %s E2E tests on a fresh SDK devnet.\n' "${package}"
+    start_clean_devnet
+    CARGO_PROFILE_DEV_PANIC=unwind cargo test --locked --features e2e \
+      --package "${package}" --test '*' -- --test-threads=1
+    stop_devnet
+  done
 else
+  start_clean_devnet
   CARGO_PROFILE_DEV_PANIC=unwind cargo test --locked --features e2e "$@"
 fi
