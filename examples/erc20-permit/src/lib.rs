@@ -7,8 +7,8 @@ use alloy_primitives::{Address, B256, U256};
 use openzeppelin_stylus::{
     access::ownable::{self, IOwnable, Ownable},
     token::erc20::{
+        extensions::{permit, Erc20Permit, IErc20Permit},
         Erc20, IErc20,
-        extensions::{Erc20Permit, IErc20Permit, permit},
     },
     utils::{
         cryptography::eip712::IEip712,
@@ -179,7 +179,6 @@ impl IErc165 for Erc20PermitExample {
     fn supports_interface(&self, interface_id: B32) -> bool {
         Erc20::supports_interface(&self.erc20, interface_id)
             || <Self as IErc20Permit>::interface_id() == interface_id
-            || <Self as INonces>::interface_id() == interface_id
             || <Self as IOwnable>::interface_id() == interface_id
     }
 }

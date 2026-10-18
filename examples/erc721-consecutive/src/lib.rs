@@ -5,17 +5,18 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 use alloy_primitives::{
-    Address, U256,
     aliases::{B32, U96},
+    Address, U256,
 };
 use openzeppelin_stylus::{
     access::ownable::{self, IOwnable, Ownable},
     token::erc721::{
+        extensions::{consecutive, Erc721Consecutive, IErc721Burnable},
         IErc721,
-        extensions::{Erc721Consecutive, IErc721Burnable, consecutive},
     },
     utils::introspection::erc165::IErc165,
 };
+use stylus_sdk::prelude::errors::MethodError;
 use stylus_sdk::{abi::Bytes, prelude::*, storage::StorageBool};
 
 #[entrypoint]
@@ -45,7 +46,7 @@ impl Erc721ConsecutiveExample {
             ._mint_consecutive_batches(
                 receivers.iter().copied().zip(amounts.iter().copied()),
             )
-            .map_err(Into::into)?;
+            .map_err(|error| error.encode())?;
         Ok(())
     }
 
