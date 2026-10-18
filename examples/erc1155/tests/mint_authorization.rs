@@ -11,6 +11,22 @@ use eyre::Result;
 mod abi;
 
 #[tokio::test]
+async fn constructor_assigns_ownership_to_deployment_signer() -> Result<()> {
+    let alice = Account::new().await?;
+    let contract_address = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
+    let contract = Erc1155::new(contract_address, &alice.wallet);
+
+    assert_eq!(alice.address(), contract.owner().call().await?);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn non_deployer_cannot_mint() -> Result<()> {
     let alice = Account::new().await?;
     let bob = Account::new().await?;
