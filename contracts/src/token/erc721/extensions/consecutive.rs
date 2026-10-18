@@ -907,6 +907,34 @@ mod tests {
     }
 
     #[openzeppelin_stylus_proc::vm_test]
+    fn zero_sized_batch_preserves_the_next_id_and_balance(
+        contract: Contract<Erc721Consecutive>,
+        alice: Address,
+    ) {
+        contract.sender(alice).init(vec![alice], vec![uint!(3_U96)]);
+        let next_id = contract.sender(alice)._next_consecutive_id();
+        let balance = contract
+            .sender(alice)
+            .balance_of(alice)
+            .expect("should return the balance after batch mint");
+
+        let returned_id = contract
+            .sender(alice)
+            ._mint_consecutive(alice, U96::ZERO)
+            .expect("an empty batch should be a no-op");
+
+        assert_eq!(returned_id, next_id);
+        assert_eq!(contract.sender(alice)._next_consecutive_id(), next_id);
+        assert_eq!(
+            contract
+                .sender(alice)
+                .balance_of(alice)
+                .expect("should return the unchanged balance"),
+            balance
+        );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_minting_token_id_twice(
         contract: Contract<Erc721Consecutive>,
         alice: Address,
@@ -1476,6 +1504,30 @@ mod tests {
                 token_id: t_id
             }) if TOKEN_ID == t_id
         ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn get_approved_returns_token_approval(
+        contract: Contract<Erc721Consecutive>,
+        alice: Address,
+        bob: Address,
+    ) {
+        contract
+            .sender(alice)
+            ._mint(alice, TOKEN_ID)
+            .expect("should mint an individually owned token");
+        contract
+            .sender(alice)
+            .approve(bob, TOKEN_ID)
+            .expect("should approve Bob for the token");
+
+        assert_eq!(
+            contract
+                .sender(alice)
+                .get_approved(TOKEN_ID)
+                .expect("should return the token approval"),
+            bob
+        );
     }
 
     #[openzeppelin_stylus_proc::vm_test]

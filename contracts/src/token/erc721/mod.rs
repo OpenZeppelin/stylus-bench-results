@@ -1081,7 +1081,8 @@ mod tests {
         ERC721IncorrectOwner, ERC721InsufficientApproval,
         ERC721InvalidApprover, ERC721InvalidOperator, ERC721InvalidOwner,
         ERC721InvalidReceiver, ERC721InvalidSender, ERC721NonexistentToken,
-        Erc721, Error, IErc721, RECEIVER_FN_SELECTOR,
+        Erc721, Error, IErc721, InvalidReceiverWithReason,
+        RECEIVER_FN_SELECTOR,
     };
     use crate::utils::introspection::erc165::IErc165;
 
@@ -1996,6 +1997,12 @@ mod tests {
 
         let approved = contract.sender(alice)._get_approved(TOKEN_ID);
         assert_eq!(bob, approved);
+
+        let approved = contract
+            .sender(alice)
+            .get_approved(TOKEN_ID)
+            .expect("should return the approved address for an owned token");
+        assert_eq!(bob, approved);
     }
 
     #[openzeppelin_stylus_proc::vm_test]
@@ -2783,5 +2790,102 @@ mod tests {
             erc721.sender(alice).owner_of(TOKEN_ID).unwrap(),
             receiver.address()
         );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn safe_mint_bubbles_receiver_revert_reason(
+        erc721: Contract<Erc721>,
+        receiver: Contract<Erc721ReceiverMock>,
+        alice: Address,
+    ) {
+        let reason = b"receiver rejected".to_vec();
+        erc721.vm().mock_call(
+            receiver.address(),
+            Erc721ReceiverTest::onERC721ReceivedCall {
+                operator: alice,
+                from: Address::ZERO,
+                token_id: TOKEN_ID,
+                data: vec![].into(),
+            }
+            .abi_encode(),
+            U256::ZERO,
+            Err(reason),
+        );
+
+        let error = erc721
+            .sender(alice)
+            ._safe_mint(receiver.address(), TOKEN_ID, &vec![].into())
+            .expect_err("safe mint should bubble a receiver revert reason");
+
+        assert!(matches!(
+            error,
+            Error::InvalidReceiverWithReason(InvalidReceiverWithReason {
+                reason
+            }) if reason == "receiver rejected"
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn safe_mint_rejects_receiver_revert_without_reason(
+        erc721: Contract<Erc721>,
+        receiver: Contract<Erc721ReceiverMock>,
+        alice: Address,
+    ) {
+        erc721.vm().mock_call(
+            receiver.address(),
+            Erc721ReceiverTest::onERC721ReceivedCall {
+                operator: alice,
+                from: Address::ZERO,
+                token_id: TOKEN_ID,
+                data: vec![].into(),
+            }
+            .abi_encode(),
+            U256::ZERO,
+            Err(vec![]),
+        );
+
+        let error = erc721
+            .sender(alice)
+            ._safe_mint(receiver.address(), TOKEN_ID, &vec![].into())
+            .expect_err("safe mint should reject a reverting receiver");
+
+        assert!(matches!(
+            error,
+            Error::InvalidReceiver(ERC721InvalidReceiver { receiver: target })
+                if target == receiver.address()
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn safe_mint_rejects_receiver_with_wrong_selector(
+        erc721: Contract<Erc721>,
+        receiver: Contract<Erc721ReceiverMock>,
+        alice: Address,
+    ) {
+        erc721.vm().mock_call(
+            receiver.address(),
+            Erc721ReceiverTest::onERC721ReceivedCall {
+                operator: alice,
+                from: Address::ZERO,
+                token_id: TOKEN_ID,
+                data: vec![].into(),
+            }
+            .abi_encode(),
+            U256::ZERO,
+            Ok(fixed_bytes!("deadbeef").abi_encode()),
+        );
+
+        let error = erc721
+            .sender(alice)
+            ._safe_mint(receiver.address(), TOKEN_ID, &vec![].into())
+            .expect_err(
+                "safe mint should reject an incorrect receiver selector",
+            );
+
+        assert!(matches!(
+            error,
+            Error::InvalidReceiver(ERC721InvalidReceiver { receiver: target })
+                if target == receiver.address()
+        ));
     }
 }

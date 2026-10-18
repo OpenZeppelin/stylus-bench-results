@@ -597,7 +597,7 @@ mod tests {
     use test_contracts::*;
 
     use super::*;
-    use crate::token::erc20;
+    use crate::token::erc20::{self, IErc20};
 
     #[cfg_attr(coverage_nightly, coverage(off))]
     mod test_contracts {
@@ -924,6 +924,48 @@ mod tests {
     }
 
     #[openzeppelin_stylus_proc::vm_test]
+    fn uups_erc20_example_keeps_token_operations_available(
+        logic: Contract<UUPSErc20Example>,
+        alice: Address,
+        bob: Address,
+        carol: Address,
+    ) {
+        let minted = U256::from(100);
+        logic.sender(alice).constructor();
+        logic
+            .sender(alice)
+            .mint(alice, minted)
+            .expect("the implementation example should mint ERC-20 tokens");
+
+        assert_eq!(logic.sender(alice).total_supply(), minted);
+
+        let direct_transfer = U256::from(10);
+        assert!(logic
+            .sender(alice)
+            .transfer(carol, direct_transfer)
+            .expect("ERC-20 transfer should succeed"));
+
+        let delegated_transfer = U256::from(40);
+        logic
+            .sender(alice)
+            .approve(bob, delegated_transfer)
+            .expect("ERC-20 approval should succeed");
+        assert_eq!(
+            logic.sender(alice).allowance(alice, bob),
+            delegated_transfer
+        );
+        assert!(logic
+            .sender(bob)
+            .transfer_from(alice, bob, delegated_transfer)
+            .expect("approved transfer should succeed"));
+
+        assert_eq!(logic.sender(alice).balance_of(alice), U256::from(50));
+        assert_eq!(logic.sender(alice).balance_of(bob), delegated_transfer);
+        assert_eq!(logic.sender(alice).balance_of(carol), direct_transfer);
+        assert_eq!(logic.sender(alice).allowance(alice, bob), U256::ZERO);
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn upgrade_via_direct_call_reverts(
         logic: Contract<UUPSErc20Example>,
         logic_v2: Contract<UUPSErc20Example>,
@@ -951,6 +993,46 @@ mod tests {
             .proxiable_uuid()
             .expect("should be able to get proxiable uuid");
         assert_eq!(result, IMPLEMENTATION_SLOT);
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn fake_implementation_reports_its_unsupported_uuid(
+        invalid: Contract<FakeImplementation>,
+        alice: Address,
+    ) {
+        assert_eq!(
+            invalid.sender(alice).proxiable_uuid().unwrap(),
+            B256::from([0xFF; 32])
+        );
+    }
+
+    #[test]
+    fn conversion_preserves_non_upgrade_erc1967_errors() {
+        let admin = Address::from([0xA1; 20]);
+        let beacon = Address::from([0xB2; 20]);
+        let target = Address::from([0xC3; 20]);
+
+        assert!(matches!(
+            Error::from(erc1967::utils::Error::InvalidAdmin(
+                ERC1967InvalidAdmin { admin }
+            )),
+            Error::InvalidAdmin(ERC1967InvalidAdmin { admin: actual })
+                if actual == admin
+        ));
+        assert!(matches!(
+            Error::from(erc1967::utils::Error::InvalidBeacon(
+                ERC1967InvalidBeacon { beacon }
+            )),
+            Error::InvalidBeacon(ERC1967InvalidBeacon { beacon: actual })
+                if actual == beacon
+        ));
+        assert!(matches!(
+            Error::from(erc1967::utils::Error::EmptyCode(
+                address::AddressEmptyCode { target }
+            )),
+            Error::EmptyCode(address::AddressEmptyCode { target: actual })
+                if actual == target
+        ));
     }
 
     #[openzeppelin_stylus_proc::vm_test]
