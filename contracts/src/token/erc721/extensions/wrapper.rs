@@ -130,6 +130,7 @@ pub trait IErc721Wrapper: IErc721Receiver {
     ///
     /// # Errors
     ///
+    /// * [`Error::UnsupportedToken`] - If the underlying token has no code.
     /// * [`Error::Erc721FailedOperation`] - If the underlying token is not an
     ///   ERC-721 contract.
     /// * [`Error::InvalidReceiverWithReason`] - If an error occurs during
@@ -156,6 +157,7 @@ pub trait IErc721Wrapper: IErc721Receiver {
     ///
     /// # Errors
     ///
+    /// * [`Error::UnsupportedToken`] - If the underlying token has no code.
     /// * [`Error::Erc721FailedOperation`] - If the underlying token is not an
     ///   ERC-721 contract.
     /// * [`Error::InvalidReceiverWithReason`] - If an error occurs during
@@ -191,6 +193,17 @@ impl Erc721Wrapper {
         self.underlying.set(underlying_token);
     }
 
+    fn ensure_underlying_contract(&self) -> Result<Address, Error> {
+        let underlying = self.underlying();
+        if self.vm().code_size(underlying) == 0 {
+            return Err(Error::UnsupportedToken(ERC721UnsupportedToken {
+                token: underlying,
+            }));
+        }
+
+        Ok(underlying)
+    }
+
     /// Check [`IErc721Wrapper::deposit_for()`] for more information.
     #[allow(clippy::missing_errors_doc)]
     pub fn deposit_for(
@@ -201,7 +214,8 @@ impl Erc721Wrapper {
     ) -> Result<bool, Error> {
         let sender = self.vm().msg_sender();
         let contract_address = self.vm().contract_address();
-        let underlying = Erc721Interface::new(self.underlying());
+        let underlying_address = self.ensure_underlying_contract()?;
+        let underlying = Erc721Interface::new(underlying_address);
         let vm = self.vm().clone();
 
         for token_id in token_ids {
@@ -250,7 +264,8 @@ impl Erc721Wrapper {
     ) -> Result<bool, Error> {
         let sender = self.vm().msg_sender();
         let contract_address = self.vm().contract_address();
-        let underlying = Erc721Interface::new(self.underlying());
+        let underlying_address = self.ensure_underlying_contract()?;
+        let underlying = Erc721Interface::new(underlying_address);
         let vm = self.vm().clone();
 
         for token_id in token_ids {
@@ -302,8 +317,8 @@ impl Erc721Wrapper {
     ///
     /// # Errors
     ///
-    /// * [`Error::UnsupportedToken`] - If the caller is not the underlying
-    ///   token.
+    /// * [`Error::UnsupportedToken`] - If the underlying token has no code or
+    ///   the caller is not the underlying token.
     /// * [`Error::InvalidSender`] - If `token_id` already exists.
     /// * [`Error::InvalidReceiver`] - If `to` is [`Address::ZERO`].
     /// * [`Error::InvalidReceiver`] - If
@@ -317,6 +332,7 @@ impl Erc721Wrapper {
         _data: &Bytes,
         erc721: &mut Erc721,
     ) -> Result<B32, Error> {
+        self.ensure_underlying_contract()?;
         let sender = self.vm().msg_sender();
         if self.underlying() != sender {
             return Err(Error::UnsupportedToken(ERC721UnsupportedToken {
@@ -669,10 +685,10 @@ mod tests {
 
         contract.sender(alice).constructor(underlying);
 
-        let err = contract
-            .sender(alice)
-            .deposit_for(alice, token_ids)
-            .expect_err("an address without code cannot be an underlying token");
+        let err =
+            contract.sender(alice).deposit_for(alice, token_ids).expect_err(
+                "an address without code cannot be an underlying token",
+            );
         assert!(matches!(
             err,
             Error::UnsupportedToken(ERC721UnsupportedToken { token })
@@ -706,10 +722,9 @@ mod tests {
                 if token == underlying
         ));
         assert_eq!(
-            contract
-                .sender(alice)
-                .owner_of(token_id)
-                .expect("wrapped token should remain owned after failed withdrawal"),
+            contract.sender(alice).owner_of(token_id).expect(
+                "wrapped token should remain owned after failed withdrawal"
+            ),
             alice
         );
     }
@@ -727,12 +742,7 @@ mod tests {
 
         let err = contract
             .sender(underlying)
-            .on_erc721_received(
-                underlying,
-                alice,
-                token_id,
-                vec![].into(),
-            )
+            .on_erc721_received(underlying, alice, token_id, vec![].into())
             .expect_err("an address without code cannot mint a wrapped token");
         assert_eq!(
             err,
@@ -1057,6 +1067,7 @@ mod tests {
         let token_ids = random_token_ids(tokens);
 
         contract.sender(alice).constructor(erc721_contract.address());
+        mock_code(contract.vm(), erc721_contract.address());
 
         let err = contract
             .sender(alice)
@@ -1217,6 +1228,7 @@ mod tests {
         let token_id = random_token_ids(1)[0];
 
         contract.sender(alice).constructor(erc721_contract.address());
+        mock_code(contract.vm(), erc721_contract.address());
 
         let invalid_operator = alice;
 
@@ -1248,6 +1260,7 @@ mod tests {
         let token_id = random_token_ids(1)[0];
 
         contract.sender(alice).constructor(erc721_contract.address());
+        mock_code(contract.vm(), erc721_contract.address());
 
         // Mint an "unexpected" wrapped token.
         contract
@@ -1281,6 +1294,7 @@ mod tests {
         let token_id = random_token_ids(1)[0];
 
         contract.sender(alice).constructor(erc721_contract.address());
+        mock_code(contract.vm(), erc721_contract.address());
 
         let initial_wrapped_balance =
             contract.sender(alice).erc721.balance_of(alice).unwrap();
