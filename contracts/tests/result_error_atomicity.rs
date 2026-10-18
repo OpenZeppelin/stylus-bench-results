@@ -78,8 +78,8 @@ fn mock_recovered_signer(
     (v, r, s)
 }
 
-fn consumer_catches<T, E>(_result: Result<T, E>) -> Result<(), ()> {
-    Ok(())
+fn consumer_catches<T, E>(_result: Result<T, E>) {
+    // An application may discard the error and still return successfully.
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn erc721_duplicate_mint_error_does_not_transfer_existing_token() {
     let result = token._mint(BOB, token_id);
     assert!(matches!(result, Err(Erc721Error::InvalidSender(_))));
 
-    consumer_catches(result).unwrap();
+    consumer_catches(result);
     assert_eq!(token._owner_of(token_id), ALICE);
 }
 
@@ -106,7 +106,7 @@ fn erc721_incorrect_owner_internal_transfer_error_keeps_owner() {
     let result = token._transfer(OTHER, BOB, token_id);
     assert!(matches!(result, Err(Erc721Error::IncorrectOwner(_))));
 
-    consumer_catches(result).unwrap();
+    consumer_catches(result);
     assert_eq!(token._owner_of(token_id), ALICE);
 }
 
@@ -121,7 +121,7 @@ fn erc721_public_transfer_from_incorrect_owner_error_keeps_owner() {
     let result = IErc721::transfer_from(&mut token, OTHER, BOB, token_id);
     assert!(matches!(result, Err(Erc721Error::IncorrectOwner(_))));
 
-    consumer_catches(result).unwrap();
+    consumer_catches(result);
     assert_eq!(token._owner_of(token_id), ALICE);
 }
 
@@ -132,7 +132,7 @@ fn erc721_burning_nonexistent_token_error_emits_no_transfer() {
     let result = token._burn(uint!(20_U256));
     assert!(matches!(result, Err(Erc721Error::NonexistentToken(_))));
 
-    consumer_catches(result).unwrap();
+    consumer_catches(result);
     assert!(vm.get_emitted_logs().is_empty());
 }
 
@@ -158,7 +158,7 @@ fn erc1155_batch_later_insufficient_balance_error_keeps_earlier_balances() {
     );
     assert!(matches!(result, Err(Erc1155Error::InsufficientBalance(_))));
 
-    consumer_catches(result).unwrap();
+    consumer_catches(result);
     assert_eq!(token.balance_of(ALICE, first_id), uint!(5_U256));
     assert_eq!(token.balance_of(BOB, first_id), U256::ZERO);
 }
@@ -175,7 +175,7 @@ fn erc20_transfer_from_insufficient_balance_error_keeps_allowance() {
     let result = IErc20::transfer_from(&mut token, ALICE, BOB, amount);
     assert!(matches!(result, Err(Erc20Error::InsufficientBalance(_))));
 
-    consumer_catches(result).unwrap();
+    consumer_catches(result);
     assert_eq!(token.allowance(ALICE, SPENDER), amount);
 }
 
@@ -191,7 +191,7 @@ fn erc20_burn_from_insufficient_balance_error_keeps_allowance() {
     let result = IErc20Burnable::burn_from(&mut token, ALICE, amount);
     assert!(matches!(result, Err(Erc20Error::InsufficientBalance(_))));
 
-    consumer_catches(result).unwrap();
+    consumer_catches(result);
     assert_eq!(token.allowance(ALICE, SPENDER), amount);
 }
 
@@ -212,7 +212,7 @@ fn erc4626_withdraw_insufficient_balance_error_keeps_share_allowance() {
         Err(openzeppelin_stylus::token::erc20::extensions::erc4626::Error::InsufficientBalance(_))
     ));
 
-    consumer_catches(result).unwrap();
+    consumer_catches(result);
     assert_eq!(shares.allowance(ALICE, SPENDER), amount);
 }
 
@@ -246,7 +246,7 @@ fn erc20_permit_invalid_signer_error_keeps_nonce() {
     );
     assert!(matches!(result, Err(permit::Error::InvalidSigner(_))));
 
-    consumer_catches(result).unwrap();
+    consumer_catches(result);
     assert_eq!(contract.nonces.nonces(ALICE), U256::ZERO);
 }
 
@@ -280,6 +280,6 @@ fn erc20_permit_zero_spender_error_keeps_nonce() {
     );
     assert!(matches!(result, Err(permit::Error::InvalidSpender(_))));
 
-    consumer_catches(result).unwrap();
+    consumer_catches(result);
     assert_eq!(contract.nonces.nonces(ALICE), U256::ZERO);
 }

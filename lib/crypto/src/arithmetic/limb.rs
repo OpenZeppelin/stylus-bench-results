@@ -140,7 +140,10 @@ mod tests {
     fn reference_sub(a: Limb, b: Limb, borrow: bool) -> (Limb, bool) {
         let difference =
             i128::from(a) - i128::from(b) - i128::from(u8::from(borrow));
-        (difference as Limb, difference < 0)
+        let modulus = 1_i128 << Limb::BITS;
+        let wrapped_difference = Limb::try_from(difference.rem_euclid(modulus))
+            .expect("a limb-sized modular difference fits in a limb");
+        (wrapped_difference, difference < 0)
     }
 
     fn assert_add_matches_reference(a: Limb, b: Limb, carry: bool) {

@@ -1,4 +1,4 @@
-//! Regression coverage for the ERC721Consecutive constructor-only mint path.
+//! Regression coverage for the `ERC721Consecutive` constructor-only mint path.
 
 use alloy_primitives::{address, aliases::U96, uint, Address, U256};
 use alloy_sol_types::SolEvent;

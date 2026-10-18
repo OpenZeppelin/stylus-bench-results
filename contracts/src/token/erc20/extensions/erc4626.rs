@@ -1090,10 +1090,10 @@ impl Erc4626 {
         shares: U256,
         erc20: &mut Erc20,
     ) -> Result<(), Error> {
-        let remaining_allowance = if caller != owner {
-            Some(erc20._allowance_after_spending(owner, caller, shares)?)
-        } else {
+        let remaining_allowance = if caller == owner {
             None
+        } else {
+            Some(erc20._allowance_after_spending(owner, caller, shares)?)
         };
 
         // If asset() is ERC-777, `transfer` can trigger a reentrancy AFTER the

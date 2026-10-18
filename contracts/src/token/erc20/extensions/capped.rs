@@ -99,6 +99,10 @@ impl Capped {
     ///
     /// * [`Error::ExceededCap`] - If the resulting supply is greater than the
     ///   configured cap.
+    ///
+    /// # Panics
+    ///
+    /// Panics if adding `increase` to `current_supply` overflows `U256`.
     pub fn _check_cap(
         &self,
         current_supply: U256,

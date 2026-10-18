@@ -468,7 +468,7 @@ impl Deployer {
             if self.constructor.is_some()
                 && (details.contains("ContractInitializationError")
                     || contains_selector(
-                        &details,
+                        details,
                         &CONTRACT_INITIALIZATION_ERROR_SELECTOR,
                     ))
             {
