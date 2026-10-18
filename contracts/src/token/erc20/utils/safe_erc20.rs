@@ -822,6 +822,34 @@ mod tests {
         );
     }
 
+    #[allow(clippy::needless_pass_by_value)]
+    fn mock_allowance(
+        vm: TestVM,
+        token: Address,
+        owner: Address,
+        spender: Address,
+        allowance: U256,
+    ) {
+        let call = IERC20::allowanceCall { owner, spender };
+        vm.mock_static_call(
+            token,
+            call.abi_encode(),
+            Ok(allowance.abi_encode()),
+        );
+    }
+
+    #[allow(clippy::needless_pass_by_value)]
+    fn mock_approve(
+        vm: TestVM,
+        token: Address,
+        spender: Address,
+        value: U256,
+        result: Result<Vec<u8>, Vec<u8>>,
+    ) {
+        let call = IERC20::approveCall { spender, value };
+        vm.mock_call(token, call.abi_encode(), U256::ZERO, result);
+    }
+
     #[openzeppelin_stylus_proc::vm_test]
     fn try_safe_transfer(
         contract: Contract<SafeErc20Example>,
@@ -905,5 +933,274 @@ mod tests {
                 token,
             }) if token == no_code_addr
         ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn safe_transfer_accepts_empty_return_data(
+        contract: Contract<SafeErc20Example>,
+        erc20: Contract<Erc20>,
+        alice: Address,
+    ) {
+        let token = erc20.address();
+        let value = U256::from(7);
+        let call = IERC20::transferCall { to: alice, value };
+        contract.vm().mock_call(
+            token,
+            call.abi_encode(),
+            U256::ZERO,
+            Ok(Vec::new()),
+        );
+
+        contract
+            .sender(alice)
+            .safe_transfer(token, alice, value)
+            .expect("empty return data from a token call is supported");
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn safe_transfer_rejects_noncanonical_true(
+        contract: Contract<SafeErc20Example>,
+        erc20: Contract<Erc20>,
+        alice: Address,
+    ) {
+        let token = erc20.address();
+        let value = U256::from(7);
+        let call = IERC20::transferCall { to: alice, value };
+        let mut noncanonical_true = true.abi_encode();
+        noncanonical_true[0] = 1;
+        contract.vm().mock_call(
+            token,
+            call.abi_encode(),
+            U256::ZERO,
+            Ok(noncanonical_true),
+        );
+
+        let err = contract
+            .sender(alice)
+            .safe_transfer(token, alice, value)
+            .expect_error("noncanonical boolean return data must fail");
+        assert!(matches!(
+            err,
+            Error::SafeErc20FailedOperation(SafeErc20FailedOperation { token: failed })
+                if failed == token
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn safe_transfer_from_try_variant_returns_false_on_revert(
+        contract: Contract<SafeErc20Example>,
+        erc20: Contract<Erc20>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let token = erc20.address();
+        let value = U256::from(7);
+        let call = IERC20::transferFromCall { from: alice, to: bob, value };
+        contract.vm().mock_call(
+            token,
+            call.abi_encode(),
+            U256::ZERO,
+            Err(vec![1]),
+        );
+
+        assert!(!contract
+            .sender(alice)
+            .try_safe_transfer_from(token, alice, bob, value));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn decrease_allowance_rejects_underflow_with_details(
+        contract: Contract<SafeErc20Example>,
+        erc20: Contract<Erc20>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let token = erc20.address();
+        let allowance = U256::from(3);
+        let requested_decrease = U256::from(4);
+        mock_allowance(
+            contract.vm(),
+            token,
+            contract.address(),
+            bob,
+            allowance,
+        );
+
+        let err = contract
+            .sender(alice)
+            .safe_decrease_allowance(token, bob, requested_decrease)
+            .expect_error("decrease larger than allowance must fail");
+        assert!(matches!(
+            err,
+            Error::SafeErc20FailedDecreaseAllowance(
+                SafeErc20FailedDecreaseAllowance {
+                    spender,
+                    current_allowance,
+                    requested_decrease: requested,
+                }
+            ) if spender == bob
+                && current_allowance == allowance
+                && requested == requested_decrease
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn increase_allowance_approves_current_plus_value(
+        contract: Contract<SafeErc20Example>,
+        erc20: Contract<Erc20>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let token = erc20.address();
+        let current = U256::from(5);
+        let increase = U256::from(8);
+        mock_allowance(contract.vm(), token, contract.address(), bob, current);
+        mock_approve(
+            contract.vm(),
+            token,
+            bob,
+            current + increase,
+            Ok(true.abi_encode()),
+        );
+
+        contract
+            .sender(alice)
+            .safe_increase_allowance(token, bob, increase)
+            .expect("increase should approve the summed allowance");
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn force_approve_reports_failure_when_retry_still_fails(
+        contract: Contract<SafeErc20Example>,
+        erc20: Contract<Erc20>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let token = erc20.address();
+        let value = U256::from(9);
+        mock_approve(contract.vm(), token, bob, value, Ok(false.abi_encode()));
+        mock_approve(
+            contract.vm(),
+            token,
+            bob,
+            U256::ZERO,
+            Ok(true.abi_encode()),
+        );
+
+        let err = contract
+            .sender(alice)
+            .force_approve(token, bob, value)
+            .expect_error("a rejected approval retry must return an error");
+        assert!(matches!(
+            err,
+            Error::SafeErc20FailedOperation(SafeErc20FailedOperation { token: failed })
+                if failed == token
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn decrease_allowance_approves_current_minus_value(
+        contract: Contract<SafeErc20Example>,
+        erc20: Contract<Erc20>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let token = erc20.address();
+        let current = U256::from(13);
+        let decrease = U256::from(8);
+        mock_allowance(contract.vm(), token, contract.address(), bob, current);
+        mock_approve(
+            contract.vm(),
+            token,
+            bob,
+            current - decrease,
+            Ok(true.abi_encode()),
+        );
+
+        contract
+            .sender(alice)
+            .safe_decrease_allowance(token, bob, decrease)
+            .expect("decrease should approve the remaining allowance");
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn transfer_and_call_relaxed_falls_back_for_eoa_recipient(
+        contract: Contract<SafeErc20Example>,
+        erc20: Contract<Erc20>,
+        alice: Address,
+    ) {
+        let token = erc20.address();
+        let value = U256::from(6);
+        mock_transfer(contract.vm(), token, alice, value);
+
+        contract
+            .sender(alice)
+            .transfer_and_call_relaxed(
+                token,
+                alice,
+                value,
+                Bytes::from(vec![1, 2]),
+            )
+            .expect("EOA recipient should use a safe ERC-20 transfer");
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn transfer_from_and_call_relaxed_falls_back_for_eoa_recipient(
+        contract: Contract<SafeErc20Example>,
+        erc20: Contract<Erc20>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let token = erc20.address();
+        let value = U256::from(6);
+        mock_transfer_from(contract.vm(), token, alice, bob, value);
+
+        contract
+            .sender(alice)
+            .transfer_from_and_call_relaxed(
+                token,
+                alice,
+                bob,
+                value,
+                Bytes::from(vec![1, 2]),
+            )
+            .expect("EOA recipient should use a safe ERC-20 transferFrom");
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn approve_and_call_relaxed_falls_back_for_eoa_spender(
+        contract: Contract<SafeErc20Example>,
+        erc20: Contract<Erc20>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let token = erc20.address();
+        let value = U256::from(6);
+        mock_approve(contract.vm(), token, bob, value, Ok(true.abi_encode()));
+
+        contract
+            .sender(alice)
+            .approve_and_call_relaxed(
+                token,
+                bob,
+                value,
+                Bytes::from(vec![1, 2]),
+            )
+            .expect("EOA spender should use forceApprove");
+    }
+
+    #[test]
+    fn canonical_true_requires_the_abi_word_one() {
+        let canonical_true = true.abi_encode();
+        let mut noncanonical_true = canonical_true.clone();
+        noncanonical_true[0] = 1;
+        let mut noncanonical_word = canonical_true.clone();
+        noncanonical_word[31] = 2;
+
+        assert!(is_canonical_true(&canonical_true));
+        assert!(!is_canonical_true(&[]));
+        assert!(!is_canonical_true(&canonical_true[..31]));
+        assert!(!is_canonical_true(&noncanonical_true));
+        assert!(!is_canonical_true(&noncanonical_word));
     }
 }
