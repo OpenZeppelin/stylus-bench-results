@@ -88,8 +88,14 @@ impl AccessControlExample {
 
     // WARNING: This should not be part of the public API, it's here for testing
     // purposes only.
-    fn set_role_admin(&mut self, role: B256, new_admin_role: B256) {
+    fn set_role_admin(
+        &mut self,
+        role: B256,
+        new_admin_role: B256,
+    ) -> Result<(), Error> {
+        self.access.only_role(AccessControl::DEFAULT_ADMIN_ROLE.into())?;
         self.access._set_role_admin(role, new_admin_role);
+        Ok(())
     }
 
     fn get_role_members(&self, role: B256) -> Vec<Address> {
