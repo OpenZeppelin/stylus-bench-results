@@ -151,7 +151,16 @@ impl IErc721Enumerable for Erc721Enumerable {
         let token = owned_tokens.get(index);
         let owner_token_count = owned_tokens.get(U256::MAX);
 
-        if index >= owner_token_count {
+        if owner_token_count.is_zero() {
+            // v0.3.0 did not store an owner count. Preserve its behavior for
+            // legacy nonzero token IDs while requiring an explicit count
+            // backfill for owners whose only legacy token is ID zero.
+            if token.is_zero() {
+                Err(ERC721OutOfBoundsIndex { owner, index }.into())
+            } else {
+                Ok(token)
+            }
+        } else if index >= owner_token_count {
             Err(ERC721OutOfBoundsIndex { owner, index }.into())
         } else {
             Ok(token)
@@ -179,6 +188,36 @@ impl IErc165 for Erc721Enumerable {
 }
 
 impl Erc721Enumerable {
+    /// Initializes the stored owner count for an owner with v0.3.0 state.
+    ///
+    /// Call this during an application migration for each existing owner
+    /// before relying on owner-index enumeration for a legacy token ID zero.
+    /// Other legacy nonzero token IDs remain readable without this call.
+    ///
+    /// # Arguments
+    ///
+    /// * `&mut self` - Write access to this extension's state.
+    /// * `owner` - Address whose legacy token count is being initialized.
+    /// * `erc721` - Read access to the paired ERC-721 implementation.
+    ///
+    /// # Errors
+    ///
+    /// * [`erc721::Error::InvalidOwner`] - If `owner` is
+    ///   [`Address::ZERO`].
+    pub fn _initialize_owner_enumeration(
+        &mut self,
+        owner: Address,
+        erc721: &impl IErc721<Error = erc721::Error>,
+    ) -> Result<(), erc721::Error> {
+        let owner_token_count = erc721.balance_of(owner)?;
+        self.owned_tokens
+            .setter(owner)
+            .setter(U256::MAX)
+            .set(owner_token_count);
+
+        Ok(())
+    }
+
     /// Function to add a token to this extension's
     /// ownership-tracking data structures.
     ///
@@ -654,6 +693,42 @@ mod tests {
             .expect("should return token id zero");
 
         assert_eq!(token_id, returned_token_id);
+    }
+
+    #[test]
+    fn legacy_token_id_zero_is_enumerable_after_owner_count_initialization() {
+        let contract = TestVMContract::<Erc721EnumerableTestExample>::new(
+            stringify!(contract),
+        );
+        let alice = test_address(stringify!(alice));
+
+        // v0.3.0 stored zero for token ID zero and had no count metadata.
+        contract
+            .sender(alice)
+            .erc721
+            ._mint(alice, U256::ZERO)
+            .expect("should mint token id zero");
+
+        {
+            let mut call = contract.sender(alice);
+            let storage = call.storage_mut();
+            assert!(storage
+                .enumerable
+                .token_of_owner_by_index(alice, U256::ZERO)
+                .is_err());
+            storage
+                .enumerable
+                ._initialize_owner_enumeration(alice, &storage.erc721)
+                .expect("should backfill the legacy owner count");
+        }
+
+        assert_eq!(
+            contract
+                .sender(alice)
+                .token_of_owner_by_index(alice, U256::ZERO)
+                .expect("legacy token ID zero should be enumerable"),
+            U256::ZERO,
+        );
     }
 
     #[test]
