@@ -38,7 +38,7 @@ use tokio::sync::Mutex;
 const RPC_URL_ENV_VAR: &str = "RPC_URL";
 const DEFAULT_RPC_URL: &str = "http://localhost:8547";
 const DEFAULT_FUNDING_WEI: u64 = 100_000_000_000_000_000;
-const DEPLOYER_FUNDING_WEI: u64 = 1_000_000_000_000_000_000;
+const DEPLOYER_FUNDING_WEI: u64 = 2_000_000_000_000_000_000;
 pub const DEFAULT_DEPLOYER_ADDRESS: &str =
     "0xcEcba2F1DC234f70Dd89F2041029807F8D03A990";
 /// Environment variable for the address of Nitro's Stylus deployer.
