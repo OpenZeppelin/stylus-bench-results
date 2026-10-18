@@ -1,10 +1,13 @@
 //! Regression coverage for the ERC721Consecutive constructor-only mint path.
 
-use alloy_primitives::{Address, U256, address, aliases::U96, uint};
+use alloy_primitives::{address, aliases::U96, uint, Address, U256};
 use alloy_sol_types::SolEvent;
-use openzeppelin_stylus::token::erc721::extensions::{
-    Erc721Consecutive,
-    consecutive::{self, Error},
+use openzeppelin_stylus::token::erc721::{
+    extensions::{
+        consecutive::{self, Error},
+        Erc721Consecutive,
+    },
+    IErc721,
 };
 use stylus_test::TestVMBuilder;
 
