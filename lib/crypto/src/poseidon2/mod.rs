@@ -58,9 +58,23 @@ impl<P: PoseidonParams<F>, F: PrimeField> Default for Poseidon2<P, F> {
 
 impl<P: PoseidonParams<F>, F: PrimeField> Poseidon2<P, F> {
     /// Create a new Poseidon sponge.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the parameter set uses an unsupported state size or a
+    /// capacity that is zero or not smaller than the state size.
     #[must_use]
     #[inline]
     pub fn new() -> Self {
+        assert!(
+            matches!(P::T, 2 | 3 | 4 | 8 | 12 | 16 | 20 | 24),
+            "unsupported Poseidon2 state size"
+        );
+        assert!(
+            P::CAPACITY > 0 && P::CAPACITY < P::T,
+            "Poseidon2 capacity must be positive and smaller than state size"
+        );
+
         Self {
             phantom: core::marker::PhantomData,
             state: vec![F::zero(); P::T].into_boxed_slice(),
@@ -402,6 +416,18 @@ mod tests {
         const ROUND_CONSTANTS: &'static [&'static [FpBLS12]] = &[];
     }
 
+    struct ZeroCapacity;
+
+    impl PoseidonParams<FpBLS12> for ZeroCapacity {
+        const T: usize = 2;
+        const D: u8 = 5;
+        const CAPACITY: usize = 0;
+        const ROUNDS_F: usize = 8;
+        const ROUNDS_P: usize = 1;
+        const MAT_INTERNAL_DIAG_M_1: &'static [FpBLS12] = &[];
+        const ROUND_CONSTANTS: &'static [&'static [FpBLS12]] = &[];
+    }
+
     #[test]
     #[should_panic(expected = "unsupported Poseidon2 state size")]
     fn rejects_unsupported_state_size_at_construction() {
@@ -410,9 +436,17 @@ mod tests {
 
     #[test]
     #[should_panic(
-        expected = "Poseidon2 capacity must be smaller than state size"
+        expected = "Poseidon2 capacity must be positive and smaller than state size"
     )]
     fn rejects_capacity_that_leaves_no_rate() {
         let _ = Poseidon2::<CapacityExceedsRate, FpBLS12>::new();
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Poseidon2 capacity must be positive and smaller than state size"
+    )]
+    fn rejects_zero_capacity() {
+        let _ = Poseidon2::<ZeroCapacity, FpBLS12>::new();
     }
 }
