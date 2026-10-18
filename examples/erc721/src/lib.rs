@@ -101,14 +101,23 @@ impl Erc721Example {
         token_id: U256,
         data: Bytes,
     ) -> Result<(), Error> {
-        self.erc721._safe_mint(to, token_id, &data)?;
+        self.erc721._mint(to, token_id)?;
 
-        // Update the extension's state.
+        // Update the extension's state before calling the receiver. A receiver
+        // can call back into this contract from `on_erc721_received`.
         self.enumerable._add_token_to_all_tokens_enumeration(token_id);
         self.enumerable._add_token_to_owner_enumeration(
             to,
             token_id,
             &self.erc721,
+        )?;
+
+        self.erc721._check_on_erc721_received(
+            self.vm().msg_sender(),
+            Address::ZERO,
+            to,
+            token_id,
+            &data,
         )?;
 
         Ok(())
