@@ -774,6 +774,34 @@ mod tests {
     }
 
     #[openzeppelin_stylus_proc::vm_test]
+    fn deposit_for_reverts_when_underlying_call_fails_without_reason(
+        contract: Contract<Erc721WrapperTestExample>,
+        erc721_contract: Contract<Erc721>,
+        alice: Address,
+    ) {
+        let token_id = random_token_ids(1)[0];
+        let underlying = erc721_contract.address();
+        contract.sender(alice).constructor(underlying);
+        mock_transfer_from(
+            &contract,
+            underlying,
+            alice,
+            contract.address(),
+            token_id,
+            Err(vec![]),
+        );
+
+        assert!(matches!(
+            contract
+                .sender(alice)
+                .deposit_for(alice, vec![token_id])
+                .expect_error("failed transfer without revert data should be reported"),
+            Error::Erc721FailedOperation(Erc721FailedOperation { token })
+                if token == underlying
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn deposit_for_reverts_when_wrapped_token_already_exists(
         contract: Contract<Erc721WrapperTestExample>,
         erc721_contract: Contract<Erc721>,
@@ -901,6 +929,43 @@ mod tests {
                 erc721::InvalidReceiverWithReason { reason }
             ) if reason == expected_error
         ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn withdraw_to_reverts_when_underlying_call_fails_without_reason(
+        contract: Contract<Erc721WrapperTestExample>,
+        erc721_contract: Contract<Erc721>,
+        alice: Address,
+    ) {
+        let token_id = random_token_ids(1)[0];
+        let underlying = erc721_contract.address();
+        contract.sender(alice).constructor(underlying);
+        contract
+            .sender(alice)
+            .erc721
+            ._mint(alice, token_id)
+            .expect("should mint wrapped token");
+        mock_safe_transfer_from(
+            &contract,
+            underlying,
+            contract.address(),
+            alice,
+            token_id,
+            Err(vec![]),
+        );
+
+        assert!(matches!(
+            contract
+                .sender(alice)
+                .withdraw_to(alice, vec![token_id])
+                .expect_error("failed withdrawal without revert data should be reported"),
+            Error::Erc721FailedOperation(Erc721FailedOperation { token })
+                if token == underlying
+        ));
+        assert_eq!(
+            alice,
+            contract.sender(alice).erc721.owner_of(token_id).unwrap()
+        );
     }
 
     #[openzeppelin_stylus_proc::vm_test]

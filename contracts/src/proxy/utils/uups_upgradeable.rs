@@ -1256,4 +1256,43 @@ mod tests {
             .encode();
         assert_eq!(error, expected);
     }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn upgrade_rolls_back_if_new_implementation_version_setup_fails(
+        logic: Contract<UUPSErc20Example>,
+        next_logic: Contract<UUPSErc20Example>,
+        alice: Address,
+    ) {
+        let setup = ERC20Interface::totalSupplyCall {}.abi_encode();
+        let initialize = ERC20Interface::setVersionCall {}.abi_encode();
+        logic.sender(alice).set_version().unwrap();
+        set_implementation_slot(&logic.vm(), logic.address());
+        logic.vm().mock_static_call(
+            next_logic.address(),
+            ProxiableUUIDInterface::proxiableUUIDCall {}.abi_encode(),
+            Ok(IMPLEMENTATION_SLOT.abi_encode()),
+        );
+        logic.vm().mock_delegate_call(
+            next_logic.address(),
+            setup.clone(),
+            Ok(U256::ZERO.abi_encode()),
+        );
+        logic.vm().mock_delegate_call(
+            next_logic.address(),
+            initialize,
+            Err(vec![]),
+        );
+
+        let error = logic
+            .sender(alice)
+            .upgrade_to_and_call(next_logic.address(), setup.into())
+            .expect_error(
+                "version setup failure must abort and roll back upgrade",
+            );
+        assert_eq!(error, address::FailedCall {}.abi_encode());
+        assert_eq!(
+            logic.vm().get_storage(U256::from_be_bytes(IMPLEMENTATION_SLOT.0)),
+            encoded_implementation(logic.address())
+        );
+    }
 }
