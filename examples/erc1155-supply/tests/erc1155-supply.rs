@@ -4,7 +4,7 @@
 mod devnet_test_support;
 
 use crate::devnet_test_support::{
-    receipt, send, watch, Account, EventExt, Trap,
+    receipt, send, watch, Account, EventExt, Revert, Trap,
 };
 use abi::Erc1155Supply;
 use alloy::primitives::{aliases::B32, Address, U256};
@@ -387,6 +387,43 @@ async fn burn_with_approval() -> eyre::Result<()> {
 }
 
 #[tokio::test]
+async fn error_when_unapproved_operator_burns() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+    let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
+    let contract_bob = Erc1155Supply::new(contract_addr, &bob.wallet);
+
+    let alice_addr = alice.address();
+    let bob_addr = bob.address();
+    let token_id = random_token_ids(1)[0];
+    let value = random_values(1)[0];
+
+    watch!(contract.mint(alice_addr, token_id, value, vec![].into()))?;
+
+    let burn_result = send!(contract_bob.burn(alice_addr, token_id, value));
+    let remaining_balance =
+        contract.balanceOf(alice_addr, token_id).call().await?;
+
+    assert!(
+        burn_result.is_err() && remaining_balance == value,
+        "unapproved operator burn must fail and preserve the holder balance; succeeded={}, remaining_balance={remaining_balance}",
+        burn_result.is_ok()
+    );
+    if let Err(err) = burn_result {
+        assert!(err.reverted_with(
+            Erc1155Supply::ERC1155MissingApprovalForAll {
+                operator: bob_addr,
+                owner: alice_addr
+            }
+        ));
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn burn_batch() -> eyre::Result<()> {
     let alice = Account::new().await?;
 
@@ -430,6 +467,54 @@ async fn burn_batch() -> eyre::Result<()> {
 
     let total_supply_all = contract.totalSupply_1().call().await?;
     assert_eq!(U256::ZERO, total_supply_all);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn error_when_unapproved_operator_burns_batch() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+    let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
+    let contract_bob = Erc1155Supply::new(contract_addr, &bob.wallet);
+
+    let alice_addr = alice.address();
+    let bob_addr = bob.address();
+    let token_ids = random_token_ids(2);
+    let values = random_values(2);
+
+    watch!(contract.mintBatch(
+        alice_addr,
+        token_ids.clone(),
+        values.clone(),
+        vec![].into()
+    ))?;
+
+    let burn_result = send!(contract_bob.burnBatch(
+        alice_addr,
+        token_ids.clone(),
+        values.clone()
+    ));
+    let remaining_balances = contract
+        .balanceOfBatch(vec![alice_addr; token_ids.len()], token_ids)
+        .call()
+        .await?;
+
+    assert!(
+        burn_result.is_err() && remaining_balances == values,
+        "unapproved operator batch burn must fail and preserve the holder balances; succeeded={}, remaining_balances={remaining_balances:?}",
+        burn_result.is_ok()
+    );
+    if let Err(err) = burn_result {
+        assert!(err.reverted_with(
+            Erc1155Supply::ERC1155MissingApprovalForAll {
+                operator: bob_addr,
+                owner: alice_addr
+            }
+        ));
+    }
 
     Ok(())
 }
