@@ -338,6 +338,7 @@ use stylus_sdk::prelude::errors::MethodError;
 mod tests {
     use crate::test_support::{test_address, TestContract as TestVMContract};
     use alloy_primitives::uint;
+    use crate::utils::math::alloy::{Math, Rounding};
 
     use super::*;
     use crate::utils::introspection::erc165::IErc165;
@@ -781,6 +782,28 @@ mod tests {
             .expect("should set default royalty");
         // should overflow.
         _ = contract.sender(bob).royalty_info(TOKEN_ID, U256::MAX);
+    }
+
+    #[test]
+    fn royalty_info_uses_full_precision_for_large_sale_price() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
+        contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
+        contract
+            .sender(bob)
+            ._set_default_royalty(bob, DEFAULT_FEE_NUMERATOR)
+            .expect("should set default royalty");
+
+        let expected = U256::MAX.mul_div(
+            U256::from(DEFAULT_FEE_NUMERATOR),
+            U256::from(DEFAULT_FEE_DENOMINATOR),
+            Rounding::Floor,
+        );
+        assert_eq!(
+            (bob, expected),
+            contract.sender(bob).royalty_info(TOKEN_ID, U256::MAX),
+        );
     }
 
     #[test]
