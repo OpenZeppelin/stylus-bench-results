@@ -7,6 +7,7 @@ publish = false
 version.workspace = true
 
 [dependencies]
+alloy.workspace = true
 eyre.workspace = true
 stylus-tools = { version = "=0.10.10", features = ["integration-tests"] }
 tokio.workspace = true

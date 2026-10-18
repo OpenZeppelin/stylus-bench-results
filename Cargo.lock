@@ -5829,6 +5829,7 @@ dependencies = [
 name = "stylus-devnet-node"
 version = "0.3.0"
 dependencies = [
+ "alloy",
  "eyre",
  "stylus-tools",
  "tokio",
