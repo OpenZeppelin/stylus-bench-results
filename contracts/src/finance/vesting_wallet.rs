@@ -880,6 +880,7 @@ mod tests {
             amount,
             Err(b"transfer failed".to_vec()),
         );
+        contract.vm().log(EtherReleased { amount: amount + U256::ONE });
 
         let error = contract
             .sender(alice)
