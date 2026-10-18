@@ -268,7 +268,7 @@ mod tests {
             $(
                 mod $test_mod {
                     use super::*;
-                    use motsu::prelude::Contract;
+                    use crate::test_support::Contract;
                     use alloc::collections::BTreeSet;
                     use stylus_sdk::prelude::TopLevelStorage;
                     use alloy_primitives::private::proptest::{prop_assert, prop_assert_eq, proptest};
@@ -315,7 +315,7 @@ mod tests {
                         }
                     }
 
-                    #[motsu::test]
+                    #[openzeppelin_stylus_proc::vm_test]
                     fn idempotency_add(alice: Address) {
                         proptest!(|(value: $value_type)| {
                             let contract = Contract::<TestEnumerableSet>::new();
@@ -331,7 +331,7 @@ mod tests {
                         });
                     }
 
-                    #[motsu::test]
+                    #[openzeppelin_stylus_proc::vm_test]
                     fn idempotency_remove(alice: Address) {
                         proptest!(|(value: $value_type)| {
                             let contract = Contract::<TestEnumerableSet>::new();
@@ -342,7 +342,7 @@ mod tests {
                         });
                     }
 
-                    #[motsu::test]
+                    #[openzeppelin_stylus_proc::vm_test]
                     fn commutativity_add(alice: Address, bob: Address) {
                         proptest!(|(value1: $value_type, value2: $value_type)| {
                             let contract1 = Contract::<TestEnumerableSet>::new();
@@ -364,7 +364,7 @@ mod tests {
                         });
                     }
 
-                    #[motsu::test]
+                    #[openzeppelin_stylus_proc::vm_test]
                     fn associativity_operations(alice: Address, bob: Address) {
                         proptest!(|(values1: Vec<$value_type>, values2: Vec<$value_type>)| {
                             if values1.is_empty() || values2.is_empty() {
@@ -393,7 +393,7 @@ mod tests {
                         });
                     }
 
-                    #[motsu::test]
+                    #[openzeppelin_stylus_proc::vm_test]
                     fn identity_empty_set(alice: Address) {
                         let contract = Contract::<TestEnumerableSet>::new();
 
@@ -405,7 +405,7 @@ mod tests {
                         assert_eq!(contract.sender(alice).length(), U256::ZERO);
                     }
 
-                    #[motsu::test]
+                    #[openzeppelin_stylus_proc::vm_test]
                     fn single_element_edge_case(alice: Address) {
                         proptest!(|(value: $value_type)| {
                             let contract = Contract::<TestEnumerableSet>::new();
@@ -426,7 +426,7 @@ mod tests {
                         });
                     }
 
-                    #[motsu::test]
+                    #[openzeppelin_stylus_proc::vm_test]
                     fn inverse_add_remove(alice: Address) {
                         proptest!(|(values: Vec<$value_type>)| {
                             let contract = Contract::<TestEnumerableSet>::new();
@@ -452,7 +452,7 @@ mod tests {
                         });
                     }
 
-                    #[motsu::test]
+                    #[openzeppelin_stylus_proc::vm_test]
                     fn subset_values_contained(alice: Address) {
                         proptest!(|(values: Vec<$value_type>)| {
                             let contract = Contract::<TestEnumerableSet>::new();
@@ -471,7 +471,7 @@ mod tests {
                         });
                     }
 
-                    #[motsu::test]
+                    #[openzeppelin_stylus_proc::vm_test]
                     fn cardinality_preservation(alice: Address) {
                         proptest!(|(values: Vec<$value_type>)| {
                             let contract = Contract::<TestEnumerableSet>::new();
@@ -493,7 +493,7 @@ mod tests {
                         });
                     }
 
-                    #[motsu::test]
+                    #[openzeppelin_stylus_proc::vm_test]
                     fn transitivity_enumeration(alice: Address) {
                         proptest!(|(values: Vec<$value_type>)| {
                             let contract = Contract::<TestEnumerableSet>::new();
@@ -517,7 +517,7 @@ mod tests {
                         });
                     }
 
-                    #[motsu::test]
+                    #[openzeppelin_stylus_proc::vm_test]
                     fn consistency_multiple_paths(alice: Address, bob: Address) {
                         proptest!(|(values: Vec<$value_type>)| {
                             let contract1 = Contract::<TestEnumerableSet>::new();
@@ -551,7 +551,7 @@ mod tests {
                     }
 
                     // tests slice_consistency: `values_slice()` should be consistent with `values()`.
-                    #[motsu::test]
+                    #[openzeppelin_stylus_proc::vm_test]
                     fn slice_consistency(alice: Address) {
                         proptest!(|(values: Vec<$value_type>)| {
                             let contract = Contract::<TestEnumerableSet>::new();
@@ -571,7 +571,7 @@ mod tests {
                     }
 
                     // tests slice_bounds_safety: invalid parameters should return empty safely
-                    #[motsu::test]
+                    #[openzeppelin_stylus_proc::vm_test]
                     fn slice_bounds_safety(alice: Address) {
                         proptest!(|(values: Vec<$value_type>)| {
                             let contract = Contract::<TestEnumerableSet>::new();
@@ -593,7 +593,7 @@ mod tests {
                     }
 
                     // tests slice_u256_path: explicitly test U256 arithmetic path
-                    #[motsu::test]
+                    #[openzeppelin_stylus_proc::vm_test]
                     fn slice_u256_path(alice: Address) {
                         let contract = Contract::<TestEnumerableSet>::new();
 
@@ -620,7 +620,7 @@ mod tests {
                     }
 
                     // tests slice_usize_boundary: test exact boundary between fast/slow paths
-                    #[motsu::test]
+                    #[openzeppelin_stylus_proc::vm_test]
                     fn slice_usize_boundary(alice: Address) {
                         proptest!(|(values: Vec<$value_type>)| {
                             let contract = Contract::<TestEnumerableSet>::new();

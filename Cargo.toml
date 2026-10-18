@@ -169,9 +169,6 @@ rpath = false
 debug-assertions = false
 incremental = false
 
-[profile.dev]
-panic = "abort"
-
 [workspace.metadata.typos]
 default = { extend-ignore-identifiers-re = [
   # ignore hex data samples.

@@ -44,6 +44,7 @@ pub struct AccessControlEnumerable {
 
 /// Interface for the [`AccessControlEnumerable`] extension.
 #[interface_id]
+#[allow(missing_docs)]
 #[public]
 pub trait IAccessControlEnumerable {
     /// The error type associated to the trait implementation.
@@ -108,7 +109,7 @@ impl IAccessControlEnumerable for AccessControlEnumerable {
         &self,
         role: B256,
         index: U256,
-    ) -> Result<Address, Self::Error> {
+    ) -> Result<Address, Error> {
         let members = self.role_members.get(role);
         match members.at(index) {
             Some(member) => Ok(member),
@@ -173,9 +174,9 @@ impl IErc165 for AccessControlEnumerable {
 #[cfg(test)]
 mod tests {
 
+    use crate::test_support::*;
     use alloy_primitives::{uint, Address};
-    use motsu::prelude::*;
-    use stylus_sdk::msg;
+    use stylus_sdk::prelude::{HostAccess, MessageAccess};
 
     use super::*;
     use crate::access::control::{self, IAccessControl};
@@ -207,7 +208,7 @@ mod tests {
             self.access_control.has_role(role, account)
         }
 
-        fn only_role(&self, role: B256) -> Result<(), Self::Error> {
+        fn only_role(&self, role: B256) -> Result<(), control::Error> {
             self.access_control.only_role(role)
         }
 
@@ -219,7 +220,7 @@ mod tests {
             &mut self,
             role: B256,
             account: Address,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), control::Error> {
             let admin_role = self.get_role_admin(role);
             self.only_role(admin_role)?;
             self.enumerable._grant_role(
@@ -234,7 +235,7 @@ mod tests {
             &mut self,
             role: B256,
             account: Address,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), control::Error> {
             let admin_role = self.get_role_admin(role);
             self.only_role(admin_role)?;
             self.enumerable._revoke_role(
@@ -249,8 +250,8 @@ mod tests {
             &mut self,
             role: B256,
             confirmation: Address,
-        ) -> Result<(), Self::Error> {
-            if msg::sender() != confirmation {
+        ) -> Result<(), control::Error> {
+            if self.vm().msg_sender() != confirmation {
                 return Err(control::Error::BadConfirmation(
                     control::AccessControlBadConfirmation {},
                 ));
@@ -273,7 +274,7 @@ mod tests {
             &self,
             role: B256,
             index: U256,
-        ) -> Result<Address, Self::Error> {
+        ) -> Result<Address, Error> {
             self.enumerable.get_role_member(role, index)
         }
 
@@ -290,7 +291,7 @@ mod tests {
         }
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn get_role_member_count_returns_zero_by_default(
         contract: Contract<AccessControlEnumerableExample>,
         alice: Address,
@@ -304,7 +305,7 @@ mod tests {
             .is_empty());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn get_role_member_reverts_when_empty_role(
         contract: Contract<AccessControlEnumerableExample>,
         alice: Address,
@@ -315,7 +316,7 @@ mod tests {
         let err = contract
             .sender(alice)
             .get_role_member(role, index)
-            .motsu_expect_err("should return `Error::OutOfBounds`");
+            .expect_error("should return `Error::OutOfBounds`");
 
         assert!(matches!(
             err,
@@ -326,7 +327,7 @@ mod tests {
         assert!(contract.sender(alice).get_role_members(role).is_empty());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn can_enumerate_role_members(
         contract: Contract<AccessControlEnumerableExample>,
         admin: Address,
@@ -343,12 +344,12 @@ mod tests {
         contract
             .sender(admin)
             .grant_role(ROLE.into(), alice)
-            .motsu_expect("should grant alice");
+            .expect("should grant alice");
 
         contract
             .sender(admin)
             .grant_role(ROLE.into(), bob)
-            .motsu_expect("should grant bob");
+            .expect("should grant bob");
 
         // Check members count.
         assert_eq!(
@@ -361,7 +362,7 @@ mod tests {
             contract
                 .sender(alice)
                 .get_role_member(ROLE.into(), U256::ZERO)
-                .motsu_expect("should return alice"),
+                .expect("should return alice"),
             alice
         );
 
@@ -369,7 +370,7 @@ mod tests {
             contract
                 .sender(alice)
                 .get_role_member(ROLE.into(), U256::from(1))
-                .motsu_expect("should return bob"),
+                .expect("should return bob"),
             bob
         );
 
@@ -379,7 +380,7 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn revoked_members_are_removed_from_enumeration(
         contract: Contract<AccessControlEnumerableExample>,
         admin: Address,
@@ -395,11 +396,11 @@ mod tests {
         contract
             .sender(admin)
             .grant_role(ROLE.into(), alice)
-            .motsu_expect("should grant alice");
+            .expect("should grant alice");
         contract
             .sender(admin)
             .revoke_role(ROLE.into(), alice)
-            .motsu_expect("should revoke alice");
+            .expect("should revoke alice");
 
         // Check member count.
         assert_eq!(
@@ -413,7 +414,7 @@ mod tests {
             .is_empty());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn supports_interface_returns_true_for_iaccess_control_enumerable(
         contract: Contract<AccessControlEnumerableExample>,
         alice: Address,
@@ -431,7 +432,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn granting_role_twice_does_not_duplicate_member(
         contract: Contract<AccessControlEnumerableExample>,
         admin: Address,
@@ -447,13 +448,13 @@ mod tests {
         contract
             .sender(admin)
             .grant_role(ROLE.into(), alice)
-            .motsu_expect("should grant alice");
+            .expect("should grant alice");
 
         // Grant `ROLE` to `alice` again.
         contract
             .sender(admin)
             .grant_role(ROLE.into(), alice)
-            .motsu_expect("should grant alice");
+            .expect("should grant alice");
 
         // Check member count.
         assert_eq!(
@@ -465,7 +466,7 @@ mod tests {
         let member = contract
             .sender(alice)
             .get_role_member(ROLE.into(), U256::ZERO)
-            .motsu_expect("should return alice");
+            .expect("should return alice");
         assert_eq!(member, alice);
 
         assert_eq!(
@@ -474,7 +475,7 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn revoking_nonexistent_role_member_has_no_effect(
         contract: Contract<AccessControlEnumerableExample>,
         admin: Address,
@@ -490,13 +491,13 @@ mod tests {
         contract
             .sender(admin)
             .grant_role(ROLE.into(), alice)
-            .motsu_expect("should grant alice");
+            .expect("should grant alice");
 
         // Try to revoke a role that `charlie` doesn't have.
         contract
             .sender(admin)
             .revoke_role(ROLE.into(), charlie)
-            .motsu_expect("should not revert");
+            .expect("should not revert");
 
         // Check member count.
         assert_eq!(
@@ -508,7 +509,7 @@ mod tests {
             contract
                 .sender(alice)
                 .get_role_member(ROLE.into(), U256::ZERO)
-                .motsu_expect("should return alice"),
+                .expect("should return alice"),
             alice
         );
 

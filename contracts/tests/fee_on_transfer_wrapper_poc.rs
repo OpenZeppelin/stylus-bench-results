@@ -1,3 +1,5 @@
+//! Characterize exact-transfer assumptions in ERC-20 wrappers and vaults.
+
 extern crate alloc;
 
 use alloy_primitives::{uint, Address, U256, U8};
@@ -109,7 +111,7 @@ fn fee_on_transfer_vault_deposit_mints_nominal_shares() {
     vm.set_code(underlying, vec![0x00]);
 
     let mut contract = VaultContract::from(&vm);
-    contract.vault.constructor(underlying, U8::ZERO);
+    contract.vault.constructor(underlying, U8::ZERO).unwrap();
     let transfer = FeeOnTransferToken::transferFromCall {
         from: alice,
         to: vault_address,

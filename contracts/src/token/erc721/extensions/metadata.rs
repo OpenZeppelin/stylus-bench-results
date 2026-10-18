@@ -28,6 +28,7 @@ pub struct Erc721Metadata {
 
 /// Interface for the optional metadata functions from the ERC-721 standard.
 #[interface_id]
+#[allow(missing_docs)]
 #[public]
 pub trait IErc721Metadata: IErc165 {
     /// The error type associated to this trait implementation.
@@ -118,8 +119,8 @@ impl Erc721Metadata {
 }
 #[cfg(test)]
 mod tests {
+    use crate::test_support::Contract;
     use alloy_primitives::{aliases::B32, Address};
-    use motsu::prelude::Contract;
 
     use super::*;
     use crate::{
@@ -170,14 +171,14 @@ mod tests {
 
     unsafe impl TopLevelStorage for Erc721MetadataExample {}
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn interface_id() {
         let actual = <Erc721MetadataExample as IErc721Metadata>::interface_id();
         let expected: B32 = 0x5b5e139f_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn supports_interface(
         contract: Contract<Erc721MetadataExample>,
         alice: Address,
@@ -193,7 +194,7 @@ mod tests {
         assert!(!contract.sender(alice).supports_interface(fake_interface_id));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn constructor(contract: Contract<Erc721MetadataExample>, alice: Address) {
         let name: String = "Erc721MetadataExample".to_string();
         let symbol: String = "OZ".to_string();

@@ -50,7 +50,10 @@ use crate::{
     },
     utils::{
         introspection::erc165::IErc165,
-        math::{alloy::{Math, Rounding}, storage::AddAssignChecked},
+        math::{
+            alloy::{Math, Rounding},
+            storage::AddAssignChecked,
+        },
     },
 };
 
@@ -185,6 +188,7 @@ unsafe impl TopLevelStorage for VestingWallet {}
 
 /// Required interface of a [`VestingWallet`] compliant contract.
 #[interface_id]
+#[allow(missing_docs)]
 #[public]
 pub trait IVestingWallet {
     /// The error type associated to this trait implementation.
@@ -445,14 +449,11 @@ impl IVestingWallet for VestingWallet {
         self.ownable.owner()
     }
 
-    fn transfer_ownership(
-        &mut self,
-        new_owner: Address,
-    ) -> Result<(), Self::Error> {
+    fn transfer_ownership(&mut self, new_owner: Address) -> Result<(), Error> {
         Ok(self.ownable.transfer_ownership(new_owner)?)
     }
 
-    fn renounce_ownership(&mut self) -> Result<(), Self::Error> {
+    fn renounce_ownership(&mut self) -> Result<(), Error> {
         Ok(self.ownable.renounce_ownership()?)
     }
 
@@ -489,10 +490,7 @@ impl IVestingWallet for VestingWallet {
     }
 
     #[selector(name = "releasable")]
-    fn releasable_erc20(
-        &mut self,
-        token: Address,
-    ) -> Result<U256, Self::Error> {
+    fn releasable_erc20(&mut self, token: Address) -> Result<U256, Error> {
         let vested =
             self.vested_amount_erc20(token, self.vm().block_timestamp())?;
         // SAFETY: total vested amount is by definition greater than or equal to
@@ -501,7 +499,7 @@ impl IVestingWallet for VestingWallet {
     }
 
     #[selector(name = "release")]
-    fn release_eth(&mut self) -> Result<(), Self::Error> {
+    fn release_eth(&mut self) -> Result<(), Error> {
         let amount = self.releasable_eth();
 
         self.released.add_assign_checked(
@@ -520,7 +518,7 @@ impl IVestingWallet for VestingWallet {
     }
 
     #[selector(name = "release")]
-    fn release_erc20(&mut self, token: Address) -> Result<(), Self::Error> {
+    fn release_erc20(&mut self, token: Address) -> Result<(), Error> {
         let amount = self.releasable_erc20(token)?;
         let owner = self.ownable.owner();
 
@@ -552,7 +550,7 @@ impl IVestingWallet for VestingWallet {
         &mut self,
         token: Address,
         timestamp: u64,
-    ) -> Result<U256, Self::Error> {
+    ) -> Result<U256, Error> {
         let erc20 = Erc20Interface::new(token);
         let balance = erc20
             .balance_of(self.vm(), Call::new(), self.vm().contract_address())
@@ -594,11 +592,7 @@ impl VestingWallet {
             // SAFETY: `self.duration()` is non-zero. If `self.duration()` were
             // zero, then `end == start`, meaning that `timestamp >= self.end()`
             // and the function would have returned earlier.
-            total_allocation.mul_div(
-                elapsed,
-                self.duration(),
-                Rounding::Floor,
-            )
+            total_allocation.mul_div(elapsed, self.duration(), Rounding::Floor)
         }
     }
 }
@@ -612,21 +606,25 @@ impl IErc165 for VestingWallet {
 }
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::Contract;
-    use stylus_sdk::{
-        alloy_primitives::{uint, Address, U256, U64},
-        block,
-    };
+    use crate::test_support::Contract;
+    use alloy_sol_types::{SolCall, SolValue};
+    use stylus_sdk::alloy_primitives::{uint, Address, U256, U64};
 
     use super::*;
     use crate::token::erc20::Erc20;
+
+    alloy_sol_types::sol! {
+        interface Erc20BalanceOfCall {
+            function balanceOf(address account) external view returns (uint256);
+        }
+    }
 
     const BALANCE: u64 = 1000;
 
     const DURATION: u64 = 4 * 365 * 86400; // 4 years
 
-    fn start() -> u64 {
-        block::timestamp() + 3600 // 1 hour
+    fn start(contract: &Contract<VestingWallet>) -> u64 {
+        contract.vm().block_timestamp() + 3600
     }
 
     impl VestingWallet {
@@ -639,26 +637,28 @@ mod tests {
         }
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn reads_start(contract: Contract<VestingWallet>, alice: Address) {
-        let (start, _) = contract.sender(alice).init(start(), DURATION);
+        let (start, _) =
+            contract.sender(alice).init(start(&contract), DURATION);
         assert_eq!(U256::from(start), contract.sender(alice).start());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn reads_duration(contract: Contract<VestingWallet>, alice: Address) {
         let (_, duration) = contract.sender(alice).init(0, DURATION);
         assert_eq!(U256::from(duration), contract.sender(alice).duration());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn reads_end(contract: Contract<VestingWallet>, alice: Address) {
-        let (start, duration) = contract.sender(alice).init(start(), DURATION);
+        let (start, duration) =
+            contract.sender(alice).init(start(&contract), DURATION);
 
         assert_eq!(U256::from(start + duration), contract.sender(alice).end());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn reads_max_end(contract: Contract<VestingWallet>, alice: Address) {
         contract.sender(alice).init(u64::MAX, u64::MAX);
         assert_eq!(
@@ -667,12 +667,13 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn gets_vesting_schedule(
         contract: Contract<VestingWallet>,
         alice: Address,
     ) {
-        let (start, duration) = contract.sender(alice).init(start(), DURATION);
+        let (start, duration) =
+            contract.sender(alice).init(start(&contract), DURATION);
 
         let one = uint!(1_U256);
         let two = uint!(2_U256);
@@ -699,12 +700,12 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn gets_vesting_schedule_zero_duration(
         contract: Contract<VestingWallet>,
         alice: Address,
     ) {
-        let (start, _) = contract.sender(alice).init(start(), 0);
+        let (start, _) = contract.sender(alice).init(start(&contract), 0);
 
         let two = uint!(2_U256);
 
@@ -719,19 +720,23 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn check_vested_amount_erc20(
         vesting_wallet: Contract<VestingWallet>,
         erc20: Contract<Erc20>,
         alice: Address,
     ) {
-        vesting_wallet.sender(alice).init(start(), DURATION);
-        erc20
-            .sender(alice)
-            ._mint(vesting_wallet.address(), U256::from(BALANCE))
-            .unwrap();
+        vesting_wallet.sender(alice).init(start(&vesting_wallet), DURATION);
+        vesting_wallet.vm().mock_static_call(
+            erc20.address(),
+            Erc20BalanceOfCall::balanceOfCall {
+                account: vesting_wallet.address(),
+            }
+            .abi_encode(),
+            Ok(U256::from(BALANCE).abi_encode()),
+        );
 
-        let start = start();
+        let start = start(&vesting_wallet);
         for i in 0..64 {
             let timestamp = i * DURATION / 60 + start;
             let expected_amount = U256::from(std::cmp::min(
@@ -750,14 +755,14 @@ mod tests {
         }
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn interface_id() {
         let actual = <VestingWallet as IVestingWallet>::interface_id();
         let expected: B32 = 0x23a2649d_u32.into();
         assert_ne!(actual, expected);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn supports_interface(contract: Contract<VestingWallet>, alice: Address) {
         assert!(contract.sender(alice).supports_interface(
             <VestingWallet as IVestingWallet>::interface_id()

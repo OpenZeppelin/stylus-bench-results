@@ -386,9 +386,9 @@ mod tests {
     #[public]
     impl Trace<S160> {}
 
-    use motsu::prelude::Contract;
+    use crate::test_support::Contract;
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn push(checkpoint: Contract<Trace<S160>>, alice: Address) {
         let first_key = uint!(1_U96);
         let first_value = uint!(11_U160);
@@ -428,7 +428,7 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn push_same_value(checkpoint: Contract<Trace<S160>>, alice: Address) {
         let first_key = uint!(1_U96);
         let first_value = uint!(11_U160);
@@ -467,7 +467,7 @@ mod tests {
             (third_key, third_value)
         );
     }
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn lower_lookup(checkpoint: Contract<Trace<S160>>, alice: Address) {
         checkpoint
             .sender(alice)
@@ -500,7 +500,7 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn upper_lookup(checkpoint: Contract<Trace<S160>>, alice: Address) {
         checkpoint
             .sender(alice)
@@ -533,7 +533,7 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn upper_lookup_recent(checkpoint: Contract<Trace<S160>>, alice: Address) {
         // `upper_lookup_recent` has different optimizations for "short" (<=5)
         // and "long" (>5) checkpoint arrays.
@@ -598,7 +598,7 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn latest(checkpoint: Contract<Trace<S160>>, alice: Address) {
         assert_eq!(checkpoint.sender(alice).latest(), uint!(0_U160));
         checkpoint
@@ -616,7 +616,7 @@ mod tests {
         assert_eq!(checkpoint.sender(alice).latest(), uint!(55_U160));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn latest_checkpoint(checkpoint: Contract<Trace<S160>>, alice: Address) {
         assert_eq!(checkpoint.sender(alice).latest_checkpoint(), None);
         checkpoint
@@ -637,7 +637,7 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_unordered_insertion(
         checkpoint: Contract<Trace<S160>>,
         alice: Address,

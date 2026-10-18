@@ -24,6 +24,7 @@ pub struct Erc1155UriStorage {
 /// Interface of an optional extension for ERC-1155 with storage based token URI
 /// management.
 #[interface_id]
+#[allow(missing_docs)]
 #[public]
 pub trait IErc1155UriStorage {
     /// Returns the Uniform Resource Identifier (URI) for `token_id` token.
@@ -87,8 +88,8 @@ impl Erc1155UriStorage {
 }
 #[cfg(test)]
 mod tests {
+    use crate::test_support::Contract;
     use alloy_primitives::{uint, Address};
-    use motsu::prelude::Contract;
     use stylus_sdk::prelude::*;
 
     use super::*;
@@ -115,7 +116,7 @@ mod tests {
 
     const TOKEN_ID: U256 = uint!(1_U256);
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn uri_returns_metadata_uri_when_token_uri_is_not_set(
         contract: Contract<Erc1155MetadataExample>,
         alice: Address,
@@ -127,7 +128,7 @@ mod tests {
         assert_eq!(uri, contract.sender(alice).uri(TOKEN_ID));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn uri_returns_empty_string_when_no_uri_is_set(
         contract: Contract<Erc1155MetadataExample>,
         alice: Address,
@@ -135,7 +136,7 @@ mod tests {
         assert!(contract.sender(alice).uri(TOKEN_ID).is_empty());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn uri_returns_token_uri_when_base_uri_is_empty(
         contract: Contract<Erc1155MetadataExample>,
         alice: Address,
@@ -152,7 +153,7 @@ mod tests {
         assert_eq!(token_uri, contract.sender(alice).uri(TOKEN_ID));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn uri_returns_concatenated_base_uri_and_token_uri(
         contract: Contract<Erc1155MetadataExample>,
         alice: Address,
@@ -174,7 +175,7 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn uri_ignores_metadata_uri_when_token_uri_is_set(
         contract: Contract<Erc1155MetadataExample>,
         alice: Address,
@@ -192,7 +193,7 @@ mod tests {
 
         assert_eq!(token_uri, contract.sender(alice).uri(TOKEN_ID));
     }
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn test_set_uri(
         contract: Contract<Erc1155MetadataExample>,
         alice: Address,
@@ -209,7 +210,7 @@ mod tests {
 
         assert_eq!(token_uri, contract.sender(alice).uri(TOKEN_ID));
     }
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn test_set_base_uri(
         contract: Contract<Erc1155MetadataExample>,
         alice: Address,

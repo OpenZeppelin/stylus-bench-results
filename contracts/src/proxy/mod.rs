@@ -205,7 +205,7 @@ mod tests {
             &mut self,
             to: Address,
             value: U256,
-        ) -> Result<bool, Self::Error> {
+        ) -> Result<bool, erc20::Error> {
             self.erc20.transfer(to, value)
         }
 
@@ -214,7 +214,7 @@ mod tests {
             from: Address,
             to: Address,
             value: U256,
-        ) -> Result<bool, Self::Error> {
+        ) -> Result<bool, erc20::Error> {
             self.erc20.transfer_from(from, to, value)
         }
 
@@ -226,7 +226,7 @@ mod tests {
             &mut self,
             spender: Address,
             value: U256,
-        ) -> Result<bool, Self::Error> {
+        ) -> Result<bool, erc20::Error> {
             self.erc20.approve(spender, value)
         }
     }

@@ -72,6 +72,8 @@ impl From<ownable::Error> for Error {
 /// upgrading the proxies that use this beacon.
 ///
 /// [BeaconProxy]: super::BeaconProxy
+#[allow(missing_docs)]
+#[public]
 pub trait IUpgradeableBeacon: IBeacon + IOwnable {
     /// Upgrades the beacon to a new implementation.
     ///
@@ -219,13 +221,13 @@ impl IOwnable for UpgradeableBeacon {
 }
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::*;
+    use crate::test_support::*;
     use stylus_sdk::alloy_primitives::Address;
 
     use super::*;
     use crate::{proxy::beacon::IBeacon, token::erc20::Erc20};
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn constructor(
         beacon: Contract<UpgradeableBeacon>,
         erc20: Contract<Erc20>,
@@ -243,7 +245,7 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn constructor_with_invalid_implementation(
         beacon: Contract<UpgradeableBeacon>,
         alice: Address,
@@ -264,7 +266,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn constructor_with_zero_owner(
         beacon: Contract<UpgradeableBeacon>,
         erc20: Contract<Erc20>,
@@ -283,7 +285,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn constructor_with_zero_implementation(
         beacon: Contract<UpgradeableBeacon>,
         alice: Address,
@@ -301,7 +303,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn upgrade_to_valid_implementation(
         beacon: Contract<UpgradeableBeacon>,
         erc20: Contract<Erc20>,
@@ -326,7 +328,7 @@ mod tests {
         beacon.assert_emitted(&Upgraded { implementation: erc20_2.address() });
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn upgrade_to_invalid_implementation(
         beacon: Contract<UpgradeableBeacon>,
         erc20: Contract<Erc20>,
@@ -356,7 +358,7 @@ mod tests {
         assert_eq!(implementation, erc20.address());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn upgrade_to_unauthorized(
         beacon: Contract<UpgradeableBeacon>,
         erc20: Contract<Erc20>,
@@ -387,7 +389,7 @@ mod tests {
         assert_eq!(implementation, erc20.address());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn upgrade_to_same_implementation(
         beacon: Contract<UpgradeableBeacon>,
         erc20: Contract<Erc20>,
@@ -411,7 +413,7 @@ mod tests {
         assert_eq!(implementation, erc20.address());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn upgrade_to_zero_address(
         beacon: Contract<UpgradeableBeacon>,
         erc20: Contract<Erc20>,
@@ -440,7 +442,7 @@ mod tests {
         assert_eq!(implementation, erc20.address());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn multiple_upgrades_emit_events(
         beacon: Contract<UpgradeableBeacon>,
         erc20: Contract<Erc20>,
@@ -473,7 +475,7 @@ mod tests {
         assert_eq!(implementation, erc20_3.address());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn transfer_ownership(
         beacon: Contract<UpgradeableBeacon>,
         erc20: Contract<Erc20>,
@@ -512,7 +514,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn transfer_ownership_to_zero_address(
         beacon: Contract<UpgradeableBeacon>,
         erc20: Contract<Erc20>,
@@ -540,7 +542,7 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn transfer_ownership_unauthorized(
         beacon: Contract<UpgradeableBeacon>,
         erc20: Contract<Erc20>,
@@ -569,7 +571,7 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn renounce_ownership(
         beacon: Contract<UpgradeableBeacon>,
         erc20: Contract<Erc20>,
@@ -601,7 +603,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn renounce_ownership_unauthorized(
         beacon: Contract<UpgradeableBeacon>,
         erc20: Contract<Erc20>,
@@ -629,7 +631,7 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn upgrade_after_ownership_transfer_chain(
         beacon: Contract<UpgradeableBeacon>,
         erc20: Contract<Erc20>,
@@ -689,7 +691,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn upgrade_after_renounce_and_transfer(
         beacon: Contract<UpgradeableBeacon>,
         erc20: Contract<Erc20>,

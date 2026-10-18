@@ -31,6 +31,7 @@ use crate::proxy::{
 #[storage]
 pub struct BeaconProxy {
     /// Reserved to preserve the storage layout of v0.3.0.
+    #[allow(dead_code)]
     beacon: StorageAddress,
 }
 

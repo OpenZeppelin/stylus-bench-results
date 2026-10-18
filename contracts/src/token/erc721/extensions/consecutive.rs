@@ -212,11 +212,11 @@ unsafe impl TopLevelStorage for Erc721Consecutive {}
 impl IErc721 for Erc721Consecutive {
     type Error = Error;
 
-    fn balance_of(&self, owner: Address) -> Result<U256, Self::Error> {
+    fn balance_of(&self, owner: Address) -> Result<U256, Error> {
         Ok(self.erc721.balance_of(owner)?)
     }
 
-    fn owner_of(&self, token_id: U256) -> Result<Address, Self::Error> {
+    fn owner_of(&self, token_id: U256) -> Result<Address, Error> {
         self._require_owned(token_id)
     }
 
@@ -225,7 +225,7 @@ impl IErc721 for Erc721Consecutive {
         from: Address,
         to: Address,
         token_id: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         // TODO: Once the SDK supports the conversion,
         // use alloy_primitives::bytes!("") here.
         self.safe_transfer_from_with_data(from, to, token_id, vec![].into())
@@ -237,7 +237,7 @@ impl IErc721 for Erc721Consecutive {
         to: Address,
         token_id: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         self.transfer_from(from, to, token_id)?;
         Ok(self.erc721._check_on_erc721_received(
             self.vm().msg_sender(),
@@ -253,7 +253,7 @@ impl IErc721 for Erc721Consecutive {
         from: Address,
         to: Address,
         token_id: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         if to.is_zero() {
             return Err(erc721::Error::InvalidReceiver(
                 ERC721InvalidReceiver { receiver: Address::ZERO },
@@ -277,11 +277,7 @@ impl IErc721 for Erc721Consecutive {
         Ok(())
     }
 
-    fn approve(
-        &mut self,
-        to: Address,
-        token_id: U256,
-    ) -> Result<(), Self::Error> {
+    fn approve(&mut self, to: Address, token_id: U256) -> Result<(), Error> {
         self._approve(to, token_id, self.vm().msg_sender(), true)
     }
 
@@ -289,11 +285,11 @@ impl IErc721 for Erc721Consecutive {
         &mut self,
         operator: Address,
         approved: bool,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         Ok(self.erc721.set_approval_for_all(operator, approved)?)
     }
 
-    fn get_approved(&self, token_id: U256) -> Result<Address, Self::Error> {
+    fn get_approved(&self, token_id: U256) -> Result<Address, Error> {
         self._require_owned(token_id)?;
         Ok(self.erc721._get_approved(token_id))
     }
@@ -668,7 +664,7 @@ impl Erc721Consecutive {
     /// Transfers `token_id` from `from` to `to`.
     ///
     /// As opposed to [`Self::transfer_from`], this imposes no restrictions on
-    /// `msg::sender`.
+    /// the message sender.
     ///
     /// # Arguments
     ///
@@ -853,8 +849,8 @@ impl IErc165 for Erc721Consecutive {
 }
 #[cfg(test)]
 mod tests {
+    use crate::test_support::Contract;
     use alloy_primitives::{uint, Address, U256};
-    use motsu::prelude::Contract;
 
     use super::*;
 
@@ -874,7 +870,7 @@ mod tests {
         }
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn mints(contract: Contract<Erc721Consecutive>, alice: Address) {
         let initial_balance = contract
             .sender(alice)
@@ -910,7 +906,7 @@ mod tests {
         assert_eq!(balance2, balance1 + uint!(1_U256));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_minting_token_id_twice(
         contract: Contract<Erc721Consecutive>,
         alice: Address,
@@ -930,7 +926,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_minting_token_invalid_receiver(
         contract: Contract<Erc721Consecutive>,
         alice: Address,
@@ -950,7 +946,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_to_is_zero(
         contract: Contract<Erc721Consecutive>,
         alice: Address,
@@ -967,7 +963,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_exceed_batch_size(
         contract: Contract<Erc721Consecutive>,
         alice: Address,
@@ -1019,15 +1015,13 @@ mod tests {
             "0xcEcba2F1DC234f70Dd89F2041029807F8D03A990"
         ));
 
-        let result = contract._mint_consecutive(
-            Address::from([1; 20]),
-            uint!(1_U96),
-        );
+        let result =
+            contract._mint_consecutive(Address::from([1; 20]), uint!(1_U96));
 
         assert!(result.is_ok(), "SDK constructor batch mint should succeed");
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn transfers_from(
         contract: Contract<Erc721Consecutive>,
         alice: Address,
@@ -1085,7 +1079,7 @@ mod tests {
         assert_eq!(alice_balance, uint!(1000_U256) - uint!(1_U256));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn burns(contract: Contract<Erc721Consecutive>, alice: Address) {
         // Mint batch of 1000 tokens to Alice.
         contract.sender(alice).init(vec![alice], vec![uint!(1000_U96)]);
@@ -1161,7 +1155,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_transfer_from(
         contract: Contract<Erc721Consecutive>,
         alice: Address,
@@ -1185,7 +1179,7 @@ mod tests {
         assert_eq!(owner, bob);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_transfers_from_approved_token(
         contract: Contract<Erc721Consecutive>,
         alice: Address,
@@ -1210,7 +1204,7 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_safe_transfer_from_incorrect_owner(
         contract: Contract<Erc721Consecutive>,
         alice: Address,
@@ -1237,7 +1231,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_internal_safe_transfer_nonexistent_token(
         contract: Contract<Erc721Consecutive>,
         alice: Address,
@@ -1256,7 +1250,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_safe_transfer_to_invalid_receiver(
         contract: Contract<Erc721Consecutive>,
         alice: Address,
@@ -1287,7 +1281,7 @@ mod tests {
         assert_eq!(alice, owner);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_transfers_from_with_data(
         contract: Contract<Erc721Consecutive>,
         alice: Address,
@@ -1316,7 +1310,7 @@ mod tests {
         assert_eq!(owner, bob);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_internal_safe_transfer_to_invalid_receiver(
         contract: Contract<Erc721Consecutive>,
         alice: Address,
@@ -1352,7 +1346,7 @@ mod tests {
         assert_eq!(alice, owner);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_internal_safe_transfer_from_incorrect_owner(
         contract: Contract<Erc721Consecutive>,
         alice: Address,
@@ -1378,7 +1372,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_mints(contract: Contract<Erc721Consecutive>, alice: Address) {
         let initial_balance = contract
             .sender(alice)
@@ -1404,7 +1398,7 @@ mod tests {
         assert_eq!(initial_balance + uint!(1_U256), balance);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_approve_for_nonexistent_token(
         contract: Contract<Erc721Consecutive>,
         alice: Address,
@@ -1423,7 +1417,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_approve_by_invalid_approver(
         contract: Contract<Erc721Consecutive>,
         alice: Address,
@@ -1448,7 +1442,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn approval_for_all(
         contract: Contract<Erc721Consecutive>,
         alice: Address,
@@ -1466,7 +1460,7 @@ mod tests {
         assert!(!contract.sender(alice).is_approved_for_all(alice, bob));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_get_approved_of_nonexistent_token(
         contract: Contract<Erc721Consecutive>,
         alice: Address,
@@ -1484,7 +1478,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn supports_interface(
         contract: Contract<Erc721Consecutive>,
         alice: Address,

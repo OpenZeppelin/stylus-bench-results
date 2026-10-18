@@ -1,4 +1,4 @@
-//! Regression test for matched responses from multiple TestVM call mocks.
+//! Regression test for matched responses from multiple `TestVM` call mocks.
 
 use alloy_primitives::Address;
 use stylus_sdk::{
@@ -16,8 +16,16 @@ fn mocked_static_calls_return_the_matched_response() {
     let first_output = [0xaa];
     let second_output = [0xbb];
 
-    vm.mock_static_call(first_target, first_input.to_vec(), Ok(first_output.to_vec()));
-    vm.mock_static_call(second_target, second_input.to_vec(), Ok(second_output.to_vec()));
+    vm.mock_static_call(
+        first_target,
+        first_input.to_vec(),
+        Ok(first_output.to_vec()),
+    );
+    vm.mock_static_call(
+        second_target,
+        second_input.to_vec(),
+        Ok(second_output.to_vec()),
+    );
 
     let mut output_len = 0;
     let status = unsafe {

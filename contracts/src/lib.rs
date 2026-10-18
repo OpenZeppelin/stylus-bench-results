@@ -54,7 +54,7 @@ impl IErc20 for MyContract {
         &mut self,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer(to, value)
     }
 
@@ -66,7 +66,7 @@ impl IErc20 for MyContract {
         &mut self,
         spender: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.approve(spender, value)
     }
 
@@ -75,7 +75,7 @@ impl IErc20 for MyContract {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer_from(from, to, value)
     }
 }
@@ -98,3 +98,6 @@ pub mod finance;
 pub mod proxy;
 pub mod token;
 pub mod utils;
+
+#[cfg(test)]
+mod test_support;

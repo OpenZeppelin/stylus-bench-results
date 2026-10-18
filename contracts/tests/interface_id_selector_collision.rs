@@ -1,3 +1,5 @@
+//! Compile-time regression test for colliding Solidity function selectors.
+
 #[test]
 fn fixture_signatures_have_identical_selectors() {
     assert_eq!(

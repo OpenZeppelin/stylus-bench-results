@@ -61,6 +61,7 @@ mod sol {
         #[derive(Debug)]
         #[allow(missing_docs)]
         error ERC3156InvalidReceiver(address receiver);
+
     }
 }
 
@@ -118,6 +119,7 @@ impl MethodError for Error {
 pub use borrower::IERC3156FlashBorrower;
 mod borrower {
     #![allow(missing_docs)]
+    #![allow(clippy::too_many_arguments)]
     #![cfg_attr(coverage_nightly, coverage(off))]
     use alloc::vec;
 
@@ -174,6 +176,7 @@ unsafe impl TopLevelStorage for Erc20FlashMint {}
 ///
 /// [ERC-3156]: https://eips.ethereum.org/EIPS/eip-3156
 #[interface_id]
+#[allow(missing_docs)]
 #[public]
 pub trait IErc3156FlashLender {
     /// The error type associated to this trait implementation.
@@ -232,7 +235,7 @@ pub trait IErc3156FlashLender {
     /// * `&mut self` - Write access to the contract's state.
     /// * `receiver` - The receiver of the flash loan. Should implement the
     ///   [`IERC3156FlashBorrower::on_flash_loan`] interface.
-    /// * `token` - The token to be flash loaned. Only [`contract::address()`]
+    /// * `token` - The token to be flash loaned. Only this contract's address
     ///   is supported.
     /// * `value` - The amount of tokens to be loaned.
     /// * `data` - Arbitrary data that is passed to the receiver.
@@ -318,12 +321,13 @@ impl Erc20FlashMint {
         }
         erc20._mint(receiver, value)?;
         let loan_receiver = IERC3156FlashBorrower::new(receiver);
-        let host = (*self.vm()).clone();
+        let initiator = self.vm().msg_sender();
+        let call = Call::new_mutating(self);
         let loan_return = loan_receiver
             .on_flash_loan(
-                &host,
-                Call::new_mutating(self),
-                self.vm().msg_sender(),
+                self.vm(),
+                call,
+                initiator,
                 token,
                 value,
                 fee,
@@ -372,7 +376,7 @@ impl Erc20FlashMint {
 // }
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::*;
+    use crate::test_support::*;
     use stylus_sdk::{
         abi::Bytes,
         alloy_primitives::{aliases::B32, uint, Address, U256},
@@ -403,7 +407,7 @@ mod tests {
             &self,
             token: Address,
             value: U256,
-        ) -> Result<U256, Self::Error> {
+        ) -> Result<U256, Error> {
             self.erc20_flash_mint.flash_fee(token, value)
         }
 
@@ -413,7 +417,7 @@ mod tests {
             token: Address,
             value: U256,
             data: Bytes,
-        ) -> Result<bool, Self::Error> {
+        ) -> Result<bool, Error> {
             self.erc20_flash_mint.flash_loan(
                 receiver,
                 token,
@@ -426,7 +430,7 @@ mod tests {
 
     unsafe impl TopLevelStorage for Erc20FlashMintTestExample {}
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn max_flash_loan_token_match(
         contract: Contract<Erc20FlashMintTestExample>,
         alice: Address,
@@ -436,7 +440,7 @@ mod tests {
         assert_eq!(max_flash_loan, U256::MAX);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn max_flash_loan_token_mismatch(
         contract: Contract<Erc20FlashMintTestExample>,
         alice: Address,
@@ -445,7 +449,7 @@ mod tests {
         assert_eq!(max_flash_loan, U256::MIN);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn max_flash_loan_when_token_minted(
         contract: Contract<Erc20FlashMintTestExample>,
         alice: Address,
@@ -456,7 +460,7 @@ mod tests {
             .sender(alice)
             .erc20
             ._mint(alice, initial_supply)
-            .motsu_expect("should mint initial supply tokens");
+            .expect("should mint initial supply tokens");
 
         let max_flash_loan =
             contract.sender(alice).max_flash_loan(contract.address());
@@ -464,7 +468,7 @@ mod tests {
         assert_eq!(max_flash_loan, U256::MAX - initial_supply);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn flash_fee(
         contract: Contract<Erc20FlashMintTestExample>,
         alice: Address,
@@ -479,12 +483,12 @@ mod tests {
         let flash_fee = contract
             .sender(alice)
             .flash_fee(contract.address(), uint!(1000_U256))
-            .motsu_expect("should return flash fee value");
+            .expect("should return flash fee value");
 
         assert_eq!(flash_fee, flash_fee_value);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn flash_fee_reverts_when_invalid_token(
         contract: Contract<Erc20FlashMintTestExample>,
         alice: Address,
@@ -494,7 +498,7 @@ mod tests {
         let err = contract
             .sender(alice)
             .flash_fee(invalid_token, uint!(1000_U256))
-            .motsu_expect_err("should return Error::UnsupportedToken");
+            .expect_error("should return Error::UnsupportedToken");
 
         assert!(matches!(
             err,
@@ -503,7 +507,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn flash_loan_reverts_when_exceeded_max_loan(
         contract: Contract<Erc20FlashMintTestExample>,
         alice: Address,
@@ -514,12 +518,12 @@ mod tests {
             .sender(alice)
             .erc20
             ._mint(alice, initial_supply)
-            .motsu_expect("should mint initial supply tokens");
+            .expect("should mint initial supply tokens");
 
         let err = contract
             .sender(alice)
             .flash_loan(alice, contract.address(), U256::MAX, vec![0, 1].into())
-            .motsu_expect_err("should return Error::ExceededMaxLoan");
+            .expect_error("should return Error::ExceededMaxLoan");
 
         assert!(matches!(
             err,
@@ -528,7 +532,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn flash_loan_reverts_when_receiver_is_zero_address(
         contract: Contract<Erc20FlashMintTestExample>,
         alice: Address,
@@ -542,7 +546,7 @@ mod tests {
                 uint!(1000_U256),
                 vec![0, 1].into(),
             )
-            .motsu_expect_err("should return Error::InvalidReceiver");
+            .expect_error("should return Error::InvalidReceiver");
 
         assert!(matches!(
             err,
@@ -550,7 +554,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn flash_loan_reverts_when_invalid_receiver(
         contract: Contract<Erc20FlashMintTestExample>,
         alice: Address,
@@ -565,7 +569,7 @@ mod tests {
                 uint!(1000_U256),
                 vec![0, 1].into(),
             )
-            .motsu_expect_err("should return Error::InvalidReceiver");
+            .expect_error("should return Error::InvalidReceiver");
 
         assert!(matches!(
             err,
@@ -574,7 +578,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn interface_id() {
         let actual =
             <Erc20FlashMintTestExample as IErc3156FlashLender>::interface_id();

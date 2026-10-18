@@ -1201,9 +1201,13 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 name = "basic-example"
 version = "0.3.0"
 dependencies = [
+ "alloy",
  "alloy-primitives",
+ "eyre",
  "openzeppelin-stylus",
  "stylus-sdk",
+ "stylus-tools",
+ "tokio",
 ]
 
 [[package]]
@@ -3925,10 +3929,14 @@ dependencies = [
 name = "merkle-proofs-example"
 version = "0.3.0"
 dependencies = [
+ "alloy",
  "alloy-primitives",
  "alloy-sol-types",
+ "eyre",
  "openzeppelin-crypto",
  "stylus-sdk",
+ "stylus-tools",
+ "tokio",
 ]
 
 [[package]]
@@ -4187,6 +4195,7 @@ dependencies = [
  "keccak-const",
  "openzeppelin-stylus-proc",
  "stylus-sdk",
+ "trybuild",
 ]
 
 [[package]]

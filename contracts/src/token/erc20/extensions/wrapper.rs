@@ -125,6 +125,7 @@ pub struct Erc20Wrapper {
 
 /// ERC-20 Wrapper Standard Interface
 #[interface_id]
+#[allow(missing_docs)]
 #[public]
 pub trait IErc20Wrapper {
     /// The error type associated to the trait implementation.
@@ -355,9 +356,7 @@ impl Erc20Wrapper {
 
         let underlying_balance = underlying_token
             .balance_of(self.vm(), Call::new(), contract_address)
-            .map_err(|_| ERC20InvalidUnderlying {
-                token: self.underlying(),
-            })?;
+            .map_err(|_| ERC20InvalidUnderlying { token: self.underlying() })?;
 
         let value = underlying_balance
             .checked_sub(erc20.total_supply())
@@ -482,6 +481,7 @@ mod tests {
 
     unsafe impl TopLevelStorage for Erc20WrapperTestExample {}
 
+    #[allow(clippy::needless_pass_by_value)]
     fn mock_transfer_from(
         vm: TestVM,
         token: Address,
@@ -499,6 +499,7 @@ mod tests {
         );
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn mock_transfer(vm: TestVM, token: Address, to: Address, value: U256) {
         let call = ERC20CallMock::transferCall { to, value };
         vm.mock_call(
@@ -509,6 +510,7 @@ mod tests {
         );
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn mock_balance_of(
         vm: TestVM,
         token: Address,
@@ -525,11 +527,13 @@ mod tests {
         );
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn mock_balance_of_reverts(vm: TestVM, token: Address, account: Address) {
         let call = ERC20CallMock::balanceOfCall { account };
         vm.mock_static_call(token, call.abi_encode(), Err(vec![1]));
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn mock_decimals(vm: TestVM, token: Address, decimals: u8) {
         let call = ERC20MetadataCallMock::decimalsCall {};
         vm.mock_static_call(

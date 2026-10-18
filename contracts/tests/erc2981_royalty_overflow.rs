@@ -1,3 +1,5 @@
+//! Test that ERC-2981 royalty calculation handles a representable quotient.
+
 use alloy_primitives::{uint, Address, U256};
 use openzeppelin_stylus::token::common::erc2981::{Erc2981, IErc2981};
 use stylus_sdk::testing::TestVM;

@@ -14,6 +14,7 @@ pub use upgradeable::{Error, IUpgradeableBeacon, UpgradeableBeacon};
 
 /// This is the interface that [`BeaconProxy`] expects of its beacon.
 #[interface_id]
+#[allow(missing_docs)]
 #[public]
 pub trait IBeacon {
     /// Must return an address that can be used as a delegate call target.

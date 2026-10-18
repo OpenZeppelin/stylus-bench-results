@@ -22,9 +22,9 @@ stylus-sdk = { workspace = true, features = ["stylus-test"] }
 trybuild = "1.0"
 
 [features]
-reentrant = ["stylus-sdk/reentrant"]
 export-abi = ["stylus-sdk/export-abi"]
 contract-client-gen = []
+reentrant = ["stylus-sdk/reentrant"]
 
 [lib]
 crate-type = ["lib"]

@@ -20,17 +20,9 @@ fn safe_transfer_rejects_noncanonical_true_return() {
     vm.set_contract_address(contract);
     vm.set_code(token, vec![0x00]);
 
-    let calldata = transferCall {
-        to: recipient,
-        value: U256::from(1),
-    }
-    .abi_encode();
-    vm.mock_call(
-        token,
-        calldata,
-        U256::ZERO,
-        Ok(U256::from(2).abi_encode()),
-    );
+    let calldata =
+        transferCall { to: recipient, value: U256::from(1) }.abi_encode();
+    vm.mock_call(token, calldata, U256::ZERO, Ok(U256::from(2).abi_encode()));
 
     let mut safe_erc20 = SafeErc20::from(&vm);
     let result = safe_erc20.safe_transfer(token, recipient, U256::from(1));

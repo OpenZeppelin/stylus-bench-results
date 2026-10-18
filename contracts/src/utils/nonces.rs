@@ -49,6 +49,7 @@ pub struct Nonces {
 }
 
 /// Interface for [`Nonces`]
+#[allow(missing_docs)]
 #[public]
 pub trait INonces {
     /// Returns the unused nonce for the given account.
@@ -129,8 +130,8 @@ impl Nonces {
 }
 #[cfg(test)]
 mod tests {
+    use crate::test_support::Contract;
     use alloy_primitives::{Address, U256};
-    use motsu::prelude::Contract;
     use stylus_sdk::prelude::*;
 
     use super::ONE;
@@ -138,12 +139,12 @@ mod tests {
 
     unsafe impl TopLevelStorage for Nonces {}
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn initiate_nonce(contract: Contract<Nonces>, alice: Address) {
         assert_eq!(contract.sender(alice).nonces(alice), U256::ZERO);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn use_nonce(contract: Contract<Nonces>, alice: Address) {
         let use_nonce = contract.sender(alice).use_nonce(alice);
         assert_eq!(use_nonce, U256::ZERO);
@@ -152,7 +153,7 @@ mod tests {
         assert_eq!(nonce, ONE);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn use_checked_nonce(contract: Contract<Nonces>, alice: Address) {
         let use_checked_nonce =
             contract.sender(alice).use_checked_nonce(alice, U256::ZERO);
@@ -162,7 +163,7 @@ mod tests {
         assert_eq!(nonce, ONE);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn use_checked_nonce_invalid_nonce(
         contract: Contract<Nonces>,
         alice: Address,

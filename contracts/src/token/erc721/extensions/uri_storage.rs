@@ -96,8 +96,8 @@ impl Erc721UriStorage {
 }
 #[cfg(test)]
 mod tests {
+    use crate::test_support::*;
     use alloy_primitives::{uint, Address};
-    use motsu::prelude::*;
     use stylus_sdk::prelude::*;
 
     use super::*;
@@ -157,14 +157,14 @@ mod tests {
 
     unsafe impl TopLevelStorage for Erc721MetadataExample {}
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn interface_id() {
         let actual = <Erc721MetadataExample as IErc721Metadata>::interface_id();
         let expected: B32 = 0x5b5e139f_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn supports_interface(
         contract: Contract<Erc721MetadataExample>,
         alice: Address,
@@ -179,7 +179,7 @@ mod tests {
         let fake_interface_id: B32 = 0x12345678_u32.into();
         assert!(!contract.sender(alice).supports_interface(fake_interface_id));
     }
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn token_uri_works(
         contract: Contract<Erc721MetadataExample>,
         alice: Address,

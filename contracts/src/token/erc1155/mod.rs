@@ -200,6 +200,7 @@ unsafe impl TopLevelStorage for Erc1155 {}
 
 /// Required interface of an [`Erc1155`] compliant contract.
 #[interface_id]
+#[allow(missing_docs)]
 #[public]
 pub trait IErc1155: IErc165 {
     /// The error type associated to this ERC-1155 trait implementation.
@@ -241,7 +242,7 @@ pub trait IErc1155: IErc165 {
     /// * `operator` - Account to add to the set of authorized operators.
     /// * `approved` - Flag that determines whether or not permission will be
     ///   granted to `operator`. If true, this means `operator` will be allowed
-    ///   to manage `msg::sender()`'s assets.
+    ///   to manage the caller's assets.
     ///
     /// # Errors
     ///
@@ -286,8 +287,7 @@ pub trait IErc1155: IErc165 {
     ///   interface id or returned with error.
     /// * [`Error::InvalidSender`] - Returned when `from` is [`Address::ZERO`].
     /// * [`Error::MissingApprovalForAll`] - Returned when `from` is not the
-    ///   caller (`msg::sender()`), and the caller does not have the right to
-    ///   approve.
+    ///   caller, and the caller does not have the right to approve.
     /// * [`Error::InsufficientBalance`] - Returned when `value` is greater than
     ///   the balance of the `from` account.
     ///
@@ -326,8 +326,7 @@ pub trait IErc1155: IErc165 {
     /// * [`Error::InsufficientBalance`] - Returned when any of the `values` is
     ///   greater than the balance of the `from` account.
     /// * [`Error::MissingApprovalForAll`] - Returned when `from` is not the
-    ///   caller (`msg::sender()`), and the caller does not have the right to
-    ///   approve.
+    ///   caller, and the caller does not have the right to approve.
     ///
     /// # Events
     ///
@@ -359,7 +358,7 @@ impl IErc1155 for Erc1155 {
         &self,
         accounts: Vec<Address>,
         ids: Vec<U256>,
-    ) -> Result<Vec<U256>, Self::Error> {
+    ) -> Result<Vec<U256>, Error> {
         Self::require_equal_arrays_length(&ids, &accounts)?;
 
         let balances: Vec<U256> = accounts
@@ -375,7 +374,7 @@ impl IErc1155 for Erc1155 {
         &mut self,
         operator: Address,
         approved: bool,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         self._set_approval_for_all(self.vm().msg_sender(), operator, approved)
     }
 
@@ -390,7 +389,7 @@ impl IErc1155 for Erc1155 {
         id: U256,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         self.authorize_transfer(from)?;
         self.do_safe_transfer_from(from, to, vec![id], vec![value], &data)
     }
@@ -402,7 +401,7 @@ impl IErc1155 for Erc1155 {
         ids: Vec<U256>,
         values: Vec<U256>,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         self.authorize_transfer(from)?;
         self.do_safe_transfer_from(from, to, ids, values, &data)
     }
@@ -671,7 +670,7 @@ impl Erc1155 {
     /// # Arguments
     ///
     /// * `&mut self` - Write access to the contract's state.
-    /// * `owner` - Tokens owner (`msg::sender`).
+    /// * `owner` - Tokens owner (the message sender).
     /// * `operator` - Account to add to the set of authorized operators.
     /// * `approved` - Flag that determines whether or not permission will be
     ///   granted to `operator`. If true, this means `operator` will be allowed
@@ -718,7 +717,7 @@ impl Erc1155 {
     ///
     /// * `&mut self` - Write access to the contract's state.
     /// * `operator` - Generally the address that initiated the token transfer
-    ///   (e.g. `msg::sender()`).
+    ///   (for example, `self.vm().msg_sender()`).
     /// * `from` - Account of the sender.
     /// * `to` - Account of the recipient.
     /// * `details` - Details about token transfer, check
@@ -1037,7 +1036,7 @@ impl Erc1155 {
         Ok(())
     }
 
-    /// Checks if `msg::sender()` is authorized to transfer tokens.
+    /// Checks if the current caller is authorized to transfer tokens.
     ///
     /// # Arguments
     ///
@@ -1046,8 +1045,8 @@ impl Erc1155 {
     ///
     /// # Errors
     ///
-    /// * [`Error::MissingApprovalForAll`] -  If the `from` is not the caller
-    ///   (`msg::sender()`), and the caller does not have the right to approve.
+    /// * [`Error::MissingApprovalForAll`] - If `from` is not the caller, and
+    ///   the caller does not have the right to approve.
     fn authorize_transfer(&self, from: Address) -> Result<(), Error> {
         let sender = self.vm().msg_sender();
         if from != sender && !self.is_approved_for_all(from, sender) {
@@ -1141,8 +1140,8 @@ enum Transfer {
 }
 #[cfg(test)]
 mod tests {
+    use crate::test_support::Contract;
     use alloy_primitives::{aliases::B32, uint, Address, U256};
-    use motsu::prelude::Contract;
 
     use super::*;
     use crate::utils::introspection::erc165::IErc165;
@@ -1205,7 +1204,7 @@ mod tests {
         assert_eq!(Transfer::Batch { ids, values }, details.transfer);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn balance_of_zero_balance(contract: Contract<Erc1155>, alice: Address) {
         let owner = alice;
         let token_id = random_token_ids(1)[0];
@@ -1213,7 +1212,7 @@ mod tests {
         assert_eq!(U256::ZERO, balance);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_array_length_mismatch(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1240,7 +1239,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn balance_of_batch_zero_balance(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1259,7 +1258,7 @@ mod tests {
         assert_eq!(expected, balances);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn set_approval_for_all(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1284,7 +1283,7 @@ mod tests {
         assert!(!contract.sender(alice).is_approved_for_all(alice, bob));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_invalid_operator_set_approval_for_all(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1304,7 +1303,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn mints(contract: Contract<Erc1155>, alice: Address) {
         let token_id = random_token_ids(1)[0];
         let value = random_values(1)[0];
@@ -1319,7 +1318,7 @@ mod tests {
         assert_eq!(balance, value);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_mints_to_invalid_receiver(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1341,7 +1340,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn mints_batch(contract: Contract<Erc1155>, alice: Address) {
         let token_ids = random_token_ids(4);
         let values = random_values(4);
@@ -1371,7 +1370,7 @@ mod tests {
         assert_eq!(values, balances);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn mints_batch_same_token(contract: Contract<Erc1155>, alice: Address) {
         let token_id = uint!(1_U256);
         let values = random_values(4);
@@ -1400,7 +1399,7 @@ mod tests {
         assert_eq!(vec![expected_balance; 4], balances);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_batch_mints_to_invalid_receiver(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1427,7 +1426,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_batch_mints_not_equal_arrays(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1450,7 +1449,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn burns(contract: Contract<Erc1155>, alice: Address) {
         let (token_ids, values) = contract.sender(alice).init(alice, 1);
 
@@ -1467,7 +1466,7 @@ mod tests {
         assert_eq!(U256::ZERO, balances);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_burns_from_invalid_sender(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1488,7 +1487,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_burns_with_insufficient_balance(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1511,7 +1510,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn burns_batch(contract: Contract<Erc1155>, alice: Address) {
         let (token_ids, values) = contract.sender(alice).init(alice, 4);
 
@@ -1528,7 +1527,7 @@ mod tests {
         assert_eq!(vec![U256::ZERO; 4], balances);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn burns_batch_same_token(contract: Contract<Erc1155>, alice: Address) {
         let token_id = uint!(1_U256);
         let value = uint!(80_U256);
@@ -1558,7 +1557,7 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_batch_burns_from_invalid_sender(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1579,7 +1578,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_batch_burns_with_insufficient_balance(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1608,7 +1607,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_batch_burns_not_equal_arrays(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1630,7 +1629,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_transfer_from(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1676,7 +1675,7 @@ mod tests {
         assert_eq!(amount_two, balance_id_two);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_invalid_receiver_safe_transfer_from(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1703,7 +1702,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_invalid_sender_safe_transfer_from(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1735,7 +1734,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_missing_approval_safe_transfer_from(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1763,7 +1762,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_insufficient_balance_safe_transfer_from(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1798,7 +1797,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_transfer_from_with_data(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1828,7 +1827,7 @@ mod tests {
         assert_eq!(values[0], balance);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_invalid_receiver_safe_transfer_from_with_data(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1856,7 +1855,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_invalid_sender_safe_transfer_from_with_data(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1888,7 +1887,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_missing_approval_safe_transfer_from_with_data(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1916,7 +1915,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_insufficient_balance_safe_transfer_from_with_data(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1952,7 +1951,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_batch_transfer_from(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -1988,7 +1987,7 @@ mod tests {
         assert_eq!(amount_two, balance_id_two);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_invalid_receiver_safe_batch_transfer_from(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -2015,7 +2014,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_invalid_sender_safe_batch_transfer_from(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -2047,7 +2046,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_missing_approval_safe_batch_transfer_from(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -2075,7 +2074,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_insufficient_balance_safe_batch_transfer_from(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -2111,7 +2110,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_not_equal_arrays_safe_batch_transfer_from(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -2146,7 +2145,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_batch_transfer_from_with_data(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -2180,7 +2179,7 @@ mod tests {
         assert_eq!(values[1], balance_id_two);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_invalid_receiver_safe_batch_transfer_from_with_data(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -2207,7 +2206,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_invalid_sender_safe_batch_transfer_from_with_data(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -2239,7 +2238,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_missing_approval_safe_batch_transfer_from_with_data(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -2267,7 +2266,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_insufficient_balance_safe_batch_transfer_from_with_data(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -2303,7 +2302,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_not_equal_arrays_safe_batch_transfer_from_with_data(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -2338,14 +2337,14 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn interface_id() {
         let actual = <Erc1155 as IErc1155>::interface_id();
         let expected: B32 = 0xd9b67a26_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn supports_interface(contract: Contract<Erc1155>, alice: Address) {
         assert!(contract
             .sender(alice)

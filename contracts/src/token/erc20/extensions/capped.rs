@@ -59,6 +59,7 @@ pub struct Capped {
 
 /// Interface for the token supply cap logic.
 #[interface_id]
+#[allow(missing_docs)]
 #[public]
 pub trait ICapped {
     /// Returns the cap on the token's total supply.
@@ -97,15 +98,15 @@ impl ICapped for Capped {
 }
 #[cfg(test)]
 mod tests {
+    use crate::test_support::Contract;
     use alloy_primitives::{uint, Address};
-    use motsu::prelude::Contract;
     use stylus_sdk::prelude::*;
 
     use super::*;
 
     unsafe impl TopLevelStorage for Capped {}
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn cap_works(contract: Contract<Capped>, alice: Address) {
         let value = uint!(2024_U256);
         contract.sender(alice).constructor(value).expect("should set cap");

@@ -137,6 +137,7 @@ pub trait IEip712: HostAccess {
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{address, b256, uint, Address, U256};
+    use stylus_sdk::{prelude::*, testing::TestVM};
 
     use super::{to_typed_data_hash, IEip712, FIELDS, SALT};
 
@@ -145,25 +146,26 @@ mod tests {
     const CONTRACT_ADDRESS: Address =
         address!("000000000000000000000000000000000000dEaD");
 
-    #[derive(Default)]
+    #[storage]
     struct TestEIP712;
 
     impl IEip712 for TestEIP712 {
         const NAME: &'static str = "A Name";
         const VERSION: &'static str = "1";
 
-        fn chain_id() -> U256 {
+        fn chain_id(&self) -> U256 {
             CHAIN_ID
         }
 
-        fn contract_address() -> Address {
+        fn contract_address(&self) -> Address {
             CONTRACT_ADDRESS
         }
     }
 
     #[test]
     fn domain_test() {
-        let contract = TestEIP712;
+        let vm = TestVM::new();
+        let contract = TestEIP712::from(&vm);
         let domain = contract.eip712_domain();
         assert_eq!(FIELDS, domain.0);
         assert_eq!(TestEIP712::NAME, domain.1);

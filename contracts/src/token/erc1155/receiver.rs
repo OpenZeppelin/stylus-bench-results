@@ -1,6 +1,7 @@
 //! Module with an interface required for smart contract in order to receive
 //! ERC-1155 token transfers.
 #![allow(missing_docs)]
+#![allow(clippy::too_many_arguments)]
 #![cfg_attr(coverage_nightly, coverage(off))]
 use alloc::{vec, vec::Vec};
 

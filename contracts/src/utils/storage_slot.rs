@@ -70,8 +70,8 @@ impl StorageSlot {
 mod tests {
     #![allow(clippy::unused_self)]
 
+    use crate::test_support::*;
     use alloy_primitives::{uint, Address, U256};
-    use motsu::prelude::*;
     use stylus_sdk::storage::StorageAddress;
 
     use super::*;
@@ -87,12 +87,19 @@ mod tests {
     #[public]
     impl Erc1967 {
         fn get_implementation(&self) -> Address {
-            StorageSlot::get_slot::<StorageAddress>(IMPLEMENTATION_SLOT).get()
+            StorageSlot::get_slot::<StorageAddress>(
+                IMPLEMENTATION_SLOT,
+                (*self.vm()).clone(),
+            )
+            .get()
         }
 
         fn set_implementation(&self, new_implementation: Address) {
-            StorageSlot::get_slot::<StorageAddress>(IMPLEMENTATION_SLOT)
-                .set(new_implementation);
+            StorageSlot::get_slot::<StorageAddress>(
+                IMPLEMENTATION_SLOT,
+                (*self.vm()).clone(),
+            )
+            .set(new_implementation);
         }
 
         fn get_address(&self) -> Address {
@@ -104,16 +111,23 @@ mod tests {
         }
 
         fn get_address_at_zero_slot(&self) -> Address {
-            StorageSlot::get_slot::<StorageAddress>(U256::ZERO).get()
+            StorageSlot::get_slot::<StorageAddress>(
+                U256::ZERO,
+                (*self.vm()).clone(),
+            )
+            .get()
         }
 
         fn set_address_at_zero_slot(&mut self, new_address: Address) {
-            StorageSlot::get_slot::<StorageAddress>(U256::ZERO)
-                .set(new_address);
+            StorageSlot::get_slot::<StorageAddress>(
+                U256::ZERO,
+                (*self.vm()).clone(),
+            )
+            .set(new_address);
         }
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn test_storage_slot(
         contract: Contract<Erc1967>,
         alice: Address,

@@ -86,6 +86,7 @@ pub struct Erc721Enumerable {
 /// This is the interface of the optional `Enumerable` extension
 /// of the ERC-721 standard.
 #[interface_id]
+#[allow(missing_docs)]
 #[public]
 pub trait IErc721Enumerable {
     /// The error type associated to this ERC-721 enumerable trait
@@ -151,7 +152,7 @@ impl IErc721Enumerable for Erc721Enumerable {
         &self,
         owner: Address,
         index: U256,
-    ) -> Result<U256, Self::Error> {
+    ) -> Result<U256, Error> {
         let token_count = self.owned_tokens_count.get(owner);
         let token = self.owned_tokens.getter(owner).get(index);
 
@@ -175,7 +176,7 @@ impl IErc721Enumerable for Erc721Enumerable {
         U256::from(tokens_length)
     }
 
-    fn token_by_index(&self, index: U256) -> Result<U256, Self::Error> {
+    fn token_by_index(&self, index: U256) -> Result<U256, Error> {
         self.all_tokens.get(index).ok_or(
             ERC721OutOfBoundsIndex { owner: Address::ZERO, index }.into(),
         )
@@ -364,7 +365,7 @@ impl Erc721Enumerable {
 }
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::*;
+    use crate::test_support::*;
     use stylus_sdk::prelude::*;
 
     use super::*;
@@ -412,7 +413,7 @@ mod tests {
 
     unsafe impl TopLevelStorage for Erc721EnumerableTestExample {}
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn total_supply_no_tokens(
         contract: Contract<Erc721EnumerableTestExample>,
         alice: Address,
@@ -420,7 +421,7 @@ mod tests {
         assert_eq!(U256::ZERO, contract.sender(alice).total_supply());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn reverts_when_token_by_index_is_out_of_bound(
         contract: Contract<Erc721EnumerableTestExample>,
         alice: Address,
@@ -441,7 +442,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn add_token_to_all_tokens_enumeration_works(
         contract: Contract<Erc721EnumerableTestExample>,
         alice: Address,
@@ -486,7 +487,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn remove_token_from_all_tokens_enumeration_works(
         contract: Contract<Erc721EnumerableTestExample>,
         alice: Address,
@@ -565,7 +566,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn check_increase_balance() {
         assert!(Erc721Enumerable::_check_increase_balance(0).is_ok());
 
@@ -580,7 +581,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn token_of_owner_by_index_works(
         contract: Contract<Erc721EnumerableTestExample>,
         alice: Address,
@@ -617,7 +618,7 @@ mod tests {
         assert_eq!(token_id, test_token_id);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn token_id_zero_is_enumerable(
         contract: Contract<Erc721EnumerableTestExample>,
         alice: Address,
@@ -647,7 +648,7 @@ mod tests {
         assert_eq!(enumerated_token, U256::ZERO);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn reads_legacy_owner_entries_without_a_count(
         contract: Contract<Erc721EnumerableTestExample>,
         alice: Address,
@@ -669,7 +670,7 @@ mod tests {
         assert_eq!(enumerated_token, token_id);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn reverts_when_token_of_owner_for_index_out_of_bound(
         contract: Contract<Erc721EnumerableTestExample>,
         alice: Address,
@@ -713,7 +714,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn reverts_when_token_of_owner_does_not_own_any_token(
         contract: Contract<Erc721EnumerableTestExample>,
         alice: Address,
@@ -732,7 +733,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn token_of_owner_by_index_after_transfer_works(
         contract: Contract<Erc721EnumerableTestExample>,
         alice: Address,
@@ -804,14 +805,14 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn interface_id() {
         let actual = <Erc721Enumerable as IErc721Enumerable>::interface_id();
         let expected: B32 = 0x780e9d63_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn supports_interface(
         contract: Contract<Erc721EnumerableTestExample>,
         alice: Address,

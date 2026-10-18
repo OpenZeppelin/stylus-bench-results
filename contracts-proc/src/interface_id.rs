@@ -18,11 +18,8 @@ pub(crate) fn interface_id(
 ) -> TokenStream {
     let mut input = parse_macro_input!(input as ItemTrait);
 
-    let unsafety = input.unsafety;
-    let mut selectors_map =
-        HashMap::<String, (String, proc_macro2::TokenStream)>::new();
-    let mut function_selectors =
-        Vec::<(String, String, proc_macro2::TokenStream)>::new();
+    let mut selectors_map = SelectorMap::new();
+    let mut function_selectors = Vec::<FunctionSelector>::new();
 
     for item in &mut input.items {
         let TraitItem::Fn(func) = item else {
@@ -68,35 +65,45 @@ pub(crate) fn interface_id(
         };
 
         // Store selector expression from every function in the trait.
-        match selectors_map.get(&signature) {
-            Some((existing_rust_fn_name, _)) => {
-                error!(
-                    existing_rust_fn_name,
-                    "selector collision detected: function '{}' has the same selector as function '{}': {}",
-                    rust_fn_name,
-                    existing_rust_fn_name,
-                    signature,
-                );
-            }
-            None => {
-                function_selectors.push((
-                    rust_fn_name.clone(),
-                    signature.clone(),
-                    selector.clone(),
-                ));
-                selectors_map.insert(
-                    signature,
-                    (
-                        rust_fn_name,
-                        quote! {
-                            alloy_primitives::aliases::B32::new(#selector)
-                        },
-                    ),
-                )
-            }
-        };
+        if let Some((existing_rust_fn_name, _)) = selectors_map.get(&signature)
+        {
+            error!(
+                existing_rust_fn_name,
+                "selector collision detected: function '{}' has the same selector as function '{}': {}",
+                rust_fn_name,
+                existing_rust_fn_name,
+                signature,
+            );
+        }
+
+        function_selectors.push((
+            rust_fn_name.clone(),
+            signature.clone(),
+            selector.clone(),
+        ));
+        selectors_map.insert(
+            signature,
+            (
+                rust_fn_name,
+                quote! {
+                    alloy_primitives::aliases::B32::new(#selector)
+                },
+            ),
+        );
     }
 
+    expand_interface(input, &selectors_map, &function_selectors)
+}
+
+type SelectorMap = HashMap<String, (String, proc_macro2::TokenStream)>;
+type FunctionSelector = (String, String, proc_macro2::TokenStream);
+
+fn expand_interface(
+    input: ItemTrait,
+    selectors_map: &SelectorMap,
+    function_selectors: &[FunctionSelector],
+) -> TokenStream {
+    let unsafety = input.unsafety;
     let name = input.ident;
     let vis = input.vis;
     let attrs = input.attrs;

@@ -45,8 +45,8 @@ pub(crate) fn p256_verify(
 #[cfg_attr(coverage_nightly, coverage(off))]
 #[cfg(test)]
 mod tests {
+    use crate::test_support::*;
     use alloy_primitives::{b256, Address, B256, U256};
-    use motsu::prelude::*;
     use stylus_sdk::prelude::*;
 
     use super::*;
@@ -86,7 +86,7 @@ mod tests {
         }
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn test_p256_verify_rejects_higher_s(
         contract: Contract<P256TestContract>,
         alice: Address,
@@ -100,16 +100,19 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    #[ignore = "Motsu doesn't support P256VERIFY precompile yet"]
+    #[openzeppelin_stylus_proc::vm_test]
     fn test_p256_verify(contract: Contract<P256TestContract>, alice: Address) {
+        contract.vm().mock_static_call(
+            P256_VERIFY_ADDRESS,
+            (VALID_HASH, VALID_R, VALID_S, VALID_X, VALID_Y).abi_encode(),
+            Ok(vec![1]),
+        );
         assert!(contract
             .sender(alice)
             .secp256r1_verify(VALID_HASH, VALID_R, VALID_S, VALID_X, VALID_Y));
     }
 
-    #[motsu::test]
-    #[ignore = "Motsu doesn't support P256VERIFY precompile yet"]
+    #[openzeppelin_stylus_proc::vm_test]
     fn p256_verify_returns_false_on_failed_verification(
         contract: Contract<P256TestContract>,
         alice: Address,
@@ -129,6 +132,12 @@ mod tests {
         );
         let y: B256 = b256!(
             "c7787964eaac00e5921fb1498a60f4606766b3d9685001558d1a974e7341513e"
+        );
+
+        contract.vm().mock_static_call(
+            P256_VERIFY_ADDRESS,
+            (hash, invalid_r, invalid_s, x, y).abi_encode(),
+            Ok(vec![]),
         );
 
         assert!(!contract

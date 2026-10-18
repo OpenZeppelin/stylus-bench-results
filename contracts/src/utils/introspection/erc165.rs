@@ -24,6 +24,7 @@ use stylus_sdk::prelude::public;
 ///
 /// [ERC]: https://eips.ethereum.org/EIPS/eip-165
 #[interface_id]
+#[allow(missing_docs)]
 #[public]
 pub trait IErc165 {
     /// Returns true if this contract implements the interface defined by

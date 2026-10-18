@@ -12,6 +12,7 @@ use stylus_sdk::prelude::public;
 /// This interface documents a method for upgradeability through a simplified
 /// proxy whose upgrades are fully controlled by the current implementation.
 #[interface_id]
+#[allow(missing_docs)]
 #[public]
 pub trait IErc1822Proxiable {
     /// Returns the storage slot that the proxiable contract assumes is being

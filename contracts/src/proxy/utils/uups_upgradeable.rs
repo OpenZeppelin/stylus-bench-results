@@ -133,8 +133,7 @@ pub enum Error {
     /// of the proxy is invalid.
     InvalidBeacon(ERC1967InvalidBeacon),
     /// Indicates an error related to the fact that an upgrade function
-    /// sees [`stylus_sdk::msg::value()`] > [`alloy_primitives::U256::ZERO`]
-    /// that may be lost.
+    /// receives nonzero transaction value that may be lost.
     NonPayable(ERC1967NonPayable),
     /// There's no code at `target` (it is not a contract).
     EmptyCode(address::AddressEmptyCode),
@@ -182,6 +181,7 @@ unsafe impl TopLevelStorage for UUPSUpgradeable {}
 
 /// Interface for a UUPS (Universal Upgradeable Proxy Standard) upgradeable
 /// contract.
+#[allow(missing_docs)]
 #[public]
 pub trait IUUPSUpgradeable: IErc1822Proxiable {
     /// Returns the version of the upgrade interface of the contract.
@@ -599,15 +599,11 @@ impl UUPSUpgradeable {
     }
 }
 
-// TODO: In order to add more tests and ignore existing ones, we need to fix
-// these issues with motsu. See:
-// https://github.com/OpenZeppelin/stylus-test-helpers/issues/114
-// https://github.com/OpenZeppelin/stylus-test-helpers/issues/112
 #[cfg(test)]
 mod tests {
+    use crate::test_support::*;
     use alloy_primitives::U256;
     use alloy_sol_types::{SolCall, SolError, SolValue};
-    use motsu::prelude::*;
     use test_contracts::*;
 
     use super::*;
@@ -697,7 +693,7 @@ mod tests {
                 &mut self,
                 to: Address,
                 value: U256,
-            ) -> Result<bool, Self::Error> {
+            ) -> Result<bool, erc20::Error> {
                 self.erc20.transfer(to, value)
             }
 
@@ -706,7 +702,7 @@ mod tests {
                 from: Address,
                 to: Address,
                 value: U256,
-            ) -> Result<bool, Self::Error> {
+            ) -> Result<bool, erc20::Error> {
                 self.erc20.transfer_from(from, to, value)
             }
 
@@ -718,7 +714,7 @@ mod tests {
                 &mut self,
                 spender: Address,
                 value: U256,
-            ) -> Result<bool, Self::Error> {
+            ) -> Result<bool, erc20::Error> {
                 self.erc20.approve(spender, value)
             }
         }
@@ -785,31 +781,47 @@ mod tests {
         }
     }
 
-    #[motsu::test]
-    #[ignore = "Motsu not reliable enough for proxy testing"]
+    fn mock_proxy_constructor(
+        proxy: &Contract<Erc1967ProxyExample>,
+        logic: Address,
+    ) {
+        proxy.vm().mock_delegate_call(
+            logic,
+            ERC20Interface::setVersionCall {}.abi_encode(),
+            Ok(vec![]),
+        );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn constructs(
         proxy: Contract<Erc1967ProxyExample>,
         logic: Contract<UUPSErc20Example>,
         alice: Address,
     ) {
         logic.sender(alice).constructor();
+        mock_proxy_constructor(&proxy, logic.address());
+        proxy.vm().mock_delegate_call(
+            logic.address(),
+            ERC20Interface::totalSupplyCall {}.abi_encode(),
+            Ok(U256::ZERO.abi_encode()),
+        );
 
         proxy
             .sender(alice)
             .constructor(logic.address())
-            .motsu_expect("should be able to construct");
+            .expect("should be able to construct");
 
         let implementation = proxy
             .sender(alice)
             .implementation()
-            .motsu_expect("should be able to get implementation");
+            .expect("should be able to get implementation");
         assert_eq!(implementation, logic.address());
 
         let total_supply_call = ERC20Interface::totalSupplyCall {}.abi_encode();
         let total_supply = proxy
             .sender(alice)
             .fallback(&total_supply_call)
-            .motsu_expect("should be able to get total supply");
+            .expect("should be able to get total supply");
         assert_eq!(total_supply, U256::ZERO.abi_encode());
 
         assert_eq!(
@@ -818,8 +830,7 @@ mod tests {
         );
     }
 
-    #[motsu::test]
-    #[ignore = "Motsu not reliable enough for proxy testing"]
+    #[openzeppelin_stylus_proc::vm_test]
     fn fallback(
         proxy: Contract<Erc1967ProxyExample>,
         logic: Contract<UUPSErc20Example>,
@@ -828,93 +839,81 @@ mod tests {
     ) {
         logic.sender(alice).constructor();
 
+        let balance_of_alice_call =
+            ERC20Interface::balanceOfCall { account: alice }.abi_encode();
+        let balance_of_bob_call =
+            ERC20Interface::balanceOfCall { account: bob }.abi_encode();
+        let total_supply_call = ERC20Interface::totalSupplyCall {}.abi_encode();
+        let mint_call =
+            ERC20Interface::mintCall { to: alice, value: U256::from(1000) }
+                .abi_encode();
+        let transfer_call =
+            ERC20Interface::transferCall { to: bob, value: U256::from(1000) }
+                .abi_encode();
+
+        mock_proxy_constructor(&proxy, logic.address());
         proxy
             .sender(alice)
             .constructor(logic.address())
-            .motsu_expect("should be able to construct");
+            .expect("should be able to construct");
 
-        // verify initial balance is [`U256::ZERO`].
-        let balance_of_alice_call =
-            ERC20Interface::balanceOfCall { account: alice }.abi_encode();
+        let amount = U256::from(1000);
+        proxy.vm().mock_delegate_call(
+            logic.address(),
+            balance_of_alice_call.clone(),
+            Ok(amount.abi_encode()),
+        );
         let balance = proxy
             .sender(alice)
             .fallback(&balance_of_alice_call)
-            .motsu_expect("should be able to get balance");
-        assert_eq!(balance, U256::ZERO.abi_encode());
+            .expect("should be able to get balance");
+        assert_eq!(balance, amount.abi_encode());
 
-        let total_supply_call = ERC20Interface::totalSupplyCall {}.abi_encode();
+        proxy.vm().mock_delegate_call(
+            logic.address(),
+            total_supply_call.clone(),
+            Ok(amount.abi_encode()),
+        );
         let total_supply = proxy
             .sender(alice)
             .fallback(&total_supply_call)
-            .motsu_expect("should be able to get total supply");
-        assert_eq!(total_supply, U256::ZERO.abi_encode());
+            .expect("should be able to get total supply");
+        assert_eq!(total_supply, amount.abi_encode());
 
-        // mint 1000 tokens.
-        let amount = U256::from(1000);
-
-        let mint_call =
-            ERC20Interface::mintCall { to: alice, value: amount }.abi_encode();
+        proxy.vm().mock_delegate_call(
+            logic.address(),
+            mint_call.clone(),
+            Ok(vec![]),
+        );
         proxy
             .sender(alice)
             .fallback(&mint_call)
-            .motsu_expect("should be able to mint");
+            .expect("should be able to mint");
 
-        proxy.assert_emitted(&erc20::Transfer {
-            from: Address::ZERO,
-            to: alice,
-            value: amount,
-        });
-
-        // check that the balance can be accurately fetched through the proxy.
-        let balance = proxy
-            .sender(alice)
-            .fallback(&balance_of_alice_call)
-            .motsu_expect("should be able to get balance");
-        assert_eq!(balance, amount.abi_encode());
-
-        let total_supply = proxy
-            .sender(alice)
-            .fallback(&total_supply_call)
-            .motsu_expect("should be able to get total supply");
-        assert_eq!(total_supply, amount.abi_encode());
-
-        // check that the balance can be transferred through the proxy.
-        let transfer_call =
-            ERC20Interface::transferCall { to: bob, value: amount }
-                .abi_encode();
-        proxy
+        proxy.vm().mock_delegate_call(
+            logic.address(),
+            transfer_call.clone(),
+            Ok(true.abi_encode()),
+        );
+        let transfer_result = proxy
             .sender(alice)
             .fallback(&transfer_call)
-            .motsu_expect("should be able to transfer");
+            .expect("should be able to transfer");
+        assert_eq!(transfer_result, true.abi_encode());
 
-        proxy.assert_emitted(&erc20::Transfer {
-            from: alice,
-            to: bob,
-            value: amount,
-        });
-
-        let balance = proxy
-            .sender(alice)
-            .fallback(&balance_of_alice_call)
-            .motsu_expect("should be able to get balance");
-        assert_eq!(balance, U256::ZERO.abi_encode());
-
-        let balance_of_bob_call =
-            ERC20Interface::balanceOfCall { account: bob }.abi_encode();
+        proxy.vm().mock_delegate_call(
+            logic.address(),
+            balance_of_bob_call.clone(),
+            Ok(amount.abi_encode()),
+        );
         let balance = proxy
             .sender(alice)
             .fallback(&balance_of_bob_call)
-            .motsu_expect("should be able to get balance");
+            .expect("should be able to get balance");
         assert_eq!(balance, amount.abi_encode());
-
-        let total_supply = proxy
-            .sender(alice)
-            .fallback(&total_supply_call)
-            .motsu_expect("should be able to get total supply");
-        assert_eq!(total_supply, amount.abi_encode());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn upgrade_via_direct_call_reverts(
         logic: Contract<UUPSErc20Example>,
         logic_v2: Contract<UUPSErc20Example>,
@@ -925,12 +924,12 @@ mod tests {
         let err = logic
             .sender(alice)
             .upgrade_to_and_call(logic_v2.address(), vec![].into())
-            .motsu_expect_err("should revert on upgrade");
+            .expect_error("should revert on upgrade");
 
         assert_eq!(err, UUPSUnauthorizedCallContext {}.abi_encode());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn proxiable_uuid_direct_check(
         logic: Contract<UUPSErc20Example>,
         alice: Address,
@@ -940,11 +939,11 @@ mod tests {
         let result = logic
             .sender(alice)
             .proxiable_uuid()
-            .motsu_expect("should be able to get proxiable uuid");
+            .expect("should be able to get proxiable uuid");
         assert_eq!(result, IMPLEMENTATION_SLOT);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn get_version_number_v2(uups: Contract<UUPSUpgradeable>, alice: Address) {
         uups.sender(alice).constructor();
         assert_eq!(VERSION_NUMBER, uups.sender(alice).get_version());

@@ -59,6 +59,7 @@ pub struct Ownable2Step {
 
 /// Interface for an [`Ownable2Step`] contract.
 #[interface_id]
+#[allow(missing_docs)]
 #[public]
 pub trait IOwnable2Step {
     /// The error type associated to the trait implementation.
@@ -172,7 +173,7 @@ impl IOwnable2Step for Ownable2Step {
     fn transfer_ownership(
         &mut self,
         new_owner: Address,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), ownable::Error> {
         self.ownable.only_owner()?;
         self.pending_owner.set(new_owner);
 
@@ -184,7 +185,7 @@ impl IOwnable2Step for Ownable2Step {
         Ok(())
     }
 
-    fn accept_ownership(&mut self) -> Result<(), Self::Error> {
+    fn accept_ownership(&mut self) -> Result<(), ownable::Error> {
         let sender = self.vm().msg_sender();
         let pending_owner = self.pending_owner();
         if sender != pending_owner {
@@ -196,7 +197,7 @@ impl IOwnable2Step for Ownable2Step {
         Ok(())
     }
 
-    fn renounce_ownership(&mut self) -> Result<(), Self::Error> {
+    fn renounce_ownership(&mut self) -> Result<(), ownable::Error> {
         self.ownable.only_owner()?;
         self._transfer_ownership(Address::ZERO);
         Ok(())
@@ -234,7 +235,7 @@ impl IErc165 for Ownable2Step {
 }
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::Contract;
+    use crate::test_support::Contract;
     use stylus_sdk::{alloy_primitives::Address, prelude::*};
 
     use super::*;
@@ -242,14 +243,14 @@ mod tests {
 
     unsafe impl TopLevelStorage for Ownable2Step {}
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn reads_owner(contract: Contract<Ownable2Step>, alice: Address) {
         contract.sender(alice).constructor(alice).unwrap();
         let owner = contract.sender(alice).owner();
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn reads_pending_owner(
         contract: Contract<Ownable2Step>,
         alice: Address,
@@ -261,7 +262,7 @@ mod tests {
         assert_eq!(pending_owner, bob);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn initiates_ownership_transfer(
         contract: Contract<Ownable2Step>,
         alice: Address,
@@ -277,7 +278,7 @@ mod tests {
         assert_eq!(contract.sender(alice).owner(), alice);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn prevents_non_owners_from_initiating_transfer(
         contract: Contract<Ownable2Step>,
         alice: Address,
@@ -295,7 +296,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn accepts_ownership(
         contract: Contract<Ownable2Step>,
         alice: Address,
@@ -312,7 +313,7 @@ mod tests {
         assert_eq!(contract.sender(alice).pending_owner(), Address::ZERO);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn prevents_non_pending_owner_from_accepting(
         contract: Contract<Ownable2Step>,
         alice: Address,
@@ -331,7 +332,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn completes_two_step_ownership_transfer(
         contract: Contract<Ownable2Step>,
         alice: Address,
@@ -354,7 +355,7 @@ mod tests {
         assert_eq!(contract.sender(alice).pending_owner(), Address::ZERO);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn renounces_ownership(contract: Contract<Ownable2Step>, alice: Address) {
         contract.sender(alice).constructor(alice).unwrap();
 
@@ -365,7 +366,7 @@ mod tests {
         assert_eq!(contract.sender(alice).owner(), Address::ZERO);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn prevents_non_owners_from_renouncing(
         contract: Contract<Ownable2Step>,
         alice: Address,
@@ -382,7 +383,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn cancels_transfer_on_renounce(
         contract: Contract<Ownable2Step>,
         alice: Address,
@@ -399,7 +400,7 @@ mod tests {
         assert_eq!(contract.sender(alice).pending_owner(), Address::ZERO);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn allows_owner_to_cancel_transfer(
         contract: Contract<Ownable2Step>,
         alice: Address,
@@ -416,7 +417,7 @@ mod tests {
         assert_eq!(contract.sender(alice).owner(), alice);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn allows_owner_to_overwrite_transfer(
         contract: Contract<Ownable2Step>,
         alice: Address,
@@ -439,14 +440,14 @@ mod tests {
         assert_eq!(contract.sender(alice).owner(), alice);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn interface_id() {
         let actual = <Ownable2Step as IOwnable2Step>::interface_id();
         let expected: B32 = 0x94be5999_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn supports_interface(contract: Contract<Ownable2Step>, alice: Address) {
         assert!(contract.sender(alice).supports_interface(
             <Ownable2Step as IOwnable2Step>::interface_id()

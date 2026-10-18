@@ -118,6 +118,7 @@ unsafe impl TopLevelStorage for Erc721Wrapper {}
 /// Interface of an extension of the ERC-721 token contract that supports token
 /// wrapping.
 #[interface_id]
+#[allow(missing_docs)]
 #[public]
 pub trait IErc721Wrapper: IErc721Receiver {
     /// The error type associated to this trait implementation.
@@ -308,7 +309,7 @@ impl Erc721Wrapper {
     ///
     /// # Errors
     ///
-    /// * [`Error::UnsupportedToken`] - If `msg::sender()` is not the underlying
+    /// * [`Error::UnsupportedToken`] - If the caller is not the underlying
     ///   token.
     /// * [`Error::InvalidSender`] - If `token_id` already exists.
     /// * [`Error::InvalidReceiver`] - If `to` is [`Address::ZERO`].
@@ -344,7 +345,9 @@ impl Erc721Wrapper {
     fn ensure_underlying(&self) -> Result<Address, Error> {
         let token = self.underlying();
         if self.vm().code_size(token) == 0 {
-            return Err(Error::UnsupportedToken(ERC721UnsupportedToken { token }));
+            return Err(Error::UnsupportedToken(ERC721UnsupportedToken {
+                token,
+            }));
         }
         Ok(token)
     }

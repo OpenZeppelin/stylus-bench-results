@@ -387,10 +387,7 @@ impl<P: PoseidonParams<F>, F: PrimeField> Poseidon2<P, F> {
 #[cfg(test)]
 mod tests {
     use super::Poseidon2;
-    use crate::{
-        field::instance::FpBLS12,
-        poseidon2::params::PoseidonParams,
-    };
+    use crate::{field::instance::FpBLS12, poseidon2::params::PoseidonParams};
 
     struct UnsupportedStateSize;
 

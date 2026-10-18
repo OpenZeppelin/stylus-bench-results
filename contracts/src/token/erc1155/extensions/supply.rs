@@ -42,6 +42,7 @@ pub struct Erc1155Supply {
 
 /// Required interface of a [`Erc1155Supply`] contract.
 #[interface_id]
+#[allow(missing_docs)]
 #[public]
 pub trait IErc1155Supply: IErc165 {
     /// Total value of tokens in with a given id.
@@ -100,7 +101,7 @@ impl IErc1155 for Erc1155Supply {
         &self,
         accounts: Vec<Address>,
         ids: Vec<U256>,
-    ) -> Result<Vec<U256>, Self::Error> {
+    ) -> Result<Vec<U256>, erc1155::Error> {
         self.erc1155.balance_of_batch(accounts, ids)
     }
 
@@ -108,7 +109,7 @@ impl IErc1155 for Erc1155Supply {
         &mut self,
         operator: Address,
         approved: bool,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc1155::Error> {
         self.erc1155.set_approval_for_all(operator, approved)
     }
 
@@ -123,7 +124,7 @@ impl IErc1155 for Erc1155Supply {
         id: U256,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc1155::Error> {
         self.erc1155.authorize_transfer(from)?;
         self.do_safe_transfer_from(from, to, vec![id], vec![value], &data)
     }
@@ -135,7 +136,7 @@ impl IErc1155 for Erc1155Supply {
         ids: Vec<U256>,
         values: Vec<U256>,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc1155::Error> {
         self.erc1155.authorize_transfer(from)?;
         self.do_safe_transfer_from(from, to, ids, values, &data)
     }
@@ -372,7 +373,7 @@ impl Erc1155Supply {
 }
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::Contract;
+    use crate::test_support::Contract;
     use stylus_sdk::{
         alloy_primitives::{Address, U256},
         prelude::*,
@@ -406,7 +407,7 @@ mod tests {
         }
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn before_mint(contract: Contract<Erc1155Supply>, alice: Address) {
         let token_id = random_token_ids(1)[0];
         assert_eq!(U256::ZERO, contract.sender(alice).total_supply(token_id));
@@ -414,7 +415,7 @@ mod tests {
         assert!(!contract.sender(alice).exists(token_id));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn after_mint_single(
         contract: Contract<Erc1155Supply>,
         alice: Address,
@@ -433,7 +434,7 @@ mod tests {
         assert!(contract.sender(alice).exists(token_ids[0]));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn after_mint_batch(
         contract: Contract<Erc1155Supply>,
         alice: Address,
@@ -449,7 +450,7 @@ mod tests {
         assert_eq!(total_supply_all, contract.sender(alice).total_supply_all());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn mint_reverts_on_invalid_receiver(
         contract: Contract<Erc1155Supply>,
         alice: Address,
@@ -471,7 +472,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     #[should_panic = "should not exceed `U256::MAX` for `total_supply`"]
     fn mint_panics_on_total_supply_overflow(
         contract: Contract<Erc1155Supply>,
@@ -494,7 +495,7 @@ mod tests {
         _ = contract.sender(alice)._mint(bob, token_id, three, &vec![].into());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     #[should_panic = "should not exceed `U256::MAX` for `total_supply_all`"]
     fn mint_panics_on_total_supply_all_overflow(
         contract: Contract<Erc1155Supply>,
@@ -515,7 +516,7 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn after_burn_single(
         contract: Contract<Erc1155Supply>,
         alice: Address,
@@ -535,7 +536,7 @@ mod tests {
         assert!(!contract.sender(alice).exists(token_ids[0]));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn after_burn_batch(
         contract: Contract<Erc1155Supply>,
         alice: Address,
@@ -561,7 +562,7 @@ mod tests {
         assert_eq!(U256::ZERO, contract.sender(alice).total_supply_all());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn burn_reverts_when_invalid_sender(
         contract: Contract<Erc1155Supply>,
         alice: Address,
@@ -583,7 +584,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn supply_unaffected_by_no_op(
         contract: Contract<Erc1155Supply>,
         alice: Address,
@@ -603,14 +604,14 @@ mod tests {
         assert!(!contract.sender(alice).exists(token_ids[0]));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn interface_id() {
         let actual = <Erc1155Supply as IErc1155Supply>::interface_id();
         let expected: B32 = 0xeac6339d_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn supports_interface(contract: Contract<Erc1155Supply>, alice: Address) {
         assert!(contract.sender(alice).supports_interface(
             <Erc1155Supply as IErc1155Supply>::interface_id()

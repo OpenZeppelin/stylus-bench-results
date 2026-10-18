@@ -1,10 +1,3 @@
 [workspace]
 
 [workspace.networks]
-
-# Shared reproducible optimization recipe. A contract opts in by declaring its own
-# [wasm-opt] table in its Stylus.toml. cargo-stylus 0.10.9+ replays this recipe
-# during deploy and verify, and includes it in the project hash.
-[wasm-opt]
-version = "116"
-flags = ["-O3"]

@@ -133,6 +133,7 @@ pub struct Erc2981 {
 /// tokens (NFTs) to enable universal support for royalty payments across all
 /// NFT marketplaces and ecosystem participants.
 #[interface_id]
+#[allow(missing_docs)]
 #[public]
 pub trait IErc2981: IErc165 {
     /// Returns how much royalty is owed and to whom, based on a sale price that
@@ -342,11 +343,10 @@ impl Erc2981 {
 }
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::uint;
-    use motsu::prelude::*;
-
     use super::*;
+    use crate::test_support::*;
     use crate::utils::introspection::erc165::IErc165;
+    use alloy_primitives::uint;
 
     const TOKEN_ID: U256 = uint!(1_U256);
     const SALE_PRICE: U256 = uint!(1000_U256);
@@ -358,7 +358,7 @@ mod tests {
     }
 
     // DEFAULT ROYALTY TESTS
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn fee_denominator_is_set_in_constructor(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -369,7 +369,7 @@ mod tests {
         assert_eq!(contract.sender(bob)._fee_denominator(), fee_denominator);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn royalty_info_default_royalty_is_same_for_all_tokens(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -393,7 +393,7 @@ mod tests {
         assert_eq!(royalty_amount, royalty_amount_2);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn royalty_info_with_token_specific_fee_numerator(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -425,7 +425,7 @@ mod tests {
         assert_eq!(uint!(800_U256), royalty_amount);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn royalty_info_with_different_token_royaltyes_for_different_tokens(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -464,7 +464,7 @@ mod tests {
         assert_eq!(uint!(800_U256), royalty_amount_2);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn royalty_info_with_almost_maximum_fee_numerator_value(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -485,7 +485,7 @@ mod tests {
         assert_eq!(SALE_PRICE - uint!(1_U256), amount);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn royalty_info_royalty_amount_equals_sale_price_when_royalty_fraction_is_100_percent(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -504,7 +504,7 @@ mod tests {
         assert_eq!(SALE_PRICE, amount);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn royalty_info_royalty_amount_is_zero_when_royalty_fraction_is_zero(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -523,7 +523,7 @@ mod tests {
         assert_eq!(U256::ZERO, amount);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn royalty_info_for_non_existent_token_uses_default_royalty(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -544,7 +544,7 @@ mod tests {
         assert_eq!(uint!(900_U256), royalty_amount);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn royalty_info_returns_zero_royalty_when_zero_sale_price(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -563,7 +563,7 @@ mod tests {
         assert_eq!(U256::ZERO, amount);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn royalty_info_with_no_royaltyes_set_returns_zero_address_and_amount(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -579,7 +579,7 @@ mod tests {
         assert_eq!(U256::ZERO, royalty_amount);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn set_default_royalty_reverts_if_invalid_receiver(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -601,7 +601,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn set_default_royalty_reverts_if_invalid_fee_numerator(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -625,7 +625,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn delete_default_royalty(contract: Contract<Erc2981>, bob: Address) {
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
@@ -653,7 +653,7 @@ mod tests {
         assert!(royalty_amount.is_zero());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn set_token_royalty_reverts_if_invalid_receiver(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -673,7 +673,7 @@ mod tests {
             }) if token_id == TOKEN_ID && receiver.is_zero()));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn set_token_royalty_reverts_if_invalid_fee_numerator(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -697,7 +697,7 @@ mod tests {
             denominator == U256::from(DEFAULT_FEE_DENOMINATOR)));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn royalty_info_uses_default_royalty_after_resetting_token_royalty(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -732,7 +732,7 @@ mod tests {
         assert_eq!(uint!(900_U256), royalty_amount);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn reset_token_royalty(contract: Contract<Erc2981>, bob: Address) {
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
@@ -752,7 +752,7 @@ mod tests {
         assert_eq!(U96::ZERO, token_royalty.royalty_fraction.get());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn royalty_info_uses_default_denominator_for_default_royalty(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -771,7 +771,7 @@ mod tests {
         assert_eq!(uint!(900_U256), amount);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn royalty_info_calculates_default_royalty_without_intermediate_overflow(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -789,7 +789,7 @@ mod tests {
         assert_eq!(expected_max_royalty_amount(), amount);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn royalty_info_uses_default_denominator_for_token_royalty(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -799,7 +799,7 @@ mod tests {
         contract
             .sender(bob)
             ._set_token_royalty(TOKEN_ID, bob, DEFAULT_FEE_NUMERATOR)
-            .expect("should set token royalty");
+            .expect("should set default royalty");
 
         let (receiver, amount) =
             contract.sender(bob).royalty_info(TOKEN_ID, SALE_PRICE);
@@ -808,7 +808,7 @@ mod tests {
         assert_eq!(uint!(900_U256), amount);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn royalty_info_calculates_token_royalty_without_intermediate_overflow(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -826,7 +826,7 @@ mod tests {
         assert_eq!(expected_max_royalty_amount(), amount);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn royalty_info_changes_royalty_calculation_on_fee_denominator_change(
         contract: Contract<Erc2981>,
         bob: Address,
@@ -852,7 +852,7 @@ mod tests {
         assert_eq!(amount_before * uint!(2_U256), amount_after);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn interface_id() {
         let actual = <Erc2981 as IErc2981>::interface_id();
         // Value taken from official EIP
@@ -861,7 +861,7 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn supports_interface(contract: Contract<Erc2981>, alice: Address) {
         assert!(contract
             .sender(alice)
