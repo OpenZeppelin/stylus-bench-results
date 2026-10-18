@@ -67,7 +67,8 @@ mod interface_id;
 ///
 /// ### Selector collision error
 ///
-/// The macro will catch duplicate Solidity signatures at compile time:
+/// The macro rejects duplicate Solidity signatures and distinct signatures that
+/// share the same four-byte selector at compile time:
 ///
 /// ```compile_fail
 /// #[interface_id]
@@ -76,6 +77,22 @@ mod interface_id;
 ///
 ///     #[selector(name = "transfer")]
 ///     fn send_tokens(&self, recipient: Address, value: U256); // transfer(address,uint256) ❌ collision!
+/// }
+/// ```
+///
+/// Signatures are compared by their actual selectors, so a hash collision is
+/// rejected even when names and argument types differ:
+///
+/// ```compile_fail
+/// use alloy_primitives::{aliases::B128, U256};
+/// use openzeppelin_stylus_proc::interface_id;
+///
+/// #[interface_id]
+/// trait SelectorCollision {
+///     fn burn(&self, value: U256);
+///
+///     #[selector(name = "collate_propagate_storage")]
+///     fn store(&self, value: B128);
 /// }
 /// ```
 #[proc_macro_attribute]

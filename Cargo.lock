@@ -4178,9 +4178,11 @@ dependencies = [
 name = "openzeppelin-stylus-proc"
 version = "0.3.0"
 dependencies = [
+ "alloy-primitives",
  "convert_case 0.6.0",
  "proc-macro2",
  "quote",
+ "stylus-sdk",
  "syn 2.0.119",
 ]
 
