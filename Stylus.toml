@@ -1,0 +1,5 @@
+# Reproducible, SDK-managed optimization used for deployments and verification.
+# Keep this aligned with scripts/bench.sh so measured gas matches deployed code.
+[wasm-opt]
+version = "116"
+flags = ["--enable-bulk-memory", "-O3"]
