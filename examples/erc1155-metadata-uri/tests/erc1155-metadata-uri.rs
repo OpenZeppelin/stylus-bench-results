@@ -180,6 +180,12 @@ async fn unauthorized_account_cannot_change_token_uris() -> eyre::Result<()> {
     assert!(err.reverted_with(Erc1155::OwnableUnauthorizedAccount {
         account: bob.address(),
     }));
+    let err = send!(contract_bob.initializeOwner(bob.address())).expect_err(
+        "an initialized contract must reject ownership reinitialization",
+    );
+    assert!(err.reverted_with(Erc1155::OwnableUnauthorizedAccount {
+        account: bob.address(),
+    }));
 
     let err =
         send!(contract_bob.setBaseURI("https://attacker.invalid/".to_owned()))

@@ -241,6 +241,12 @@ async fn unauthorized_account_cannot_change_token_uri() -> eyre::Result<()> {
     assert!(err.reverted_with(Erc721::OwnableUnauthorizedAccount {
         account: bob.address(),
     }));
+    let err = send!(contract_bob.initializeOwner(bob.address())).expect_err(
+        "an initialized contract must reject ownership reinitialization",
+    );
+    assert!(err.reverted_with(Erc721::OwnableUnauthorizedAccount {
+        account: bob.address(),
+    }));
     assert_eq!(contract_alice.tokenURI(token_id).call().await?, original_uri);
 
     Ok(())

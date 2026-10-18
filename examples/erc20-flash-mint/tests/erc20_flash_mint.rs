@@ -53,6 +53,12 @@ async fn unauthorized_account_cannot_change_flash_fee_configuration(
     assert!(err.reverted_with(Erc20FlashMint::OwnableUnauthorizedAccount {
         account: bob.address(),
     }));
+    let err = send!(contract_bob.initializeOwner(bob.address())).expect_err(
+        "an initialized contract must reject ownership reinitialization",
+    );
+    assert!(err.reverted_with(Erc20FlashMint::OwnableUnauthorizedAccount {
+        account: bob.address(),
+    }));
 
     let err = send!(contract_bob.setFlashFeeValue(U256::ZERO))
         .expect_err("an unrelated account must not change flash fees");
