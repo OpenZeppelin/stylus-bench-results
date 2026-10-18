@@ -429,6 +429,40 @@ mod tests {
         });
     }
 
+    #[openzeppelin_stylus_proc::vm_test]
+    fn public_permit_traits_forward_to_storage(
+        contract: Contract<PermitExample>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let vm = contract.vm();
+        vm.set_block_timestamp(100);
+        mock_recover(&vm, 27, alice);
+
+        let value = U256::from(42);
+        let mut call = contract.sender(alice);
+        assert_eq!(INonces::nonces(&*call, alice), U256::ZERO);
+        assert_eq!(
+            IErc20Permit::domain_separator(&*call),
+            call.permit.domain_separator()
+        );
+
+        IErc20Permit::permit(
+            &mut *call,
+            alice,
+            bob,
+            value,
+            U256::from(101),
+            27,
+            R,
+            S,
+        )
+        .expect("the public trait should forward a valid permit");
+
+        assert_eq!(INonces::nonces(&*call, alice), U256::ONE);
+        assert_eq!(call.erc20.allowance(alice, bob), value);
+    }
+
     #[test]
     fn interface_id_includes_domain_separator_nonces_and_permit() {
         let actual = <PermitExample as IErc20Permit>::interface_id();
