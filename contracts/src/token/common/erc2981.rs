@@ -32,6 +32,7 @@ use stylus_sdk::{
 
 use crate::utils::{
     introspection::erc165::IErc165,
+    math::alloy::{Math, Rounding},
     structs::checkpoints::{Size, S160},
 };
 
@@ -149,9 +150,6 @@ pub trait IErc2981: IErc165 {
     /// * `token_id` - Id of a token.
     /// * `sale_price` - The sale price of the token.
     ///
-    /// # Panics
-    ///
-    /// * If `sale_price` * `royalty_fraction` overflows.
     fn royalty_info(&self, token_id: U256, sale_price: U256)
         -> (Address, U256);
 }
@@ -183,13 +181,11 @@ impl IErc2981 for Erc2981 {
                 (&royalty_info.receiver, &royalty_info.royalty_fraction)
             };
 
-        let royalty_amount = sale_price
-            .checked_mul(U256::from(royalty_fraction.get()))
-            .expect(
-                "multiplication overflowed in `royalty_amount` calculation.",
-            )
-            .checked_div(U256::from(self._fee_denominator()))
-            .expect("division by zero in `royalty_amount` calculation.");
+        let royalty_amount = sale_price.mul_div(
+            U256::from(royalty_fraction.get()),
+            U256::from(self._fee_denominator()),
+            Rounding::Floor,
+        );
 
         (royalty_receiver.get(), royalty_amount)
     }
@@ -338,7 +334,6 @@ use stylus_sdk::prelude::errors::MethodError;
 mod tests {
     use crate::test_support::{test_address, TestContract as TestVMContract};
     use alloy_primitives::uint;
-    use crate::utils::math::alloy::{Math, Rounding};
 
     use super::*;
     use crate::utils::introspection::erc165::IErc165;
@@ -769,8 +764,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic = "multiplication overflowed in `royalty_amount` calculation."]
-    fn royalty_info_reverts_on_overflow_in_default_royalty() {
+    fn royalty_info_uses_full_precision_for_large_default_royalty() {
         let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
         let bob = test_address(stringify!(bob));
 
@@ -780,21 +774,6 @@ mod tests {
             .sender(bob)
             ._set_default_royalty(bob, DEFAULT_FEE_NUMERATOR)
             .expect("should set default royalty");
-        // should overflow.
-        _ = contract.sender(bob).royalty_info(TOKEN_ID, U256::MAX);
-    }
-
-    #[test]
-    fn royalty_info_uses_full_precision_for_large_sale_price() {
-        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
-        let bob = test_address(stringify!(bob));
-
-        contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
-        contract
-            .sender(bob)
-            ._set_default_royalty(bob, DEFAULT_FEE_NUMERATOR)
-            .expect("should set default royalty");
-
         let expected = U256::MAX.mul_div(
             U256::from(DEFAULT_FEE_NUMERATOR),
             U256::from(DEFAULT_FEE_DENOMINATOR),
@@ -825,8 +804,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic = "multiplication overflowed in `royalty_amount` calculation."]
-    fn royalty_info_reverts_on_overflow_in_token_royalty() {
+    fn royalty_info_uses_full_precision_for_large_token_royalty() {
         let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
         let bob = test_address(stringify!(bob));
 
@@ -836,8 +814,15 @@ mod tests {
             .sender(bob)
             ._set_token_royalty(TOKEN_ID, bob, DEFAULT_FEE_NUMERATOR)
             .expect("should set token royalty");
-        // should overflow.
-        _ = contract.sender(bob).royalty_info(TOKEN_ID, U256::MAX);
+        let expected = U256::MAX.mul_div(
+            U256::from(DEFAULT_FEE_NUMERATOR),
+            U256::from(DEFAULT_FEE_DENOMINATOR),
+            Rounding::Floor,
+        );
+        assert_eq!(
+            (bob, expected),
+            contract.sender(bob).royalty_info(TOKEN_ID, U256::MAX),
+        );
     }
 
     #[test]
