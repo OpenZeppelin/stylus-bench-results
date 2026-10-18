@@ -903,6 +903,24 @@ mod tests {
     }
 
     #[test]
+    fn individual_mint_is_forbidden_during_constructor() {
+        let contract =
+            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
+        let error = contract
+            .sender(alice)
+            ._mint(alice, TOKEN_ID)
+            .expect_err("individual mint must be unavailable during construction");
+
+        assert!(matches!(error, Error::ForbiddenMint(_)));
+        assert_eq!(
+            U256::ZERO,
+            contract.sender(alice).balance_of(alice).expect("balance query"),
+        );
+    }
+
+    #[test]
     fn error_when_minting_token_id_twice() {
         let contract =
             TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
@@ -1482,5 +1500,4 @@ mod tests {
         let fake_interface_id: B32 = 0x12345678_u32.into();
         assert!(!contract.sender(alice).supports_interface(fake_interface_id));
     }
-
 }
