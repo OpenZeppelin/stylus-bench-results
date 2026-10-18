@@ -74,6 +74,34 @@ async fn unauthorized_account_cannot_change_flash_fee_configuration(
 }
 
 #[tokio::test]
+async fn unauthorized_account_cannot_mint_flash_mint_tokens() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
+    let contract_alice = Erc20FlashMint::new(contract_addr, &alice.wallet);
+    let contract_bob = Erc20FlashMint::new(contract_addr, &bob.wallet);
+    let amount = U256::from(10);
+
+    let err = send!(contract_bob.mint(bob.address(), amount))
+        .expect_err("an unrelated account must not mint tokens");
+    assert!(err.reverted_with(Erc20FlashMint::OwnableUnauthorizedAccount {
+        account: bob.address(),
+    }));
+    assert_eq!(contract_alice.totalSupply().call().await?, U256::ZERO);
+
+    watch!(contract_alice.mint(bob.address(), amount))?;
+    assert_eq!(contract_alice.balanceOf(bob.address()).call().await?, amount);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn max_flash_loan() -> Result<()> {
     let alice = Account::new().await?;
 
