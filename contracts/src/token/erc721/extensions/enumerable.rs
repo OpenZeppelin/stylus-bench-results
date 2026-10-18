@@ -348,7 +348,9 @@ mod tests {
     use crate::test_support::*;
     use crate::utils::introspection::erc165::IErc165;
     use alloy_primitives::aliases::B32;
+    use alloy_sol_types::SolError;
     use stylus_sdk::prelude::*;
+    use stylus_sdk::stylus_core::calls::errors::MethodError;
 
     use super::*;
     use crate::token::erc721::Erc721;
@@ -881,5 +883,16 @@ mod tests {
 
         let fake_interface_id: B32 = 0x12345678_u32.into();
         assert!(!contract.sender(alice).supports_interface(fake_interface_id));
+    }
+
+    #[test]
+    fn encodes_enumerable_errors_with_their_solidity_selectors() {
+        assert_eq!(
+            Error::EnumerableForbiddenBatchMint(
+                ERC721EnumerableForbiddenBatchMint {},
+            )
+            .encode(),
+            ERC721EnumerableForbiddenBatchMint {}.abi_encode()
+        );
     }
 }

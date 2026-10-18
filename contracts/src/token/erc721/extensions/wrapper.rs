@@ -1422,4 +1422,52 @@ mod tests {
             initial_wrapped_balance + uint!(1_U256)
         );
     }
+
+    #[test]
+    fn converts_remaining_erc721_errors_and_encodes_wrapper_errors() {
+        let owner = Address::from([0x11; 20]);
+        let receiver = Address::from([0x22; 20]);
+        let approver = Address::from([0x33; 20]);
+        let operator = Address::from([0x44; 20]);
+
+        assert!(matches!(
+            Error::from(erc721::Error::InvalidOwner(
+                erc721::ERC721InvalidOwner { owner },
+            )),
+            Error::InvalidOwner(erc721::ERC721InvalidOwner { owner: actual })
+                if actual == owner
+        ));
+        assert!(matches!(
+            Error::from(erc721::Error::InvalidReceiverWithReason(
+                erc721::InvalidReceiverWithReason {
+                    reason: String::from("rejected"),
+                },
+            )),
+            Error::InvalidReceiverWithReason(
+                erc721::InvalidReceiverWithReason { reason }
+            ) if reason == "rejected"
+        ));
+        assert!(matches!(
+            Error::from(erc721::Error::InvalidApprover(
+                erc721::ERC721InvalidApprover { approver },
+            )),
+            Error::InvalidApprover(erc721::ERC721InvalidApprover {
+                approver: actual,
+            }) if actual == approver
+        ));
+        assert!(matches!(
+            Error::from(erc721::Error::InvalidOperator(
+                erc721::ERC721InvalidOperator { operator },
+            )),
+            Error::InvalidOperator(erc721::ERC721InvalidOperator {
+                operator: actual,
+            }) if actual == operator
+        ));
+
+        assert_eq!(
+            Error::InvalidReceiver(erc721::ERC721InvalidReceiver { receiver })
+                .encode(),
+            erc721::ERC721InvalidReceiver { receiver }.abi_encode()
+        );
+    }
 }

@@ -132,10 +132,12 @@ impl Nonces {
 mod tests {
     use crate::test_support::Contract;
     use alloy_primitives::{Address, U256};
+    use alloy_sol_types::SolError;
     use stylus_sdk::prelude::*;
+    use stylus_sdk::stylus_core::calls::errors::MethodError;
 
     use super::ONE;
-    use crate::utils::nonces::{Error, INonces, Nonces};
+    use crate::utils::nonces::{Error, INonces, InvalidAccountNonce, Nonces};
 
     unsafe impl TopLevelStorage for Nonces {}
 
@@ -174,5 +176,19 @@ mod tests {
             use_checked_nonce,
             Err(Error::InvalidAccountNonce(_))
         ));
+    }
+
+    #[test]
+    fn encodes_invalid_nonce_with_its_solidity_selector() {
+        let account = Address::from([0x55; 20]);
+        let current_nonce = U256::from(7);
+        assert_eq!(
+            Error::InvalidAccountNonce(InvalidAccountNonce {
+                account,
+                current_nonce,
+            })
+            .encode(),
+            InvalidAccountNonce { account, current_nonce }.abi_encode()
+        );
     }
 }

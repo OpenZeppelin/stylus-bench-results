@@ -851,6 +851,8 @@ impl IErc165 for Erc721Consecutive {
 mod tests {
     use crate::test_support::Contract;
     use alloy_primitives::{uint, Address, U256};
+    use alloy_sol_types::SolError;
+    use stylus_sdk::stylus_core::calls::errors::MethodError;
 
     use super::*;
 
@@ -1405,6 +1407,11 @@ mod tests {
                 checkpoints::CheckpointUnorderedInsertion {}
             )
         ));
+
+        assert_eq!(
+            Error::ForbiddenMint(ERC721ForbiddenMint {}).encode(),
+            ERC721ForbiddenMint {}.abi_encode()
+        );
     }
 
     #[openzeppelin_stylus_proc::vm_test]

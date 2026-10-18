@@ -210,7 +210,8 @@ fn check_if_malleable(s: &B256) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{address, b256, Address, B256, U256};
-    use alloy_sol_types::SolValue;
+    use alloy_sol_types::{SolError, SolValue};
+    use stylus_sdk::stylus_core::calls::errors::MethodError;
     use stylus_sdk::{prelude::Call, testing::TestVM};
 
     use super::*;
@@ -326,5 +327,14 @@ mod tests {
             err,
             Error::InvalidSignatureS(ECDSAInvalidSignatureS { s }) if s == invalid_s
         ));
+    }
+
+    #[test]
+    fn encodes_invalid_signature_errors_with_their_selectors() {
+        let s = B256::from([0x44; 32]);
+        assert_eq!(
+            Error::InvalidSignatureS(ECDSAInvalidSignatureS { s }).encode(),
+            ECDSAInvalidSignatureS { s }.abi_encode()
+        );
     }
 }

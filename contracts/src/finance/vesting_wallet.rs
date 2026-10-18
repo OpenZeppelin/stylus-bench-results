@@ -607,8 +607,9 @@ impl IErc165 for VestingWallet {
 #[cfg(test)]
 mod tests {
     use crate::test_support::{Contract, TransactionResultExt};
-    use alloy_sol_types::{SolCall, SolEvent, SolValue};
+    use alloy_sol_types::{SolCall, SolError, SolEvent, SolValue};
     use stylus_sdk::alloy_primitives::{uint, Address, U256, U64};
+    use stylus_sdk::stylus_core::calls::errors::MethodError;
 
     use super::*;
     use crate::token::erc20::Erc20;
@@ -990,5 +991,83 @@ mod tests {
                 .expect_error("token without code must be rejected"),
             Error::InvalidToken(InvalidToken { token }) if token == no_code
         ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn receive_accepts_ether(
+        contract: Contract<VestingWallet>,
+        alice: Address,
+    ) {
+        contract
+            .sender_and_value(alice, U256::ONE)
+            .receive()
+            .expect("should accept an empty-data Ether transfer");
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn interface_forwards_ownership_transfer_and_renounce(
+        contract: Contract<VestingWallet>,
+        alice: Address,
+        bob: Address,
+        charlie: Address,
+    ) {
+        contract
+            .sender(alice)
+            .constructor(alice, U64::from(1), U64::from(10))
+            .expect("should initialize the owner and vesting schedule");
+
+        assert!(matches!(
+            contract
+                .sender(bob)
+                .transfer_ownership(charlie)
+                .expect_error("non-owner should not transfer ownership"),
+            Error::UnauthorizedAccount(
+                ownable::OwnableUnauthorizedAccount { account }
+            ) if account == bob
+        ));
+
+        contract
+            .sender(alice)
+            .transfer_ownership(bob)
+            .expect("should transfer ownership through IVestingWallet");
+        assert_eq!(contract.sender(alice).owner(), bob);
+
+        contract
+            .sender(bob)
+            .renounce_ownership()
+            .expect("should renounce ownership through IVestingWallet");
+        assert_eq!(contract.sender(alice).owner(), Address::ZERO);
+    }
+
+    #[test]
+    fn converts_decrease_allowance_errors_and_encodes_wallet_errors() {
+        let spender = Address::from([0x12; 20]);
+        let current_allowance = U256::from(8);
+        let requested_decrease = U256::from(9);
+
+        let error =
+            Error::from(safe_erc20::Error::SafeErc20FailedDecreaseAllowance(
+                safe_erc20::SafeErc20FailedDecreaseAllowance {
+                    spender,
+                    current_allowance,
+                    requested_decrease,
+                },
+            ));
+        assert!(matches!(
+            error,
+            Error::SafeErc20FailedDecreaseAllowance(
+                safe_erc20::SafeErc20FailedDecreaseAllowance {
+                    spender: actual_spender,
+                    current_allowance: actual_allowance,
+                    requested_decrease: actual_decrease,
+                }
+            ) if actual_spender == spender
+                && actual_allowance == current_allowance
+                && actual_decrease == requested_decrease
+        ));
+
+        let token = Address::from([0x34; 20]);
+        let error = Error::InvalidToken(InvalidToken { token });
+        assert_eq!(error.encode(), InvalidToken { token }.abi_encode());
     }
 }

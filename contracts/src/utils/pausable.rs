@@ -170,9 +170,11 @@ impl Pausable {
 mod tests {
     use crate::test_support::Contract;
     use alloy_primitives::Address;
+    use alloy_sol_types::SolError;
     use stylus_sdk::prelude::*;
+    use stylus_sdk::stylus_core::calls::errors::MethodError;
 
-    use crate::utils::pausable::{Error, IPausable, Pausable};
+    use crate::utils::pausable::{EnforcedPause, Error, IPausable, Pausable};
 
     unsafe impl TopLevelStorage for Pausable {}
 
@@ -273,5 +275,13 @@ mod tests {
         let result = contract.sender(alice).unpause();
         assert!(matches!(result, Err(Error::ExpectedPause(_))));
         assert!(!contract.sender(alice).paused());
+    }
+
+    #[test]
+    fn encodes_pause_error_with_its_solidity_selector() {
+        assert_eq!(
+            Error::EnforcedPause(EnforcedPause {}).encode(),
+            EnforcedPause {}.abi_encode()
+        );
     }
 }

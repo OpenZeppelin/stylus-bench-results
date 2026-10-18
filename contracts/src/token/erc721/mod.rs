@@ -1074,7 +1074,8 @@ impl Erc721 {
 mod tests {
     use crate::test_support::*;
     use alloy_primitives::{aliases::B32, fixed_bytes, uint, Address, U256};
-    use alloy_sol_types::{sol, SolCall, SolValue};
+    use alloy_sol_types::{sol, SolCall, SolError, SolValue};
+    use stylus_sdk::stylus_core::calls::errors::MethodError;
     use stylus_sdk::{abi::Bytes, prelude::*};
 
     use super::{
@@ -2887,5 +2888,16 @@ mod tests {
             Error::InvalidReceiver(ERC721InvalidReceiver { receiver: target })
                 if target == receiver.address()
         ));
+    }
+
+    #[test]
+    fn encodes_erc721_errors_with_their_solidity_selectors() {
+        let receiver = Address::from([0x56; 20]);
+        let error = Error::InvalidReceiver(ERC721InvalidReceiver { receiver });
+
+        assert_eq!(
+            error.encode(),
+            ERC721InvalidReceiver { receiver }.abi_encode()
+        );
     }
 }

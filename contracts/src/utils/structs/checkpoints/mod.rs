@@ -375,7 +375,9 @@ impl<S: Size> Trace<S> {
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{uint, Address};
+    use alloy_sol_types::SolError;
     use stylus_sdk::prelude::*;
+    use stylus_sdk::stylus_core::calls::errors::MethodError;
 
     use super::{
         generic_size::S160, CheckpointUnorderedInsertion, Error, Trace,
@@ -660,5 +662,25 @@ mod tests {
                 CheckpointUnorderedInsertion {}
             )
         ));
+    }
+
+    #[test]
+    fn encodes_unordered_checkpoint_error_with_its_solidity_selector() {
+        assert_eq!(
+            Error::CheckpointUnorderedInsertion(
+                CheckpointUnorderedInsertion {},
+            )
+            .encode(),
+            CheckpointUnorderedInsertion {}.abi_encode()
+        );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    #[should_panic(expected = "should get checkpoint at index `0`")]
+    fn panics_when_checkpoint_index_is_out_of_bounds(
+        checkpoint: Contract<Trace<S160>>,
+        alice: Address,
+    ) {
+        checkpoint.sender(alice).at(uint!(0_U32));
     }
 }
