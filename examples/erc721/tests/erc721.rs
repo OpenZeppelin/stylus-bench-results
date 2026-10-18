@@ -117,6 +117,24 @@ async fn mints() -> eyre::Result<()> {
 }
 
 #[tokio::test]
+async fn unauthorized_account_cannot_mint() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+    let contract = Erc721::new(contract_addr, &bob.wallet);
+    let token_id = random_token_id();
+
+    let err = send!(contract.mint(bob.address(), token_id))
+        .expect_err("an unrelated account must not mint NFTs");
+    assert!(err.reverted_with(Erc721::OwnableUnauthorizedAccount {
+        account: bob.address(),
+    }));
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn error_when_minting_token_id_twice() -> eyre::Result<()> {
     let alice = Account::new().await?;
 

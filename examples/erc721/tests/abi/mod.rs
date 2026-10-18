@@ -43,6 +43,7 @@ sol!(
         error ERC721NonexistentToken(uint256 tokenId);
         error ERC721OutOfBoundsIndex(address owner, uint256 index);
         error ERC721EnumerableForbiddenBatchMint();
+        error OwnableUnauthorizedAccount(address account);
 
         #[derive(Debug, PartialEq)]
         event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
