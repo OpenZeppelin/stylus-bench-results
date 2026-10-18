@@ -113,12 +113,13 @@ impl UUPSProxyErc20Example {
                 uups_upgradeable::InvalidInitialization {},
             ));
         }
-        self.uups.set_version()?;
         self.ownable.constructor(owner)?;
+        self.uups.set_version()?;
         Ok(())
     }
 
     fn set_version(&mut self) -> Result<(), Error> {
+        self.ownable.only_owner()?;
         Ok(self.uups.set_version()?)
     }
 

@@ -368,6 +368,9 @@ impl UUPSUpgradeable {
     ///
     /// Intended to be called via a proxy ([`delegate_call`][delegate_call]) to
     /// record `VERSION_NUMBER` in the proxy’s storage.
+    /// A consumer that exposes a public wrapper must restrict it to the
+    /// contract's upgrade authority. Initializers can call this method
+    /// internally after initializing the authority state.
     ///
     /// # Arguments
     ///

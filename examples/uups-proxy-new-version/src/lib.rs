@@ -132,12 +132,22 @@ impl UUPSProxyErc20ExampleNewVersion {
                 uups_upgradeable::InvalidInitialization {},
             ));
         }
-        self.set_version()?;
         self.ownable.constructor(owner)?;
-        Ok(())
+        self.set_version_for_upgrade()
     }
 
     fn set_version(&mut self) -> Result<(), Error> {
+        self.ownable.only_owner()?;
+        self.set_version_for_upgrade()
+    }
+
+    pub fn get_version(&self) -> U32 {
+        VERSION_NUMBER
+    }
+}
+
+impl UUPSProxyErc20ExampleNewVersion {
+    fn set_version_for_upgrade(&mut self) -> Result<(), Error> {
         if self.not_delegated().is_ok() {
             return Err(Error::UnauthorizedCallContext(
                 UUPSUnauthorizedCallContext {},
@@ -151,10 +161,6 @@ impl UUPSProxyErc20ExampleNewVersion {
 
         self.version.set(VERSION_NUMBER);
         Ok(())
-    }
-
-    pub fn get_version(&self) -> U32 {
-        VERSION_NUMBER
     }
 }
 

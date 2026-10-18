@@ -2,7 +2,9 @@
 #[path = "../../devnet_test_support.rs"]
 mod devnet_test_support;
 
-use crate::devnet_test_support::{constructor, receipt, Account};
+use crate::devnet_test_support::{
+    constructor, receipt, send, Account, Revert,
+};
 use abi::Erc1967Example;
 use alloy::primitives::Bytes;
 use eyre::Result;
@@ -32,7 +34,11 @@ async fn permissionless_version_write_cannot_block_initialization() -> Result<()
         .contract_address;
 
     let attacker_proxy = Erc1967Example::new(proxy_address, &bob.wallet);
-    let _ = receipt!(attacker_proxy.setVersion());
+    let version_error = send!(attacker_proxy.setVersion())
+        .expect_err("a non-owner must not write the proxy version");
+    assert!(version_error.reverted_with(
+        Erc1967Example::OwnableUnauthorizedAccount { account: bob.address() }
+    ));
 
     let owner_proxy = Erc1967Example::new(proxy_address, &alice.wallet);
     let initialization = receipt!(owner_proxy.initialize(alice.address()));
