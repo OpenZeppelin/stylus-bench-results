@@ -1,0 +1,626 @@
+Reading additional input from stdin...
+2026-10-17T22:53:18.076547Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/basic/script/src/main.rs:
+use alloy::{
+    network::EthereumWallet, primitives::Address, providers::ProviderBuilder,
+    signers::local::PrivateKeySigner, sol,
+};
+use e2e::{Account, Constructor};
+2026-10-17T22:54:00.537978Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/access/control/mod.rs:
+        self._check_role(role, msg::sender())
+2026-10-17T22:54:10.215921Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/access/control/mod.rs:
+        evm::log(RoleAdminChanged {
+2026-10-17T22:58:25.095249Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/test-support/mod.rs:
+                let mut params = vec![abi_name($first)];
+                $(params.push(abi_name($rest));)*
+                format!("constructor({})", params.join(","))
+2026-10-17T22:58:34.778600Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc721/extensions/wrapper.rs:
+        let owner = underlying.owner_of(Call::new_mutating(self), token_id).map_err(
+            |_| Error::Erc721FailedOperation(Erc721FailedOperation {
+                token: self.underlying(),
+            }),
+        )?;
+2026-10-17T22:58:39.586359Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc721/extensions/wrapper.rs:
+            // from there, we are safe.
+            match underlying.transfer_from(
+                Call::new_mutating(self),
+2026-10-17T22:58:52.216964Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc20/extensions/wrapper.rs:
+        let balance = erc20
+            .balance_of(Call::new_mutating(self), contract_address)
+2026-10-17T23:01:05.611435Z ERROR codex_core::tools::router: error=apply_patch verification failed: invalid hunk at line 8, Update hunk does not contain any lines
+2026-10-17T23:01:42.328618Z ERROR codex_core::tools::router: error=agent_name `..` is reserved
+2026-10-17T23:07:03.463495Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/utils/address.rs:
+    abi::Bytes,
+2026-10-17T23:10:43.252517Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc1155/mod.rs:
+use stylus_sdk::{
+    call,
+    prelude::*,
+2026-10-17T23:12:48.722446Z ERROR codex_core::tools::router: error=apply_patch verification failed: invalid hunk at line 15, Update hunk does not contain any lines
+2026-10-17T23:16:12.522161Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/scripts/stylus-tools.sh:
+  if [[ ! "$version" =~ version[[:space:]]116([[:space:]]|\\(|$) ]]; then
+2026-10-17T23:17:24.390434Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/benches/src/lib.rs:
+    // The SDK's deployer uses the contract's Stylus.toml. Enable the
+    // SDK's pinned optimizer only for the optimized benchmark pass and restore
+    // any existing config as soon as deployment completes.
+    let _wasm_opt = match opt {
+        Opt::CacheWasmOpt => Some(WasmOptConfig::enable(&contract_dir)?),
+        Opt::None | Opt::Cache => None,
+2026-10-17T23:18:14.620166Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/test_support.rs:
+    pub fn from_tag(tag: &str) -> Self {
+2026-10-17T23:19:51.346643Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/benches/src/report.rs:
+    pub async fn generate<
+2026-10-17T23:21:23.470341Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/templates/crypto-erc20/Stylus.toml:
+# Opt in to the workspace-pinned Binaryen 116 / -O3 recipe for reproducible
+# cargo-stylus deploy and verify.
+[wasm-opt]
+version = "116"
+flags = ["-O3"]
+2026-10-17T23:22:26.043542Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/scripts/e2e-tests.sh:
+# integration-test targets. These tests use stylus-tools::devnet::Node, which starts and
+# stops a pinned Nitro container through Testcontainers. Running serially keeps
+# the Docker and devnet load bounded on local and hosted runners.
+2026-10-17T23:22:27.998673Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/scripts/e2e-tests.sh:
+# Docker and devnet load bounded on local and hosted runners.
+2026-10-17T23:31:23.214777Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc20/extensions/wrapper.rs:
+        erc20_contract.assert_emitted(&erc20::Transfer {
+            from: contract.address(),
+            to: alice,
+            value: amount,
+        });
+
+        assert_eq!(
+            erc20_contract.sender(alice).balance_of(alice),
+            initial_balance + amount
+        );
+
+        assert_eq!(
+            contract.sender(alice).erc20.balance_of(alice),
+            initial_wrapped_balance - amount
+        );
+
+        assert_eq!(
+            erc20_contract
+                .sender(alice)
+                .balance_of(contract.address()),
+            initial_contract_balance - amount
+        );
+2026-10-17T23:36:55.949013Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/finance/vesting_wallet.rs:
+            let scaled_allocation = total_allocation
+                .checked_mul(elapsed)
+                .expect("scaled allocation exceeds `U256::MAX`" );
+
+            // SAFETY: `self.duration()` is non-zero. If `self.duration()` were
+            // zero, then `end == start`, meaning that `timestamp >= self.end()`
+            // and the function would have returned earlier.
+            scaled_allocation / self.duration()
+2026-10-17T23:37:01.501430Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/proxy/utils/uups_upgradeable.rs:
+            interface UUPSUpgradeableInterface {
+                function proxiableUUID() external view returns (bytes32);
+                function upgradeToAndCall(address newImplementation, bytes calldata data) external payable;
+2026-10-17T23:45:40.654938Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc20/extensions/wrapper.rs:
+        assert_eq!(contract.sender(alice).total_supply(), amount);
+        assert_eq!(contract.sender(alice).balance_of(alice), amount);
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn recover_works(
+2026-10-17T23:45:56.779367Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/test_support.rs:
+static NEXT_ADDRESS: AtomicU64 = AtomicU64::new(1);
+
+/// Creates stable test addresses and contracts from readable parameter names.
+trait FromTag: Sized {
+2026-10-17T23:47:04.055533Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc721/mod.rs:
+    ///   (i.e. `msg::sender()`).
+2026-10-17T23:47:54.207015Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/proxy/beacon/proxy.rs:
+    use stylus_sdk::{
+        alloy_primitives::{Address, U256},
+        prelude::*,
+        testing::TestVM,
+        ArbResult,
+2026-10-17T23:48:50.146967Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/tests/fee_on_transfer_wrapper_poc.rs:
+use alloy_primitives::{Address, U256, uint};
+use alloy_sol_types::{SolCall, SolType};
+use openzeppelin_stylus::token::erc20::{
+    extensions::wrapper::Erc20Wrapper,
+    interface::Erc20Interface,
+    Erc20,
+2026-10-17T23:50:26.266627Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 83580
+2026-10-17T23:52:51.089990Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/SECURITY-REVIEW.md:
+The v0.3.0 report marks each resolved; current-source validation of every item is pending.
+2026-10-18T00:03:23.772941Z ERROR codex_core::tools::router: error=exec_command failed: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'rm -f contracts/wip/interface_id_selector_collision.stderr && cargo test -p openzeppelin-stylus --test interface_id_selector_collision -- --nocapture'` rejected: rm -f style commands are not permitted. Use a safer approach\")" }
+2026-10-18T00:08:59.253521Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts-proc/src/interface_id.rs:
+                    quote! {
+                        assert!(
+                            u32::from_be_bytes(#selector_a)
+                                != u32::from_be_bytes(#selector_b),
+                            #message
+                        );
+                    }
+                })
+        })
+2026-10-18T00:15:36.381652Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 64666
+2026-10-18T00:47:08.465122Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/access-control/Stylus.toml:
+[wasm-opt]
+version = "116"
+flags = ["-O3"]
+2026-10-18T01:32:14.872402Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 77803
+2026-10-18T02:14:36.459019Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/vesting-wallet/tests/vesting-wallet.rs:
+use crate::test_support::{
+    send, watch, Account, ContractInitializationError, EventExt, Panic,
+    PanicCode, Revert,
+};
+2026-10-18T02:37:46.924130Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/benches/src/lib.rs:
+struct WasmOptConfig {
+    path: PathBuf,
+    original: Option<Vec<u8>>,
+}
+
+impl WasmOptConfig {
+    fn enable(contract_dir: &Path) -> eyre::Result<Self> {
+        let path = contract_dir.join("Stylus.toml");
+        let original = path.exists().then(|| fs::read(&path)).transpose()?;
+        let existing =
+            original.as_deref().map(std::str::from_utf8).transpose()?;
+        let existing = existing.unwrap_or_default();
+        if !has_wasm_opt_table(existing) {
+            let config = format!(
+                "{existing}\n[wasm-opt]\nversion = \"116\"\nflags = [\"-O3\"]\n"
+            );
+            fs::write(&path, config)?;
+        }
+
+        Ok(Self { path, original })
+    }
+
+    fn disable(contract_dir: &Path) -> eyre::Result<Self> {
+        let path = contract_dir.join("Stylus.toml");
+        let original = path.exists().then(|| fs::read(&path)).transpose()?;
+        let existing =
+            original.as_deref().map(std::str::from_utf8).transpose()?;
+        if let Some(existing) = existing {
+            if let Some(disabled) = without_wasm_opt_table(existing) {
+                fs::write(&path, disabled)?;
+            }
+        }
+
+        Ok(Self { path, original })
+    }
+}
+
+fn has_wasm_opt_table(contents: &str) -> bool {
+    contents.lines().any(|line| table_header(line) == Some("[wasm-opt]"))
+}
+
+fn without_wasm_opt_table(contents: &str) -> Option<String> {
+    let mut found = false;
+    let mut in_wasm_opt = false;
+    let mut output = String::with_capacity(contents.len());
+
+    for line in contents.split_inclusive('\n') {
+        if let Some(header) = table_header(line) {
+            in_wasm_opt = header == "[wasm-opt]"
+                || header == "[[wasm-opt]]"
+                || header.starts_with("[wasm-opt.")
+                || header.starts_with("[[wasm-opt.");
+            found |= in_wasm_opt;
+        }
+        if !in_wasm_opt {
+            output.push_str(line);
+        }
+    }
+
+    found.then_some(output)
+}
+
+fn table_header(line: &str) -> Option<&str> {
+    let header = line.split('#').next()?.trim();
+    (header.starts_with('[') && header.ends_with(']')).then_some(header)
+}
+
+impl Drop for WasmOptConfig {
+    fn drop(&mut self) {
+        match self.original.take() {
+            Some(contents) => {
+                let _ = fs::write(&self.path, contents);
+            }
+            None => {
+                let _ = fs::remove_file(&self.path);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod wasm_opt_config_tests {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    use super::*;
+
+    static NEXT_TEMP_DIRECTORY: AtomicU64 = AtomicU64::new(0);
+
+    fn temp_contract_dir() -> PathBuf {
+        let id = NEXT_TEMP_DIRECTORY.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir()
+            .join(
+                format!("stylus-bench-wasm-opt-{}-{id}", std::process::id(),),
+            );
+        fs::create_dir_all(&path)
+            .expect("temporary directory should be created");
+        path
+    }
+
+    #[test]
+    fn disable_temporarily_removes_only_the_optimizer_table_and_restores_bytes()
+    {
+        let directory = temp_contract_dir();
+        let path = directory.join("Stylus.toml");
+        let original = b"# contract opts in\n[wasm-opt]\nversion = \"116\"\nflags = [\"-O3\"]\n[other]\nvalue = true\n";
+        fs::write(&path, original).expect("config should be written");
+
+        {
+            let _guard = WasmOptConfig::disable(&directory).unwrap();
+            let disabled = fs::read_to_string(&path)
+                .expect("disabled config should be readable");
+            assert!(!has_wasm_opt_table(&disabled));
+            assert!(disabled.contains("[other]\nvalue = true"));
+        }
+
+        assert_eq!(fs::read(&path).unwrap(), original);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn enable_preserves_an_existing_optimizer_table() {
+        let directory = temp_contract_dir();
+        let path = directory.join("Stylus.toml");
+        let original = b"# inherited recipe\n[wasm-opt]\n";
+        fs::write(&path, original).expect("config should be written");
+
+        {
+            let _guard = WasmOptConfig::enable(&directory).unwrap();
+            assert_eq!(fs::read(&path).unwrap(), original);
+        }
+
+        assert_eq!(fs::read(&path).unwrap(), original);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn enable_temporary_config_is_removed_when_none_existed() {
+        let directory = temp_contract_dir();
+        let path = directory.join("Stylus.toml");
+
+        {
+            let _guard = WasmOptConfig::enable(&directory).unwrap();
+            let enabled =
+                fs::read_to_string(&path).expect("config should be created");
+            assert!(has_wasm_opt_table(&enabled));
+            assert!(enabled.contains("version = \"116\""));
+        }
+
+        assert!(!path.exists());
+        fs::remove_dir_all(directory).unwrap();
+    }
+}
+2026-10-18T02:38:01.513451Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/benches/src/lib.rs:
+struct WasmOptConfig {
+    path: PathBuf,
+    original: Option<Vec<u8>>,
+}
+
+impl WasmOptConfig {
+    fn enable(contract_dir: &Path) -> eyre::Result<Self> {
+        let path = contract_dir.join("Stylus.toml");
+        let original = path.exists().then(|| fs::read(&path)).transpose()?;
+        let existing =
+            original.as_deref().map(std::str::from_utf8).transpose()?;
+        let existing = existing.unwrap_or_default();
+        if !has_wasm_opt_table(existing) {
+            let config = format!(
+                "{existing}\n[wasm-opt]\nversion = \"116\"\nflags = [\"-O3\"]\n"
+            );
+            fs::write(&path, config)?;
+        }
+
+        Ok(Self { path, original })
+    }
+
+    fn disable(contract_dir: &Path) -> eyre::Result<Self> {
+        let path = contract_dir.join("Stylus.toml");
+        let original = path.exists().then(|| fs::read(&path)).transpose()?;
+        let existing =
+            original.as_deref().map(std::str::from_utf8).transpose()?;
+        if let Some(existing) = existing {
+            if let Some(disabled) = without_wasm_opt_table(existing) {
+                fs::write(&path, disabled)?;
+            }
+        }
+
+        Ok(Self { path, original })
+    }
+}
+
+fn has_wasm_opt_table(contents: &str) -> bool {
+    contents.lines().any(|line| table_header(line) == Some("[wasm-opt]"))
+}
+
+fn without_wasm_opt_table(contents: &str) -> Option<String> {
+    let mut found = false;
+    let mut in_wasm_opt = false;
+    let mut output = String::with_capacity(contents.len());
+
+    for line in contents.split_inclusive('\n') {
+        if let Some(header) = table_header(line) {
+            in_wasm_opt = header == "[wasm-opt]"
+                || header == "[[wasm-opt]]"
+                || header.starts_with("[wasm-opt.")
+                || header.starts_with("[[wasm-opt.");
+            found |= in_wasm_opt;
+        }
+        if !in_wasm_opt {
+            output.push_str(line);
+        }
+    }
+
+    found.then_some(output)
+}
+
+fn table_header(line: &str) -> Option<&str> {
+    let header = line.split('#').next()?.trim();
+    (header.starts_with('[') && header.ends_with(']')).then_some(header)
+}
+
+impl Drop for WasmOptConfig {
+    fn drop(&mut self) {
+        match self.original.take() {
+            Some(contents) => {
+                let _ = fs::write(&self.path, contents);
+            }
+            None => {
+                let _ = fs::remove_file(&self.path);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod wasm_opt_config_tests {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    use super::*;
+
+    static NEXT_TEMP_DIRECTORY: AtomicU64 = AtomicU64::new(0);
+
+    fn temp_contract_dir() -> PathBuf {
+        let id = NEXT_TEMP_DIRECTORY.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir()
+            .join(
+                format!("stylus-bench-wasm-opt-{}-{id}", std::process::id(),),
+            );
+        fs::create_dir_all(&path)
+            .expect("temporary directory should be created");
+        path
+    }
+
+    #[test]
+    fn disable_temporarily_removes_only_the_optimizer_table_and_restores_bytes()
+    {
+        let directory = temp_contract_dir();
+        let path = directory.join("Stylus.toml");
+        let original = b"# contract opts in\n[wasm-opt]\nversion = \"116\"\nflags = [\"-O3\"]\n[other]\nvalue = true\n";
+        fs::write(&path, original).expect("config should be written");
+
+        {
+            let _guard = WasmOptConfig::disable(&directory).unwrap();
+            let disabled = fs::read_to_string(&path)
+                .expect("disabled config should be readable");
+            assert!(!has_wasm_opt_table(&disabled));
+            assert!(disabled.contains("[other]\nvalue = true"));
+        }
+
+        assert_eq!(fs::read(&path).unwrap(), original);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn enable_preserves_an_existing_optimizer_table() {
+        let directory = temp_contract_dir();
+        let path = directory.join("Stylus.toml");
+        let original = b"# inherited recipe\n[wasm-opt]\n";
+        fs::write(&path, original).expect("config should be written");
+
+        {
+            let _guard = WasmOptConfig::enable(&directory).unwrap();
+            assert_eq!(fs::read(&path).unwrap(), original);
+        }
+
+        assert_eq!(fs::read(&path).unwrap(), original);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn enable_temporary_config_is_removed_when_none_existed() {
+        let directory = temp_contract_dir();
+        let path = directory.join("Stylus.toml");
+
+        {
+            let _guard = WasmOptConfig::enable(&directory).unwrap();
+            let enabled =
+                fs::read_to_string(&path).expect("config should be created");
+            assert!(has_wasm_opt_table(&enabled));
+            assert!(enabled.contains("version = \"116\""));
+        }
+
+        assert!(!path.exists());
+        fs::remove_dir_all(directory).unwrap();
+    }
+}
+2026-10-18T02:44:13.028671Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/docs/modules/ROOT/pages/vesting-wallet.adoc:
+[NOTE]
+====
+Since the wallet is xref:access-control.adoc#ownership-and-ownable[Ownable],
+and ownership can be transferred, it is possible to sell unvested tokens.
+Preventing this in a smart contract is difficult, considering that: 1) a
+beneficiary address could be a counterfactually deployed contract, 2) there is
+likely to be a migration path for EOAs to become contracts in the near
+future.
+====
+
+[NOTE]
+====
+When using this contract with any token whose balance is adjusted automatically
+(i.e. a rebase token), make sure to account the supply/balance adjustment in the
+vesting schedule to ensure the vested amount is as intended.
+====
+2026-10-18T02:55:37.343854Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 68778
+2026-10-18T03:01:37.413961Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 28518
+2026-10-18T03:06:03.852858Z ERROR codex_core::tools::router: error=apply_patch verification failed: invalid hunk at line 8, Expected update hunk to start with a @@ context marker, got: 'authorization for callbacks.'
+2026-10-18T03:06:07.821117Z ERROR codex_core::tools::router: error=apply_patch verification failed: invalid hunk at line 8, Expected update hunk to start with a @@ context marker, got: 'authorization for callbacks.'
+2026-10-18T03:06:11.666326Z ERROR codex_core::tools::router: error=apply_patch verification failed: invalid hunk at line 8, Expected update hunk to start with a @@ context marker, got: 'authorization for callbacks.'
+2026-10-18T03:06:16.491955Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/GUIDELINES.md:
+1. Formal verification for state machines.
+2026-10-18T03:31:39.357767Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/access-control/tests/access_control.rs:
+    let hasRole = contract.hasRole(ROLE.into(), alice_addr).call().await?;
+    assert!(hasRole);
+2026-10-18T03:45:31.266135Z ERROR codex_core::tools::router: error=exec_command failed: CreateProcess { message: "Rejected(\"`/bin/zsh -lc \\\"cat > /tmp/oz-diff-v030/Cargo.toml <<'EOF'\\n[package]\\nname = \\\\\\\"oz-diff-v030\\\\\\\"\\nversion = \\\\\\\"0.1.0\\\\\\\"\\nedition = \\\\\\\"2021\\\\\\\"\\n\\n[dependencies]\\ncrypto = { package = \\\\\\\"openzeppelin-crypto\\\\\\\", path = \\\\\\\"/tmp/oz-stylus-v030/lib/crypto\\\\\\\" }\\nEOF\\ncat > /tmp/oz-diff-v030/src/main.rs <<'EOF'\\nuse crypto::hash::{Build…1250 chars truncated…21] {\\n        poseidon.absorb(&Fp::from(input));\\n    }\\n    println!(\\\"poseidon2-bn256:{}\\\", poseidon.squeeze());\\n}\\n\\nfn alloy_hex(bytes: &[u8]) -> String {\\n    bytes.iter().map(|byte| format!(\\\"{byte:02x}\\\")).collect()\\n}\\nEOF\\nrm -f /tmp/oz-diff-v030/Cargo.lock\\ncargo run --manifest-path /tmp/oz-diff-v030/Cargo.toml > /tmp/differential-v03.out'` rejected: rm -f style commands are not permitted. Use a safer approach\")" }
+2026-10-18T03:54:49.522185Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/docs/modules/ROOT/pages/upgrading.adoc:
+The SDK also checks for selector collisions in public
+implementations. Resolve collisions before deployment while preserving the
+selectors expected by existing clients; use an explicit selector rename only
+when the ABI change is intended.
+2026-10-18T04:14:24.338515Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/safe-erc20/tests/safe_erc20_erc20.rs:
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let owner = crate::test_support::Account::new().await?;
+        let attacker = crate::test_support::Account::new().await?;
+
+        let safe_erc20_addr = owner.as_deployer().deploy().await?.contract_address;
+        let safe_erc20_attacker = SafeErc20::new(safe_erc20_addr, &attacker.wallet);
+        let erc20_address = erc20::deploy(&owner.wallet).await?;
+        let erc20_owner = ERC20Mock::new(erc20_address, &owner.wallet);
+        watch!(erc20_owner.mint(safe_erc20_addr, uint!(10_U256)))?;
+2026-10-18T04:28:06.733331Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/SECURITY-REVIEW.md:
+| **v0.2.0:** H-01 limb shift overflow (resolved); M-01 `ct_rem` underflow (resolved); M-02 custom trait selectors not matched to implementations (acknowledged/open); L-01 custom Merkle hash commutativity documentation (resolved); L-02 carry/borrow types (resolved); L-03 zero bit count (resolved); L-04 hex parsing overflow (resolved); L-05 wrapper decimals (resolved); L-06 ERC4626 mutability (resolved); L-07 duplicate selectors (marked resolved; residual hash-collision gap is C-06); L-08 generated trait components (resolved); L-09 big-integer comparison timing (marked resolved); N-01–N-07 and N-09 (reported resolved); N-08 misleading docs (partially resolved); N-10 test coverage (acknowledged/open). The Poseidon2 parameter checks are additional recommendations, not counted findings.
+2026-10-18T04:58:52.446460Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 60212
+2026-10-18T05:19:05.482797Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/docs/modules/ROOT/pages/erc721-enumerable.adoc:
+impl IErc165 for Erc721Example {
+    fn supports_interface(&self, interface_id: B32) -> bool {
+        self.erc721.supports_interface(interface_id)
+            || self.enumerable.supports_interface(interface_id)
+    }
+}
+```
+2026-10-18T05:19:22.855842Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/SECURITY-REVIEW.md:
+| C-15 | Low, enumeration correctness — fixed | **ERC721 enumerable treated token ID zero as an unset entry.** `tokenOfOwnerByIndex(owner, 0)` returned out-of-bounds for a live token ID zero. | Preexisting, not in prior audits. Red TestVM PoC `da24c3a`; fix `a1be921` appends per-owner enumeration counts while preserving prior storage fields. The getter falls back to legacy nonzero entries. Old proxies that minted token zero need their per-owner list rebuilt as the upgrade guide describes. |
+2026-10-18T05:34:14.458248Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 93416
+2026-10-18T06:02:17.640015Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/SECURITY-REVIEW.md:
+| C-15 | Low, enumeration correctness — fixed | **ERC721 enumerable treated token ID zero as an unset entry.** `tokenOfOwnerByIndex(owner, 0)` returned out-of-bounds for a live token ID zero. | Preexisting, not in prior audits. Red TestVM PoC `da24c3a`; initial fix `a1be921` appended per-owner counts. Gas measurements found the extra transfer writes, so a follow-up derives bounds from core balances and removes that field. The final implementation preserves v0.3.0 storage layout and reads existing proxy entries, including token zero; no migration is required. |
+2026-10-18T06:04:51.291126Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/lib/crypto/src/curve/tests.rs:
+            baby_jubjub::BabyJubjubConfig,
+2026-10-18T06:07:18.901436Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/SECURITY-REVIEW.md:
+| `audits/Stylus Contracts Library v0.3.0 Audit.pdf` | 17 findings/notes; all 17 marked resolved in the report. | Source cross-check confirms H-01’s curve parameters; M-01/M-02 conversions; M-03 zeroization derive; M-04 P256 low-s rejection; L-01 event shape; L-02 zero-Z normalization guard; L-03 UUPS context/version checks; L-04 code-aware allowance reads; L-05 strict versus relaxed ERC1363 helper behavior; and N-01–N-07 conversion guards, ranged values, EdDSA public-key consistency, scalar aliases, gas warnings, error text, and compressed-y spare-bit assertion. These findings remain resolved in current source. v0.2 L-09 does not establish constant-time EdDSA scalar multiplication (C-08). |
+2026-10-18T06:07:28.779477Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/SECURITY-REVIEW.md:
+| `audits/Stylus Contracts Library v0.3.0 Audit.pdf` | 17 findings/notes; all 17 marked resolved in the report. | Source cross-check confirms H-01’s curve parameters; M-01/M-02 conversions; M-03 zeroization derive; M-04 P256 low-s rejection; L-01 event shape; L-02 zero-Z normalization guard; L-03 UUPS context/version checks; L-04 code-aware allowance reads; L-05 strict versus relaxed ERC1363 helper behavior; and N-01–N-07 conversion guards, ranged values, EdDSA public-key consistency, scalar aliases, gas warnings, error text, and compressed-y spare-bit assertion. These findings remain resolved in current source. v0.2 L-09 does not establish constant-time EdDSA scalar multiplication (C-08). |
+2026-10-18T06:08:01.813064Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/MIGRATION.md:
+* ERC2981 uses the standard 10,000 denominator when fresh storage reads zero
+  and uses full-precision royalty arithmetic. Vesting schedule arithmetic also
+  uses full-precision multiplication/division.
+2026-10-18T06:09:49.249301Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 14453
+2026-10-18T06:14:15.875374Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/proxy/utils/uups_upgradeable.rs:
+        assert_eq!(
+            uups.vm()
+                .get_storage(U256::from_be_bytes(IMPLEMENTATION_SLOT.0)),
+            encoded_implementation(logic.address())
+        );
+    }
+}
+2026-10-18T06:14:52.504054Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/lib/crypto/src/curve/tests.rs:
+te_properties!(curve25519_group_properties, Curve25519Config);
+te_properties!(jubjub_group_properties, JubjubConfig);
+
+#[test]
+fn checked_short_weierstrass_constructors_accept_generators_and_reject_off_curve_points() {
+2026-10-18T06:31:29.752929Z ERROR codex_core::tools::router: error=exec_command failed: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'rm -f contracts/default_2758537618796489527_0_85562.profraw contracts/default_2758537618796489527_0_85620.profraw && git diff --check && git status --short'` rejected: rm -f style commands are not permitted. Use a safer approach\")" }
+2026-10-18T06:34:50.064223Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc20/extensions/permit.rs:
+    fn mock_recover(
+        vm: TestVM,
+2026-10-18T06:37:36.534743Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc20/extensions/permit.rs:
+        assert_eq!(contract.sender(alice).erc20.allowance(alice, bob), value);
+        assert_eq!(contract.sender(alice).nonces.nonces(alice), U256::ONE);
+        contract.assert_emitted(&Approval { owner: alice, spender: bob, value });
+2026-10-18T06:56:28.970822Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc20/utils/safe_erc20.rs:
+    alloy_sol_types::sol! {
+        interface Erc20CallMock {
+            function balanceOf(address account) external view returns (uint256);
+            function transfer(address to, uint256 value) external returns (bool);
+            function transferFrom(address from, address to, uint256 value) external returns (bool);
+        }
+2026-10-18T06:57:04.260551Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/proxy/utils/uups_upgradeable.rs:
+        let initialize = UUPSUpgradeableInterface::setVersionCall {}.abi_encode();
+2026-10-18T06:57:32.803279Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc20/extensions/erc4626.rs:
+            shares,
+        });
+    }
+}
+2026-10-18T06:59:46.115918Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/lib/crypto/src/curve/tests.rs:
+    let projective_generator = TEProjective::<BabyJubjubConfig>::generator();
+    assert_eq!(projective_generator, generator.into_group());
+    assert_eq!(format!("{}", projective_generator), format!("{generator}"));
+    assert!(format!("{projective_generator:?}").starts_with('('));
+2026-10-18T07:00:43.267590Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/lib/crypto/src/field/fp.rs:
+            || quotient /= &zero,
+2026-10-18T07:13:29.460584Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/lib/crypto/src/arithmetic/uint.rs:
+        assert!(std::panic::catch_unwind(|| from_str_radix::<4>("2", 1)).is_err());
+        assert!(std::panic::catch_unwind(|| from_str_hex::<4>("g")).is_err());
+        assert!(std::panic::catch_unwind(|| from_str_hex::<4>("é")).is_err());
+    }
+}
+2026-10-18T07:13:39.752950Z ERROR codex_core::tools::router: error=agent_name `..` is reserved
+2026-10-18T07:14:15.586746Z ERROR codex_core::tools::router: error=agent_name `..` is reserved
+2026-10-18T07:14:29.415176Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc20/extensions/erc4626.rs:
+        alice: Address,
+        bob: Address,
+    ) {
+        assert!(is_invalid_asset(
+            contract.sender(alice).convert_to_shares(U256::ONE)
+        ));
+        assert!(is_invalid_asset(
+            contract.sender(alice).convert_to_assets(U256::ONE)
+        ));
+        assert!(is_invalid_asset(
+            contract.sender(alice).preview_deposit(U256::ONE)
+        ));
+        assert!(is_invalid_asset(
+            contract.sender(alice).preview_mint(U256::ONE)
+        ));
+        assert!(is_invalid_asset(
+            contract.sender(alice).preview_withdraw(U256::ONE)
+        ));
+        assert!(is_invalid_asset(
+            contract.sender(alice).preview_redeem(U256::ONE)
+        ));
+        assert!(is_invalid_asset(contract.sender(alice).max_withdraw(alice)));
+        assert!(is_invalid_asset(
+            contract.sender(alice).deposit(U256::ONE, bob)
+        ));
+        assert!(is_invalid_asset(contract.sender(alice).mint(U256::ONE, bob)));
+        assert!(is_invalid_asset(
+            contract.sender(alice).withdraw(U256::ONE, bob, alice)
+        ));
+        assert!(is_invalid_asset(
+            contract.sender(alice).redeem(U256::ZERO, bob, alice)
+        ));
+2026-10-18T07:25:30.241422Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc20/extensions/wrapper.rs:
+            Error::InsufficientBalance(erc20::ERC20InsufficientBalance { .. })
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn withdraw_to_works(
+2026-10-18T07:37:19.311351Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc20/extensions/wrapper.rs:
+    use crate::test_support::*;
+    use alloy_primitives::{aliases::B32, uint, Address, U256, U8};
+    use alloy_sol_types::{SolCall, SolType, SolValue};
+    use stylus_sdk::{
+        prelude::*,
+        storage::{StorageAddress, StorageU256},
+        testing::TestVM,
+    };
