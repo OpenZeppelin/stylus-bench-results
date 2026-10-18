@@ -659,6 +659,28 @@ mod tests {
     }
 
     #[test]
+    fn deposit_for_reverts_when_underlying_has_no_code() {
+        let contract = TestVMContract::<Erc721WrapperTestExample>::new(
+            stringify!(contract),
+        );
+        let alice = test_address(stringify!(alice));
+        let underlying = test_address(stringify!(underlying));
+        let token_ids = random_token_ids(1);
+
+        contract.sender(alice).constructor(underlying);
+
+        let err = contract
+            .sender(alice)
+            .deposit_for(alice, token_ids)
+            .expect_err("an address without code cannot be an underlying token");
+        assert!(matches!(
+            err,
+            Error::UnsupportedToken(ERC721UnsupportedToken { token })
+                if token == underlying
+        ));
+    }
+
+    #[test]
     fn deposit_for_reverts_when_nonexistent_token() {
         let contract = TestVMContract::<Erc721WrapperTestExample>::new(
             stringify!(contract),
