@@ -7,11 +7,10 @@ cd "$ROOT_DIR"
 
 source "$SCRIPT_DIR/stylus-tools.sh"
 require_cargo_stylus
-require_wasm_opt_116
 
-# `cargo stylus check` builds each cdylib with the pinned SDK toolchain, applies
-# its Stylus.toml wasm-opt recipe, checks the size limit, and estimates the
-# activation data fee against the configured RPC. This needs outbound access
+# `cargo stylus check` builds each cdylib with the pinned SDK toolchain, checks
+# the size limit, and estimates the activation data fee against the configured
+# RPC. This needs outbound access
 # to Arbitrum Sepolia unless RPC_URL is set to another compatible endpoint. The
 # integration-test job separately deploys and activates examples on devnet.
 RPC_URL="${RPC_URL:-https://sepolia-rollup.arbitrum.io/rpc}"
@@ -19,6 +18,9 @@ contract_configs=()
 while IFS= read -r config; do
   contract_configs+=("$config")
 done < <(find examples -type f -name Stylus.toml -print | sort)
+while IFS= read -r config; do
+  contract_configs+=("$config")
+done < <(find templates -type f -name Stylus.toml -print | sort)
 if [[ ${#contract_configs[@]} -eq 0 ]]; then
   echo "No example Stylus.toml files were found." >&2
   exit 1

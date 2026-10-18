@@ -4,7 +4,7 @@
 mod test_support;
 use crate::test_support::{
     constructor, receipt, send, watch, Account, Constructor,
-    ContractInitializationError, EventExt, Panic, PanicCode, Revert,
+    ContractInitializationError, EventExt, Revert,
 };
 use abi::VestingWallet;
 use alloy::{
@@ -12,7 +12,7 @@ use alloy::{
     network::TransactionBuilder,
     primitives::{Address, U256},
     providers::Provider,
-    rpc::types::{BlockTransactionsKind, TransactionRequest},
+    rpc::types::TransactionRequest,
 };
 use mock::{erc20, erc20::ERC20Mock};
 
@@ -33,7 +33,7 @@ fn ctr(
 async fn block_timestamp(account: &Account) -> eyre::Result<u64> {
     let timestamp = account
         .wallet
-        .get_block(BlockId::latest(), BlockTransactionsKind::Hashes)
+        .get_block(BlockId::latest())
         .await?
         .expect("latest block should exist")
         .header
@@ -69,10 +69,10 @@ async fn constructs() -> eyre::Result<()> {
         .contract_address;
     let contract = VestingWallet::new(contract_addr, &alice.wallet);
 
-    let owner = contract.owner().call().await?.owner;
-    let start = contract.start().call().await?.start;
-    let duration = contract.duration().call().await?.duration;
-    let end = contract.end().call().await?.end;
+    let owner = contract.owner().call().await?;
+    let start = contract.start().call().await?;
+    let duration = contract.duration().call().await?;
+    let end = contract.end().call().await?;
 
     assert_eq!(alice.address(), owner);
     assert_eq!(U256::from(start_timestamp), start);
@@ -150,8 +150,8 @@ mod ether_vesting {
         let old_contract_balance =
             alice.wallet.get_balance(contract_addr).await?;
 
-        let released = contract.released_0().call().await?.released;
-        let releasable = contract.releasable_0().call().await?.releasable;
+        let released = contract.released_0().call().await?;
+        let releasable = contract.releasable_0().call().await?;
         assert_eq!(U256::ZERO, released);
         assert_in_delta(expected_amount, releasable);
 
@@ -159,13 +159,14 @@ mod ether_vesting {
 
         let alice_balance = alice.wallet.get_balance(alice.address()).await?;
         let contract_balance = alice.wallet.get_balance(contract_addr).await?;
-        let released = contract.released_0().call().await?.released;
-        let releasable = contract.releasable_0().call().await?.releasable;
+        let released = contract.released_0().call().await?;
+        let releasable = contract.releasable_0().call().await?;
         assert_in_delta(expected_amount, released);
         assert_in_delta(U256::ZERO, releasable);
         assert_in_delta(
             old_alice_balance + released
-                - U256::from(receipt.gas_used * receipt.effective_gas_price),
+                - U256::from(receipt.gas_used)
+                    * U256::from(receipt.effective_gas_price),
             alice_balance,
         );
         assert_in_delta(old_contract_balance - released, contract_balance);
@@ -236,7 +237,7 @@ mod ether_vesting {
             ));
 
             let vested_amount =
-                contract.vestedAmount_0(timestamp).call().await?.vestedAmount;
+                contract.vestedAmount_0(timestamp).call().await?;
             assert_eq!(
                 expected_amount, vested_amount,
                 "\n---\ni: {i}\nstart: {start}\ntimestamp: {timestamp}\n---\n"
@@ -307,28 +308,21 @@ mod erc20_vesting {
         let contract = VestingWallet::new(contract_addr, &alice.wallet);
         let erc20 = ERC20Mock::new(erc20_address, &alice.wallet);
 
-        let old_alice_balance =
-            erc20.balanceOf(alice.address()).call().await?.balance;
+        let old_alice_balance = erc20.balanceOf(alice.address()).call().await?;
         let old_contract_balance =
-            erc20.balanceOf(contract_addr).call().await?.balance;
+            erc20.balanceOf(contract_addr).call().await?;
 
-        let released =
-            contract.released_1(erc20_address).call().await?.released;
-        let releasable =
-            contract.releasable_1(erc20_address).call().await?.releasable;
+        let released = contract.released_1(erc20_address).call().await?;
+        let releasable = contract.releasable_1(erc20_address).call().await?;
         assert_eq!(U256::ZERO, released);
         assert_in_delta(expected_amount, releasable);
 
         let receipt = receipt!(contract.release_1(erc20_address))?;
 
-        let alice_balance =
-            erc20.balanceOf(alice.address()).call().await?.balance;
-        let contract_balance =
-            erc20.balanceOf(contract_addr).call().await?.balance;
-        let released =
-            contract.released_1(erc20_address).call().await?.released;
-        let releasable =
-            contract.releasable_1(erc20_address).call().await?.releasable;
+        let alice_balance = erc20.balanceOf(alice.address()).call().await?;
+        let contract_balance = erc20.balanceOf(contract_addr).call().await?;
+        let released = contract.released_1(erc20_address).call().await?;
+        let releasable = contract.releasable_1(erc20_address).call().await?;
         assert_in_delta(expected_amount, released);
         assert_in_delta(U256::ZERO, releasable);
         assert_in_delta(old_alice_balance + released, alice_balance);
@@ -405,8 +399,7 @@ mod erc20_vesting {
             let vested_amount = contract
                 .vestedAmount_1(erc20_address, timestamp)
                 .call()
-                .await?
-                .vestedAmount;
+                .await?;
             assert_eq!(
                 expected_amount, vested_amount,
                 "\n---\ni: {i}\nstart: {start}\ntimestamp: {timestamp}\n---\n"
@@ -500,23 +493,23 @@ mod erc20_vesting {
     }
 
     #[tokio::test]
-    async fn vested_amount_reverts_on_scaled_allocation_overflow(
+    async fn vested_amount_uses_full_precision_for_max_allocation(
     ) -> eyre::Result<()> {
         let _test_context = crate::test_support::TestContext::new().await?;
         let alice = crate::test_support::Account::new().await?;
 
         let start = block_timestamp(&alice).await?;
-        let timestamp = DURATION / 2 + start;
+        let elapsed = DURATION / 2;
+        let timestamp = elapsed + start;
         let contract_addr = deploy(&alice, start, DURATION).await?;
         let erc20_address =
             deploy_erc20(&alice, contract_addr, U256::MAX).await?;
 
         let contract = VestingWallet::new(contract_addr, &alice.wallet);
 
-        let err = send!(contract.vestedAmount_1(erc20_address, timestamp))
-            .expect_err("should exceed `U256::MAX`");
-
-        assert!(err.panicked_with(PanicCode::ArithmeticOverflow));
+        let vested_amount =
+            contract.vestedAmount_1(erc20_address, timestamp).call().await?;
+        assert_eq!(U256::MAX / U256::from(2), vested_amount);
 
         Ok(())
     }

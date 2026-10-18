@@ -14,20 +14,6 @@ require_cargo_stylus() {
   fi
 }
 
-require_wasm_opt_116() {
-  if ! command -v wasm-opt >/dev/null 2>&1; then
-    echo "Binaryen wasm-opt 116 is required; install it with: cargo install --locked --force wasm-opt@0.116.1" >&2
-    return 1
-  fi
-
-  local version
-  version="$(wasm-opt --version)"
-  if ! grep -Eq 'version[[:space:]]116([^0-9]|$)' <<<"$version"; then
-    echo "Binaryen wasm-opt 116 is required, found: $version" >&2
-    return 1
-  fi
-}
-
 require_docker_daemon() {
   if ! command -v docker >/dev/null 2>&1; then
     echo "Docker is required by stylus-tools devnet integration tests and benchmarks." >&2

@@ -31,10 +31,10 @@ async fn upgrade_to() -> Result<()> {
         UpgradeableBeaconExample::new(receipt.contract_address, &bob.wallet);
 
     // check initial state.
-    let implementation = contract.implementation().call().await?.implementation;
+    let implementation = contract.implementation().call().await?;
     assert_eq!(implementation, implementation_addr);
 
-    let owner = contract.owner().call().await?.owner;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, alice.address());
 
     assert!(receipt.emits(UpgradeableBeaconExample::Upgraded {
@@ -64,7 +64,7 @@ async fn upgrade_to() -> Result<()> {
         implementation: new_implementation,
     }));
 
-    let implementation = contract.implementation().call().await?.implementation;
+    let implementation = contract.implementation().call().await?;
     assert_eq!(implementation, new_implementation);
 
     Ok(())

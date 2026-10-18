@@ -3,7 +3,7 @@
 #[path = "../../test-support/mod.rs"]
 mod test_support;
 use crate::test_support::{
-    constructor, receipt, send, watch, Account, Constructor, EventExt, Revert,
+    constructor, receipt, send, watch, Constructor, EventExt, Revert,
 };
 use abi::Erc1967Example;
 use alloy::{
@@ -35,7 +35,7 @@ async fn constructs() -> Result<()> {
         .contract_address;
     let contract = Erc1967Example::new(contract_addr, &alice.wallet);
 
-    let implementation = contract.implementation().call().await?.implementation;
+    let implementation = contract.implementation().call().await?;
     assert_eq!(implementation, implementation_addr);
 
     Ok(())
@@ -62,14 +62,14 @@ async fn constructs_with_data() -> Result<()> {
         .contract_address;
     let contract = Erc1967Example::new(contract_addr, &alice.wallet);
 
-    let implementation = contract.implementation().call().await?.implementation;
+    let implementation = contract.implementation().call().await?;
     assert_eq!(implementation, implementation_addr);
 
     // check that the balance can be accurately fetched through the proxy.
-    let balance = contract.balanceOf(alice.address()).call().await?.balance;
+    let balance = contract.balanceOf(alice.address()).call().await?;
     assert_eq!(balance, amount);
 
-    let total_supply = contract.totalSupply().call().await?.totalSupply;
+    let total_supply = contract.totalSupply().call().await?;
     assert_eq!(total_supply, amount);
 
     Ok(())
@@ -91,10 +91,10 @@ async fn fallback() -> Result<()> {
     let contract = Erc1967Example::new(contract_addr, &alice.wallet);
 
     // verify initial balance is [`U256::ZERO`].
-    let balance = contract.balanceOf(alice.address()).call().await?.balance;
+    let balance = contract.balanceOf(alice.address()).call().await?;
     assert_eq!(balance, U256::ZERO);
 
-    let total_supply = contract.totalSupply().call().await?.totalSupply;
+    let total_supply = contract.totalSupply().call().await?;
     assert_eq!(total_supply, U256::ZERO);
 
     // mint 1000 tokens.
@@ -102,10 +102,10 @@ async fn fallback() -> Result<()> {
     watch!(contract.mint(alice.address(), amount))?;
 
     // check that the balance can be accurately fetched through the proxy.
-    let balance = contract.balanceOf(alice.address()).call().await?.balance;
+    let balance = contract.balanceOf(alice.address()).call().await?;
     assert_eq!(balance, amount);
 
-    let total_supply = contract.totalSupply().call().await?.totalSupply;
+    let total_supply = contract.totalSupply().call().await?;
     assert_eq!(total_supply, amount);
 
     // check that the balance can be transferred through the proxy.
@@ -117,13 +117,13 @@ async fn fallback() -> Result<()> {
         value: amount,
     }));
 
-    let balance = contract.balanceOf(alice.address()).call().await?.balance;
+    let balance = contract.balanceOf(alice.address()).call().await?;
     assert_eq!(balance, U256::ZERO);
 
-    let balance = contract.balanceOf(bob.address()).call().await?.balance;
+    let balance = contract.balanceOf(bob.address()).call().await?;
     assert_eq!(balance, amount);
 
-    let total_supply = contract.totalSupply().call().await?.totalSupply;
+    let total_supply = contract.totalSupply().call().await?;
     assert_eq!(total_supply, amount);
 
     Ok(())

@@ -73,7 +73,7 @@ async fn balance_of_zero_balance() -> eyre::Result<()> {
     let contract = Erc1155::new(contract_addr, &alice.wallet);
     let token_ids = random_token_ids(1);
 
-    let Erc1155::balanceOfReturn { balance } =
+    let balance =
         contract.balanceOf(alice.address(), token_ids[0]).call().await?;
     assert_eq!(U256::ZERO, balance);
 
@@ -94,8 +94,7 @@ async fn balance_of_batch_zero_balance() -> eyre::Result<()> {
         vec![alice.address(), bob.address(), dave.address(), charlie.address()];
     let token_ids = random_token_ids(4);
 
-    let Erc1155::balanceOfBatchReturn { balances } =
-        contract.balanceOfBatch(accounts, token_ids).call().await?;
+    let balances = contract.balanceOfBatch(accounts, token_ids).call().await?;
     assert_eq!(vec![U256::ZERO, U256::ZERO, U256::ZERO, U256::ZERO], balances);
 
     Ok(())
@@ -128,8 +127,7 @@ async fn mints() -> eyre::Result<()> {
         value
     }));
 
-    let Erc1155::balanceOfReturn { balance } =
-        contract.balanceOf(alice_addr, token_id).call().await?;
+    let balance = contract.balanceOf(alice_addr, token_id).call().await?;
     assert_eq!(value, balance);
 
     Ok(())
@@ -151,7 +149,7 @@ async fn mints_to_receiver_contract() -> eyre::Result<()> {
     let token_id = random_token_ids(1)[0];
     let value = random_values(1)[0];
 
-    let Erc1155::balanceOfReturn { balance: initial_receiver_balance } =
+    let initial_receiver_balance =
         contract.balanceOf(receiver_addr, token_id).call().await?;
 
     let receipt =
@@ -173,7 +171,7 @@ async fn mints_to_receiver_contract() -> eyre::Result<()> {
         data: vec![].into(),
     }));
 
-    let Erc1155::balanceOfReturn { balance: receiver_balance } =
+    let receiver_balance =
         contract.balanceOf(receiver_addr, token_id).call().await?;
     assert_eq!(initial_receiver_balance + value, receiver_balance);
 
@@ -335,12 +333,11 @@ async fn mint_batch() -> eyre::Result<()> {
     }));
 
     for (token_id, value) in token_ids.iter().zip(values.iter()) {
-        let Erc1155::balanceOfReturn { balance } =
-            contract.balanceOf(alice_addr, *token_id).call().await?;
+        let balance = contract.balanceOf(alice_addr, *token_id).call().await?;
         assert_eq!(*value, balance);
     }
 
-    let Erc1155::balanceOfBatchReturn { balances } = contract
+    let balances = contract
         .balanceOfBatch(
             vec![alice_addr, alice_addr, alice_addr],
             token_ids.clone(),
@@ -368,14 +365,10 @@ async fn mint_batch_transfer_to_receiver_contract() -> eyre::Result<()> {
     let token_ids = random_token_ids(2);
     let values = random_values(2);
 
-    let Erc1155::balanceOfBatchReturn { balances: initial_receiver_balances } =
-        contract
-            .balanceOfBatch(
-                vec![receiver_addr, receiver_addr],
-                token_ids.clone(),
-            )
-            .call()
-            .await?;
+    let initial_receiver_balances = contract
+        .balanceOfBatch(vec![receiver_addr, receiver_addr], token_ids.clone())
+        .call()
+        .await?;
 
     let receipt = receipt!(contract.mintBatch(
         receiver_addr,
@@ -400,14 +393,10 @@ async fn mint_batch_transfer_to_receiver_contract() -> eyre::Result<()> {
         data: vec![].into(),
     }));
 
-    let Erc1155::balanceOfBatchReturn { balances: receiver_balances } =
-        contract
-            .balanceOfBatch(
-                vec![receiver_addr, receiver_addr],
-                token_ids.clone(),
-            )
-            .call()
-            .await?;
+    let receiver_balances = contract
+        .balanceOfBatch(vec![receiver_addr, receiver_addr], token_ids.clone())
+        .call()
+        .await?;
 
     for (idx, value) in values.iter().enumerate() {
         assert_eq!(
@@ -598,7 +587,7 @@ async fn set_approval_for_all() -> eyre::Result<()> {
         approved: approved_value,
     }));
 
-    let Erc1155::isApprovedForAllReturn { approved } =
+    let approved =
         contract.isApprovedForAll(alice_addr, bob_addr).call().await?;
     assert_eq!(approved_value, approved);
 
@@ -612,7 +601,7 @@ async fn set_approval_for_all() -> eyre::Result<()> {
         approved: approved_value,
     }));
 
-    let Erc1155::isApprovedForAllReturn { approved } =
+    let approved =
         contract.isApprovedForAll(alice_addr, bob_addr).call().await?;
     assert_eq!(approved_value, approved);
 
@@ -649,7 +638,7 @@ async fn is_approved_for_all_zero_address() -> eyre::Result<()> {
 
     let invalid_operator = Address::ZERO;
 
-    let Erc1155::isApprovedForAllReturn { approved } = contract
+    let approved = contract
         .isApprovedForAll(alice.address(), invalid_operator)
         .call()
         .await?;
@@ -679,9 +668,9 @@ async fn safe_transfer_from() -> eyre::Result<()> {
         vec![0, 1, 2, 3].into()
     ))?;
 
-    let Erc1155::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract.balanceOf(alice_addr, token_id).call().await?;
-    let Erc1155::balanceOfReturn { balance: initial_bob_balance } =
+    let initial_bob_balance =
         contract.balanceOf(bob_addr, token_id).call().await?;
 
     let receipt = receipt!(contract.safeTransferFrom(
@@ -700,12 +689,10 @@ async fn safe_transfer_from() -> eyre::Result<()> {
         value
     }));
 
-    let Erc1155::balanceOfReturn { balance: alice_balance } =
-        contract.balanceOf(alice_addr, token_id).call().await?;
+    let alice_balance = contract.balanceOf(alice_addr, token_id).call().await?;
     assert_eq!(initial_alice_balance - value, alice_balance);
 
-    let Erc1155::balanceOfReturn { balance: bob_balance } =
-        contract.balanceOf(bob_addr, token_id).call().await?;
+    let bob_balance = contract.balanceOf(bob_addr, token_id).call().await?;
     assert_eq!(initial_bob_balance + value, bob_balance);
 
     Ok(())
@@ -735,9 +722,9 @@ async fn safe_transfer_from_with_approval() -> eyre::Result<()> {
 
     watch!(contract_bob.setApprovalForAll(alice_addr, true))?;
 
-    let Erc1155::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract_alice.balanceOf(alice_addr, token_id).call().await?;
-    let Erc1155::balanceOfReturn { balance: initial_bob_balance } =
+    let initial_bob_balance =
         contract_alice.balanceOf(bob_addr, token_id).call().await?;
 
     let receipt = receipt!(contract_alice.safeTransferFrom(
@@ -756,11 +743,11 @@ async fn safe_transfer_from_with_approval() -> eyre::Result<()> {
         value
     }));
 
-    let Erc1155::balanceOfReturn { balance: alice_balance } =
+    let alice_balance =
         contract_alice.balanceOf(alice_addr, token_id).call().await?;
     assert_eq!(initial_alice_balance + value, alice_balance);
 
-    let Erc1155::balanceOfReturn { balance: bob_balance } =
+    let bob_balance =
         contract_alice.balanceOf(bob_addr, token_id).call().await?;
     assert_eq!(initial_bob_balance - value, bob_balance);
 
@@ -790,9 +777,9 @@ async fn safe_transfer_to_receiver_contract() -> eyre::Result<()> {
         vec![0, 1, 2, 3].into()
     ))?;
 
-    let Erc1155::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract.balanceOf(alice_addr, token_id).call().await?;
-    let Erc1155::balanceOfReturn { balance: initial_receiver_balance } =
+    let initial_receiver_balance =
         contract.balanceOf(receiver_addr, token_id).call().await?;
 
     let receipt = receipt!(contract.safeTransferFrom(
@@ -819,11 +806,10 @@ async fn safe_transfer_to_receiver_contract() -> eyre::Result<()> {
         data: vec![].into(),
     }));
 
-    let Erc1155::balanceOfReturn { balance: alice_balance } =
-        contract.balanceOf(alice_addr, token_id).call().await?;
+    let alice_balance = contract.balanceOf(alice_addr, token_id).call().await?;
     assert_eq!(initial_alice_balance - value, alice_balance);
 
-    let Erc1155::balanceOfReturn { balance: receiver_balance } =
+    let receiver_balance =
         contract.balanceOf(receiver_addr, token_id).call().await?;
     assert_eq!(initial_receiver_balance + value, receiver_balance);
 
@@ -1116,17 +1102,15 @@ async fn safe_batch_transfer_from() -> eyre::Result<()> {
         vec![].into()
     ))?;
 
-    let Erc1155::balanceOfBatchReturn { balances: initial_alice_balances } =
-        contract_alice
-            .balanceOfBatch(vec![alice_addr, alice_addr], token_ids.clone())
-            .call()
-            .await?;
+    let initial_alice_balances = contract_alice
+        .balanceOfBatch(vec![alice_addr, alice_addr], token_ids.clone())
+        .call()
+        .await?;
 
-    let Erc1155::balanceOfBatchReturn { balances: initial_bob_balances } =
-        contract_alice
-            .balanceOfBatch(vec![bob_addr, bob_addr], token_ids.clone())
-            .call()
-            .await?;
+    let initial_bob_balances = contract_alice
+        .balanceOfBatch(vec![bob_addr, bob_addr], token_ids.clone())
+        .call()
+        .await?;
 
     let receipt = receipt!(contract_alice.safeBatchTransferFrom(
         alice_addr,
@@ -1144,17 +1128,15 @@ async fn safe_batch_transfer_from() -> eyre::Result<()> {
         values: values.clone()
     }));
 
-    let Erc1155::balanceOfBatchReturn { balances: alice_balances } =
-        contract_alice
-            .balanceOfBatch(vec![alice_addr, alice_addr], token_ids.clone())
-            .call()
-            .await?;
+    let alice_balances = contract_alice
+        .balanceOfBatch(vec![alice_addr, alice_addr], token_ids.clone())
+        .call()
+        .await?;
 
-    let Erc1155::balanceOfBatchReturn { balances: bob_balances } =
-        contract_alice
-            .balanceOfBatch(vec![bob_addr, bob_addr], token_ids.clone())
-            .call()
-            .await?;
+    let bob_balances = contract_alice
+        .balanceOfBatch(vec![bob_addr, bob_addr], token_ids.clone())
+        .call()
+        .await?;
 
     for (idx, value) in values.iter().enumerate() {
         assert_eq!(initial_alice_balances[idx] - value, alice_balances[idx]);
@@ -1187,20 +1169,15 @@ async fn safe_batch_transfer_to_receiver_contract() -> eyre::Result<()> {
         vec![].into()
     ))?;
 
-    let Erc1155::balanceOfBatchReturn { balances: initial_alice_balances } =
-        contract
-            .balanceOfBatch(vec![alice_addr, alice_addr], token_ids.clone())
-            .call()
-            .await?;
+    let initial_alice_balances = contract
+        .balanceOfBatch(vec![alice_addr, alice_addr], token_ids.clone())
+        .call()
+        .await?;
 
-    let Erc1155::balanceOfBatchReturn { balances: initial_receiver_balances } =
-        contract
-            .balanceOfBatch(
-                vec![receiver_addr, receiver_addr],
-                token_ids.clone(),
-            )
-            .call()
-            .await?;
+    let initial_receiver_balances = contract
+        .balanceOfBatch(vec![receiver_addr, receiver_addr], token_ids.clone())
+        .call()
+        .await?;
 
     let receipt = receipt!(contract.safeBatchTransferFrom(
         alice_addr,
@@ -1226,19 +1203,15 @@ async fn safe_batch_transfer_to_receiver_contract() -> eyre::Result<()> {
         data: vec![].into(),
     }));
 
-    let Erc1155::balanceOfBatchReturn { balances: alice_balances } = contract
+    let alice_balances = contract
         .balanceOfBatch(vec![alice_addr, alice_addr], token_ids.clone())
         .call()
         .await?;
 
-    let Erc1155::balanceOfBatchReturn { balances: receiver_balances } =
-        contract
-            .balanceOfBatch(
-                vec![receiver_addr, receiver_addr],
-                token_ids.clone(),
-            )
-            .call()
-            .await?;
+    let receiver_balances = contract
+        .balanceOfBatch(vec![receiver_addr, receiver_addr], token_ids.clone())
+        .call()
+        .await?;
 
     for (idx, value) in values.iter().enumerate() {
         assert_eq!(initial_alice_balances[idx] - value, alice_balances[idx]);
@@ -1441,17 +1414,15 @@ async fn safe_batch_transfer_from_with_approval() -> eyre::Result<()> {
 
     watch!(contract_bob.setApprovalForAll(alice_addr, true))?;
 
-    let Erc1155::balanceOfBatchReturn { balances: initial_dave_balances } =
-        contract_alice
-            .balanceOfBatch(vec![dave_addr, dave_addr], token_ids.clone())
-            .call()
-            .await?;
+    let initial_dave_balances = contract_alice
+        .balanceOfBatch(vec![dave_addr, dave_addr], token_ids.clone())
+        .call()
+        .await?;
 
-    let Erc1155::balanceOfBatchReturn { balances: initial_bob_balances } =
-        contract_alice
-            .balanceOfBatch(vec![bob_addr, bob_addr], token_ids.clone())
-            .call()
-            .await?;
+    let initial_bob_balances = contract_alice
+        .balanceOfBatch(vec![bob_addr, bob_addr], token_ids.clone())
+        .call()
+        .await?;
 
     let receipt = receipt!(contract_alice.safeBatchTransferFrom(
         bob_addr,
@@ -1469,17 +1440,15 @@ async fn safe_batch_transfer_from_with_approval() -> eyre::Result<()> {
         values: values.clone()
     }));
 
-    let Erc1155::balanceOfBatchReturn { balances: bob_balances } =
-        contract_alice
-            .balanceOfBatch(vec![bob_addr, bob_addr], token_ids.clone())
-            .call()
-            .await?;
+    let bob_balances = contract_alice
+        .balanceOfBatch(vec![bob_addr, bob_addr], token_ids.clone())
+        .call()
+        .await?;
 
-    let Erc1155::balanceOfBatchReturn { balances: dave_balances } =
-        contract_alice
-            .balanceOfBatch(vec![dave_addr, dave_addr], token_ids.clone())
-            .call()
-            .await?;
+    let dave_balances = contract_alice
+        .balanceOfBatch(vec![dave_addr, dave_addr], token_ids.clone())
+        .call()
+        .await?;
 
     for (idx, value) in values.iter().enumerate() {
         assert_eq!(initial_bob_balances[idx] - value, bob_balances[idx]);
@@ -1670,7 +1639,7 @@ async fn burns() -> eyre::Result<()> {
     watch!(contract.mint(alice_addr, token_ids[0], values[0], vec![].into()))?;
 
     let initial_balance =
-        contract.balanceOf(alice_addr, token_ids[0]).call().await?.balance;
+        contract.balanceOf(alice_addr, token_ids[0]).call().await?;
     assert_eq!(values[0], initial_balance);
 
     let receipt = receipt!(contract.burn(alice_addr, token_ids[0], values[0]))?;
@@ -1683,8 +1652,7 @@ async fn burns() -> eyre::Result<()> {
         value: values[0],
     }));
 
-    let balance =
-        contract.balanceOf(alice_addr, token_ids[0]).call().await?.balance;
+    let balance = contract.balanceOf(alice_addr, token_ids[0]).call().await?;
     assert_eq!(U256::ZERO, balance);
 
     Ok(())
@@ -1708,7 +1676,7 @@ async fn burns_with_approval() -> eyre::Result<()> {
     watch!(contract.mint(bob_addr, token_ids[0], values[0], vec![].into()))?;
 
     let initial_balance =
-        contract.balanceOf(bob_addr, token_ids[0]).call().await?.balance;
+        contract.balanceOf(bob_addr, token_ids[0]).call().await?;
     assert_eq!(values[0], initial_balance);
 
     watch!(contract_bob.setApprovalForAll(alice_addr, true))?;
@@ -1723,8 +1691,7 @@ async fn burns_with_approval() -> eyre::Result<()> {
         value: values[0],
     }));
 
-    let balance =
-        contract.balanceOf(bob_addr, token_ids[0]).call().await?.balance;
+    let balance = contract.balanceOf(bob_addr, token_ids[0]).call().await?;
     assert_eq!(U256::ZERO, balance);
 
     Ok(())
@@ -1805,7 +1772,7 @@ async fn burns_batch() -> eyre::Result<()> {
     ))?;
 
     for (&id, &value) in token_ids.iter().zip(values.iter()) {
-        let balance = contract.balanceOf(alice_addr, id).call().await?.balance;
+        let balance = contract.balanceOf(alice_addr, id).call().await?;
         assert_eq!(value, balance);
     }
 
@@ -1824,7 +1791,7 @@ async fn burns_batch() -> eyre::Result<()> {
     }));
 
     for id in token_ids {
-        let balance = contract.balanceOf(alice_addr, id).call().await?.balance;
+        let balance = contract.balanceOf(alice_addr, id).call().await?;
         assert_eq!(U256::ZERO, balance);
     }
 
@@ -1854,7 +1821,7 @@ async fn burns_batch_with_approval() -> eyre::Result<()> {
     ))?;
 
     for (&id, &value) in token_ids.iter().zip(values.iter()) {
-        let balance = contract.balanceOf(bob_addr, id).call().await?.balance;
+        let balance = contract.balanceOf(bob_addr, id).call().await?;
         assert_eq!(value, balance);
     }
 
@@ -1875,7 +1842,7 @@ async fn burns_batch_with_approval() -> eyre::Result<()> {
     }));
 
     for id in token_ids {
-        let balance = contract.balanceOf(bob_addr, id).call().await?.balance;
+        let balance = contract.balanceOf(bob_addr, id).call().await?;
         assert_eq!(U256::ZERO, balance);
     }
 

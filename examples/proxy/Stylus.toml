@@ -1,3 +1,0 @@
-# Opt in to the workspace-pinned Binaryen 116 / -O3 recipe for reproducible
-# cargo-stylus deploy and verify.
-[wasm-opt]

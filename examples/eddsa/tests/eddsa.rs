@@ -34,7 +34,7 @@ async fn eddsa_works() -> Result<()> {
     // Verify with signed message.
     let message = b"Sign me!";
     let signature = signing_key.sign(message);
-    let EddsaExample::verifyReturn { is_valid } = contract
+    let is_valid = contract
         .verify(
             encode_verifying_key(signing_key.verifying_key()),
             encode_signature(signature),
@@ -46,7 +46,7 @@ async fn eddsa_works() -> Result<()> {
 
     // Verify with a different message.
     let invalid_message = b"I'm not signed!";
-    let EddsaExample::verifyReturn { is_valid } = contract
+    let is_valid = contract
         .verify(
             encode_verifying_key(signing_key.verifying_key()),
             encode_signature(signature),

@@ -21,7 +21,7 @@ rand.workspace = true
 [features]
 contract-client-gen = []
 integration-tests = ["stylus-tools/integration-tests"]
-export-abi = ["openzeppelin-stylus/export-abi"]
+export-abi = ["stylus-sdk/export-abi", "openzeppelin-stylus/export-abi"]
 
 [lib]
 crate-type = ["lib", "cdylib"]

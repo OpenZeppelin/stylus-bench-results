@@ -39,7 +39,7 @@ impl ISafeErc20 for SafeErc20Example {
         token: Address,
         to: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), safe_erc20::Error> {
         self.safe_erc20.safe_transfer(token, to, value)
     }
 
@@ -49,7 +49,7 @@ impl ISafeErc20 for SafeErc20Example {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), safe_erc20::Error> {
         self.safe_erc20.safe_transfer_from(token, from, to, value)
     }
 
@@ -94,7 +94,7 @@ impl ISafeErc20 for SafeErc20Example {
         token: Address,
         spender: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), safe_erc20::Error> {
         self.safe_erc20.safe_increase_allowance(token, spender, value)
     }
 
@@ -103,7 +103,7 @@ impl ISafeErc20 for SafeErc20Example {
         token: Address,
         spender: Address,
         requested_decrease: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), safe_erc20::Error> {
         self.safe_erc20.safe_decrease_allowance(
             token,
             spender,
@@ -116,7 +116,7 @@ impl ISafeErc20 for SafeErc20Example {
         token: Address,
         spender: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), safe_erc20::Error> {
         self.safe_erc20.force_approve(token, spender, value)
     }
 
@@ -126,7 +126,7 @@ impl ISafeErc20 for SafeErc20Example {
         to: Address,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), safe_erc20::Error> {
         self.safe_erc20.transfer_and_call_relaxed(token, to, value, data)
     }
 
@@ -137,7 +137,7 @@ impl ISafeErc20 for SafeErc20Example {
         to: Address,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), safe_erc20::Error> {
         self.safe_erc20
             .transfer_from_and_call_relaxed(token, from, to, value, data)
     }
@@ -148,7 +148,7 @@ impl ISafeErc20 for SafeErc20Example {
         spender: Address,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), safe_erc20::Error> {
         self.safe_erc20.approve_and_call_relaxed(token, spender, value, data)
     }
 }

@@ -38,11 +38,10 @@ async fn constructs() -> Result<()> {
         newOwner: alice_addr,
     }));
 
-    let Ownable2Step::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, alice_addr);
 
-    let Ownable2Step::pendingOwnerReturn { pendingOwner } =
-        contract.pendingOwner().call().await?;
+    let pendingOwner = contract.pendingOwner().call().await?;
     assert_eq!(pendingOwner, Address::ZERO);
 
     Ok(())
@@ -95,12 +94,11 @@ async fn transfer_ownership_initiates_transfer() -> Result<()> {
     }));
 
     // Current owner is still Alice
-    let Ownable2Step::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, alice_addr);
 
     // Pending owner is Bob
-    let Ownable2Step::pendingOwnerReturn { pendingOwner } =
-        contract.pendingOwner().call().await?;
+    let pendingOwner = contract.pendingOwner().call().await?;
     assert_eq!(pendingOwner, bob_addr);
 
     Ok(())
@@ -158,11 +156,10 @@ async fn accept_ownership() -> Result<()> {
         newOwner: bob_addr,
     }));
 
-    let Ownable2Step::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, bob_addr);
 
-    let Ownable2Step::pendingOwnerReturn { pendingOwner } =
-        contract.pendingOwner().call().await?;
+    let pendingOwner = contract.pendingOwner().call().await?;
     assert_eq!(pendingOwner, Address::ZERO);
 
     Ok(())
@@ -192,8 +189,7 @@ async fn transfer_ownership_cancel_transfer() -> Result<()> {
         newOwner: Address::ZERO,
     }));
 
-    let Ownable2Step::pendingOwnerReturn { pendingOwner } =
-        contract.pendingOwner().call().await?;
+    let pendingOwner = contract.pendingOwner().call().await?;
     assert_eq!(pendingOwner, Address::ZERO);
 
     Ok(())
@@ -231,8 +227,7 @@ async fn overwrite_previous_transfer_ownership() -> Result<()> {
         newOwner: charlie_addr,
     }));
 
-    let Ownable2Step::pendingOwnerReturn { pendingOwner } =
-        contract.pendingOwner().call().await?;
+    let pendingOwner = contract.pendingOwner().call().await?;
     assert_eq!(pendingOwner, charlie_addr);
 
     // Connect as Bob and try to accept ownership
@@ -252,11 +247,10 @@ async fn overwrite_previous_transfer_ownership() -> Result<()> {
         newOwner: charlie_addr,
     }));
 
-    let Ownable2Step::pendingOwnerReturn { pendingOwner } =
-        contract.pendingOwner().call().await?;
+    let pendingOwner = contract.pendingOwner().call().await?;
     assert_eq!(pendingOwner, Address::ZERO);
 
-    let Ownable2Step::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, charlie_addr);
 
     Ok(())
@@ -312,12 +306,11 @@ async fn renounce_ownership() -> Result<()> {
         newOwner: Address::ZERO,
     }));
 
-    let Ownable2Step::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, Address::ZERO);
 
     // Pending owner is set to zero
-    let Ownable2Step::pendingOwnerReturn { pendingOwner } =
-        contract.pendingOwner().call().await?;
+    let pendingOwner = contract.pendingOwner().call().await?;
     assert_eq!(pendingOwner, Address::ZERO);
 
     Ok(())
@@ -346,7 +339,7 @@ async fn renounce_ownership_reverts_when_not_owner() -> Result<()> {
         account: bob_addr,
     });
 
-    let Ownable2Step::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, alice_addr);
 
     Ok(())

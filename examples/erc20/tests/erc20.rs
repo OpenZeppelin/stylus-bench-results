@@ -4,7 +4,7 @@
 #[path = "../../test-support/mod.rs"]
 mod test_support;
 use crate::test_support::{
-    constructor, receipt, send, watch, Account, Constructor,
+    constructor, receipt, send, watch, Constructor,
     ContractInitializationError, EventExt, Panic, PanicCode, Revert,
 };
 use abi::Erc20;
@@ -42,12 +42,12 @@ async fn constructs() -> Result<()> {
         .contract_address;
     let contract = Erc20::new(contract_addr, &alice.wallet);
 
-    let name = contract.name().call().await?.name;
-    let symbol = contract.symbol().call().await?.symbol;
-    let cap = contract.cap().call().await?.cap;
-    let decimals = contract.decimals().call().await?.decimals;
-    let total_supply = contract.totalSupply().call().await?.totalSupply;
-    let paused = contract.paused().call().await?.paused;
+    let name = contract.name().call().await?;
+    let symbol = contract.symbol().call().await?;
+    let cap = contract.cap().call().await?;
+    let decimals = contract.decimals().call().await?;
+    let total_supply = contract.totalSupply().call().await?;
+    let paused = contract.paused().call().await?;
 
     assert_eq!(name, TOKEN_NAME.to_owned());
     assert_eq!(symbol, TOKEN_SYMBOL.to_owned());
@@ -73,10 +73,8 @@ async fn mints() -> Result<()> {
     let contract = Erc20::new(contract_addr, &alice.wallet);
     let alice_addr = alice.address();
 
-    let Erc20::balanceOfReturn { balance: initial_balance } =
-        contract.balanceOf(alice_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract.totalSupply().call().await?;
+    let initial_balance = contract.balanceOf(alice_addr).call().await?;
+    let initial_supply = contract.totalSupply().call().await?;
 
     assert_eq!(U256::ZERO, initial_balance);
     assert_eq!(U256::ZERO, initial_supply);
@@ -89,10 +87,8 @@ async fn mints() -> Result<()> {
         value: one,
     }));
 
-    let Erc20::balanceOfReturn { balance } =
-        contract.balanceOf(alice_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: total_supply } =
-        contract.totalSupply().call().await?;
+    let balance = contract.balanceOf(alice_addr).call().await?;
+    let total_supply = contract.totalSupply().call().await?;
 
     assert_eq!(initial_balance + one, balance);
     assert_eq!(initial_supply + one, total_supply);
@@ -113,10 +109,8 @@ async fn mints_rejects_invalid_receiver() -> Result<()> {
     let contract = Erc20::new(contract_addr, &alice.wallet);
     let invalid_receiver = Address::ZERO;
 
-    let Erc20::balanceOfReturn { balance: initial_balance } =
-        contract.balanceOf(invalid_receiver).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract.totalSupply().call().await?;
+    let initial_balance = contract.balanceOf(invalid_receiver).call().await?;
+    let initial_supply = contract.totalSupply().call().await?;
 
     let value = uint!(10_U256);
     let err = send!(contract.mint(invalid_receiver, value))
@@ -125,10 +119,8 @@ async fn mints_rejects_invalid_receiver() -> Result<()> {
         receiver: invalid_receiver
     }));
 
-    let Erc20::balanceOfReturn { balance } =
-        contract.balanceOf(invalid_receiver).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: total_supply } =
-        contract.totalSupply().call().await?;
+    let balance = contract.balanceOf(invalid_receiver).call().await?;
+    let total_supply = contract.totalSupply().call().await?;
 
     assert_eq!(initial_balance, balance);
     assert_eq!(initial_supply, total_supply);
@@ -155,10 +147,8 @@ async fn mints_rejects_overflow() -> Result<()> {
 
     watch!(contract.mint(alice_addr, max_cap))?;
 
-    let Erc20::balanceOfReturn { balance: initial_balance } =
-        contract.balanceOf(alice_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract.totalSupply().call().await?;
+    let initial_balance = contract.balanceOf(alice_addr).call().await?;
+    let initial_supply = contract.totalSupply().call().await?;
 
     assert_eq!(initial_supply, max_cap);
     assert_eq!(initial_balance, max_cap);
@@ -168,10 +158,8 @@ async fn mints_rejects_overflow() -> Result<()> {
 
     assert!(err.panicked_with(PanicCode::ArithmeticOverflow));
 
-    let Erc20::balanceOfReturn { balance } =
-        contract.balanceOf(alice_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: total_supply } =
-        contract.totalSupply().call().await?;
+    let balance = contract.balanceOf(alice_addr).call().await?;
+    let total_supply = contract.totalSupply().call().await?;
 
     assert_eq!(initial_balance, balance);
     assert_eq!(initial_supply, total_supply);
@@ -199,21 +187,16 @@ async fn transfers() -> Result<()> {
 
     watch!(contract_alice.mint(alice.address(), balance))?;
 
-    let Erc20::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: initial_bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract_alice.totalSupply().call().await?;
+    let initial_bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let initial_supply = contract_alice.totalSupply().call().await?;
 
     let receipt = receipt!(contract_alice.transfer(bob_addr, value))?;
 
-    let Erc20::balanceOfReturn { balance: alice_balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract_alice.totalSupply().call().await?;
+    let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let supply = contract_alice.totalSupply().call().await?;
 
     assert!(receipt.emits(Erc20::Transfer {
         from: alice_addr,
@@ -249,12 +232,10 @@ async fn transfer_rejects_insufficient_balance() -> Result<()> {
 
     watch!(contract_alice.mint(alice.address(), balance))?;
 
-    let Erc20::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: initial_bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract_alice.totalSupply().call().await?;
+    let initial_bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let initial_supply = contract_alice.totalSupply().call().await?;
 
     let err = send!(contract_alice.transfer(bob_addr, value))
         .expect_err("should not transfer when insufficient balance");
@@ -264,12 +245,9 @@ async fn transfer_rejects_insufficient_balance() -> Result<()> {
         needed: value
     }));
 
-    let Erc20::balanceOfReturn { balance: alice_balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract_alice.totalSupply().call().await?;
+    let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let supply = contract_alice.totalSupply().call().await?;
 
     assert_eq!(initial_alice_balance, alice_balance);
     assert_eq!(initial_bob_balance, bob_balance);
@@ -298,12 +276,11 @@ async fn transfer_rejects_invalid_receiver() -> Result<()> {
 
     watch!(contract_alice.mint(alice.address(), balance))?;
 
-    let Erc20::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: initial_receiver_balance } =
+    let initial_receiver_balance =
         contract_alice.balanceOf(invalid_receiver).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract_alice.totalSupply().call().await?;
+    let initial_supply = contract_alice.totalSupply().call().await?;
 
     let err = send!(contract_alice.transfer(invalid_receiver, value))
         .expect_err("should not transfer to Address::ZERO");
@@ -311,12 +288,10 @@ async fn transfer_rejects_invalid_receiver() -> Result<()> {
         receiver: invalid_receiver
     }));
 
-    let Erc20::balanceOfReturn { balance: alice_balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: receiver_balance } =
+    let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let receiver_balance =
         contract_alice.balanceOf(invalid_receiver).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract_alice.totalSupply().call().await?;
+    let supply = contract_alice.totalSupply().call().await?;
 
     assert_eq!(initial_alice_balance, alice_balance);
     assert_eq!(initial_receiver_balance, receiver_balance);
@@ -344,16 +319,13 @@ async fn approves() -> Result<()> {
     let one = uint!(1_U256);
     let ten = uint!(10_U256);
 
-    let Erc20::allowanceReturn { allowance: initial_alice_bob_allowance } =
+    let initial_alice_bob_allowance =
         contract.allowance(alice_addr, bob_addr).call().await?;
-    let Erc20::allowanceReturn { allowance: initial_bob_alice_allowance } =
+    let initial_bob_alice_allowance =
         contract.allowance(bob_addr, alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: initial_alice_balance } =
-        contract.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: initial_bob_balance } =
-        contract.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract.totalSupply().call().await?;
+    let initial_alice_balance = contract.balanceOf(alice_addr).call().await?;
+    let initial_bob_balance = contract.balanceOf(bob_addr).call().await?;
+    let initial_supply = contract.totalSupply().call().await?;
 
     assert_eq!(U256::ZERO, initial_alice_bob_allowance);
     assert_eq!(U256::ZERO, initial_bob_alice_allowance);
@@ -365,9 +337,9 @@ async fn approves() -> Result<()> {
         value: one,
     }));
 
-    let Erc20::allowanceReturn { allowance: alice_bob_allowance } =
+    let alice_bob_allowance =
         contract.allowance(alice_addr, bob_addr).call().await?;
-    let Erc20::allowanceReturn { allowance: bob_alice_allowance } =
+    let bob_alice_allowance =
         contract.allowance(bob_addr, alice_addr).call().await?;
 
     assert_eq!(initial_alice_bob_allowance + one, alice_bob_allowance);
@@ -380,17 +352,14 @@ async fn approves() -> Result<()> {
         value: ten,
     }));
 
-    let Erc20::allowanceReturn { allowance: alice_bob_allowance } =
+    let alice_bob_allowance =
         contract.allowance(alice_addr, bob_addr).call().await?;
-    let Erc20::allowanceReturn { allowance: bob_alice_allowance } =
+    let bob_alice_allowance =
         contract.allowance(bob_addr, alice_addr).call().await?;
 
-    let Erc20::balanceOfReturn { balance: alice_balance } =
-        contract.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: bob_balance } =
-        contract.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract.totalSupply().call().await?;
+    let alice_balance = contract.balanceOf(alice_addr).call().await?;
+    let bob_balance = contract.balanceOf(bob_addr).call().await?;
+    let supply = contract.totalSupply().call().await?;
 
     assert_eq!(initial_alice_bob_allowance + ten, alice_bob_allowance);
     assert_eq!(initial_bob_alice_allowance, bob_alice_allowance);
@@ -418,16 +387,14 @@ async fn approve_rejects_invalid_spender() -> Result<()> {
 
     let ten = uint!(10_U256);
 
-    let Erc20::allowanceReturn { allowance: initial_alice_spender_allowance } =
+    let initial_alice_spender_allowance =
         contract.allowance(alice_addr, invalid_spender).call().await?;
-    let Erc20::allowanceReturn { allowance: initial_spender_alice_allowance } =
+    let initial_spender_alice_allowance =
         contract.allowance(invalid_spender, alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: initial_alice_balance } =
-        contract.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: initial_spender_balance } =
+    let initial_alice_balance = contract.balanceOf(alice_addr).call().await?;
+    let initial_spender_balance =
         contract.balanceOf(invalid_spender).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract.totalSupply().call().await?;
+    let initial_supply = contract.totalSupply().call().await?;
 
     assert_eq!(U256::ZERO, initial_alice_spender_allowance);
     assert_eq!(U256::ZERO, initial_spender_alice_allowance);
@@ -439,16 +406,13 @@ async fn approve_rejects_invalid_spender() -> Result<()> {
         spender: invalid_spender
     }));
 
-    let Erc20::allowanceReturn { allowance: alice_spender_allowance } =
+    let alice_spender_allowance =
         contract.allowance(alice_addr, invalid_spender).call().await?;
-    let Erc20::allowanceReturn { allowance: spender_alice_allowance } =
+    let spender_alice_allowance =
         contract.allowance(invalid_spender, alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: alice_balance } =
-        contract.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: spender_balance } =
-        contract.balanceOf(invalid_spender).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract.totalSupply().call().await?;
+    let alice_balance = contract.balanceOf(alice_addr).call().await?;
+    let spender_balance = contract.balanceOf(invalid_spender).call().await?;
+    let supply = contract.totalSupply().call().await?;
 
     assert_eq!(initial_alice_spender_allowance, alice_spender_allowance);
     assert_eq!(initial_spender_alice_allowance, spender_alice_allowance);
@@ -482,28 +446,23 @@ async fn transfers_from() -> Result<()> {
 
     watch!(contract_alice.mint(alice.address(), balance))?;
 
-    let Erc20::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: initial_bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract_alice.totalSupply().call().await?;
+    let initial_bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let initial_supply = contract_alice.totalSupply().call().await?;
 
     watch!(contract_alice.approve(bob_addr, balance))?;
 
-    let Erc20::allowanceReturn { allowance: initial_allowance } =
+    let initial_allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     let receipt =
         receipt!(contract_bob.transferFrom(alice_addr, bob_addr, value))?;
 
-    let Erc20::balanceOfReturn { balance: alice_balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract_alice.totalSupply().call().await?;
-    let Erc20::allowanceReturn { allowance } =
+    let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let supply = contract_alice.totalSupply().call().await?;
+    let allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     assert!(receipt.emits(Erc20::Transfer {
@@ -543,16 +502,14 @@ async fn transfer_from_reverts_insufficient_balance() -> Result<()> {
 
     watch!(contract_alice.mint(alice.address(), balance))?;
 
-    let Erc20::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: initial_bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract_alice.totalSupply().call().await?;
+    let initial_bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let initial_supply = contract_alice.totalSupply().call().await?;
 
     watch!(contract_alice.approve(bob_addr, value))?;
 
-    let Erc20::allowanceReturn { allowance: initial_allowance } =
+    let initial_allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     let err = send!(contract_bob.transferFrom(alice_addr, bob_addr, value))
@@ -564,13 +521,10 @@ async fn transfer_from_reverts_insufficient_balance() -> Result<()> {
         needed: value
     }));
 
-    let Erc20::balanceOfReturn { balance: alice_balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract_alice.totalSupply().call().await?;
-    let Erc20::allowanceReturn { allowance } =
+    let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let supply = contract_alice.totalSupply().call().await?;
+    let allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     assert_eq!(initial_alice_balance, alice_balance);
@@ -604,14 +558,12 @@ async fn transfer_from_rejects_insufficient_allowance() -> Result<()> {
 
     watch!(contract_alice.mint(alice.address(), balance))?;
 
-    let Erc20::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: initial_bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract_alice.totalSupply().call().await?;
+    let initial_bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let initial_supply = contract_alice.totalSupply().call().await?;
 
-    let Erc20::allowanceReturn { allowance: initial_allowance } =
+    let initial_allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     assert_eq!(initial_allowance, U256::ZERO);
@@ -625,13 +577,10 @@ async fn transfer_from_rejects_insufficient_allowance() -> Result<()> {
         needed: value
     }));
 
-    let Erc20::balanceOfReturn { balance: alice_balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract_alice.totalSupply().call().await?;
-    let Erc20::allowanceReturn { allowance } =
+    let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let supply = contract_alice.totalSupply().call().await?;
+    let allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     assert_eq!(initial_alice_balance, alice_balance);
@@ -666,16 +615,15 @@ async fn transfer_from_rejects_invalid_receiver() -> Result<()> {
 
     watch!(contract_alice.mint(alice.address(), balance))?;
 
-    let Erc20::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: initial_receiver_balance } =
+    let initial_receiver_balance =
         contract_alice.balanceOf(invalid_receiver).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract_alice.totalSupply().call().await?;
+    let initial_supply = contract_alice.totalSupply().call().await?;
 
     watch!(contract_alice.approve(bob_addr, balance))?;
 
-    let Erc20::allowanceReturn { allowance: initial_allowance } =
+    let initial_allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     let err =
@@ -686,13 +634,10 @@ async fn transfer_from_rejects_invalid_receiver() -> Result<()> {
         receiver: invalid_receiver
     }));
 
-    let Erc20::balanceOfReturn { balance: alice_balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: receiver_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract_alice.totalSupply().call().await?;
-    let Erc20::allowanceReturn { allowance } =
+    let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let receiver_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let supply = contract_alice.totalSupply().call().await?;
+    let allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     assert_eq!(initial_alice_balance, alice_balance);
@@ -726,17 +671,13 @@ async fn burns() -> Result<()> {
 
     watch!(contract_alice.mint(alice.address(), balance))?;
 
-    let Erc20::balanceOfReturn { balance: initial_balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract_alice.totalSupply().call().await?;
+    let initial_balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let initial_supply = contract_alice.totalSupply().call().await?;
 
     let receipt = receipt!(contract_alice.burn(value))?;
 
-    let Erc20::balanceOfReturn { balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract_alice.totalSupply().call().await?;
+    let balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let supply = contract_alice.totalSupply().call().await?;
 
     assert!(receipt.emits(Erc20::Transfer {
         from: alice_addr,
@@ -769,10 +710,8 @@ async fn burn_rejects_insufficient_balance() -> Result<()> {
 
     watch!(contract_alice.mint(alice.address(), balance))?;
 
-    let Erc20::balanceOfReturn { balance: initial_balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract_alice.totalSupply().call().await?;
+    let initial_balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let initial_supply = contract_alice.totalSupply().call().await?;
 
     let err = send!(contract_alice.burn(value))
         .expect_err("should not burn when insufficient balance");
@@ -782,10 +721,8 @@ async fn burn_rejects_insufficient_balance() -> Result<()> {
         needed: value
     }));
 
-    let Erc20::balanceOfReturn { balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract_alice.totalSupply().call().await?;
+    let balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let supply = contract_alice.totalSupply().call().await?;
 
     assert_eq!(initial_balance, balance);
     assert_eq!(initial_supply, supply);
@@ -816,27 +753,22 @@ async fn burns_from() -> Result<()> {
 
     watch!(contract_alice.mint(alice.address(), balance))?;
 
-    let Erc20::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: initial_bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract_alice.totalSupply().call().await?;
+    let initial_bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let initial_supply = contract_alice.totalSupply().call().await?;
 
     watch!(contract_alice.approve(bob_addr, balance))?;
 
-    let Erc20::allowanceReturn { allowance: initial_allowance } =
+    let initial_allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     let receipt = receipt!(contract_bob.burnFrom(alice_addr, value))?;
 
-    let Erc20::balanceOfReturn { balance: alice_balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract_alice.totalSupply().call().await?;
-    let Erc20::allowanceReturn { allowance } =
+    let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let supply = contract_alice.totalSupply().call().await?;
+    let allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     assert!(receipt.emits(Erc20::Transfer {
@@ -876,16 +808,14 @@ async fn burn_from_reverts_insufficient_balance() -> Result<()> {
 
     watch!(contract_alice.mint(alice.address(), balance))?;
 
-    let Erc20::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: initial_bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract_alice.totalSupply().call().await?;
+    let initial_bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let initial_supply = contract_alice.totalSupply().call().await?;
 
     watch!(contract_alice.approve(bob_addr, value))?;
 
-    let Erc20::allowanceReturn { allowance: initial_allowance } =
+    let initial_allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     let err = send!(contract_bob.burnFrom(alice_addr, value))
@@ -897,13 +827,10 @@ async fn burn_from_reverts_insufficient_balance() -> Result<()> {
         needed: value
     }));
 
-    let Erc20::balanceOfReturn { balance: alice_balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract_alice.totalSupply().call().await?;
-    let Erc20::allowanceReturn { allowance } =
+    let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let supply = contract_alice.totalSupply().call().await?;
+    let allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     assert_eq!(initial_alice_balance, alice_balance);
@@ -937,14 +864,12 @@ async fn burn_from_rejects_insufficient_allowance() -> Result<()> {
 
     watch!(contract_alice.mint(alice.address(), balance))?;
 
-    let Erc20::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: initial_bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract_alice.totalSupply().call().await?;
+    let initial_bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let initial_supply = contract_alice.totalSupply().call().await?;
 
-    let Erc20::allowanceReturn { allowance: initial_allowance } =
+    let initial_allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     assert_eq!(initial_allowance, U256::ZERO);
@@ -958,13 +883,10 @@ async fn burn_from_rejects_insufficient_allowance() -> Result<()> {
         needed: value
     }));
 
-    let Erc20::balanceOfReturn { balance: alice_balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract_alice.totalSupply().call().await?;
-    let Erc20::allowanceReturn { allowance } =
+    let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let supply = contract_alice.totalSupply().call().await?;
+    let allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     assert_eq!(initial_alice_balance, alice_balance);
@@ -1000,10 +922,8 @@ async fn mint_rejects_exceeding_cap() -> Result<()> {
 
     watch!(contract_alice.mint(alice_addr, balance))?;
 
-    let Erc20::balanceOfReturn { balance: initial_balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract_alice.totalSupply().call().await?;
+    let initial_balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let initial_supply = contract_alice.totalSupply().call().await?;
 
     let err = send!(contract_alice.mint(alice_addr, two))
         .expect_err("should not mint when exceeding the cap");
@@ -1012,10 +932,8 @@ async fn mint_rejects_exceeding_cap() -> Result<()> {
         cap
     }));
 
-    let Erc20::balanceOfReturn { balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract_alice.totalSupply().call().await?;
+    let balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let supply = contract_alice.totalSupply().call().await?;
 
     assert_eq!(initial_balance, balance);
     assert_eq!(initial_supply, supply);
@@ -1043,10 +961,8 @@ async fn mint_rejects_when_cap_reached() -> Result<()> {
 
     watch!(contract_alice.mint(alice_addr, balance))?;
 
-    let Erc20::balanceOfReturn { balance: initial_balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract_alice.totalSupply().call().await?;
+    let initial_balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let initial_supply = contract_alice.totalSupply().call().await?;
 
     let err = send!(contract_alice.mint(alice_addr, one))
         .expect_err("should not mint when the cap is reached");
@@ -1055,10 +971,8 @@ async fn mint_rejects_when_cap_reached() -> Result<()> {
         cap
     }));
 
-    let Erc20::balanceOfReturn { balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract_alice.totalSupply().call().await?;
+    let balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let supply = contract_alice.totalSupply().call().await?;
 
     assert_eq!(initial_balance, balance);
     assert_eq!(initial_supply, supply);
@@ -1110,7 +1024,7 @@ async fn pauses() -> eyre::Result<()> {
 
     assert!(receipt.emits(Erc20::Paused { account: alice.address() }));
 
-    let paused = contract.paused().call().await?.paused;
+    let paused = contract.paused().call().await?;
 
     assert!(paused);
 
@@ -1160,7 +1074,7 @@ async fn unpauses() -> eyre::Result<()> {
 
     assert!(receipt.emits(Erc20::Unpaused { account: alice.address() }));
 
-    let paused = contract.paused().call().await?.paused;
+    let paused = contract.paused().call().await?;
 
     assert!(!paused);
 
@@ -1181,7 +1095,7 @@ async fn unpause_reverts_in_unpaused_state() -> eyre::Result<()> {
 
     let contract = Erc20::new(contract_addr, &alice.wallet);
 
-    let paused = contract.paused().call().await?.paused;
+    let paused = contract.paused().call().await?;
 
     assert!(!paused);
 
@@ -1212,10 +1126,8 @@ async fn error_when_burn_in_paused_state() -> Result<()> {
 
     watch!(contract.mint(alice.address(), balance))?;
 
-    let Erc20::balanceOfReturn { balance: initial_balance } =
-        contract.balanceOf(alice_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract.totalSupply().call().await?;
+    let initial_balance = contract.balanceOf(alice_addr).call().await?;
+    let initial_supply = contract.totalSupply().call().await?;
 
     watch!(contract.pause())?;
 
@@ -1223,10 +1135,8 @@ async fn error_when_burn_in_paused_state() -> Result<()> {
         send!(contract.burn(value)).expect_err("should return `EnforcedPause`");
     assert!(err.reverted_with(Erc20::EnforcedPause {}));
 
-    let Erc20::balanceOfReturn { balance } =
-        contract.balanceOf(alice_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract.totalSupply().call().await?;
+    let balance = contract.balanceOf(alice_addr).call().await?;
+    let supply = contract.totalSupply().call().await?;
 
     assert_eq!(initial_balance, balance);
     assert_eq!(initial_supply, supply);
@@ -1257,16 +1167,14 @@ async fn error_when_burn_from_in_paused_state() -> Result<()> {
 
     watch!(contract_alice.mint(alice.address(), balance))?;
 
-    let Erc20::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: initial_bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract_alice.totalSupply().call().await?;
+    let initial_bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let initial_supply = contract_alice.totalSupply().call().await?;
 
     watch!(contract_alice.approve(bob_addr, balance))?;
 
-    let Erc20::allowanceReturn { allowance: initial_allowance } =
+    let initial_allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     watch!(contract_alice.pause())?;
@@ -1275,13 +1183,10 @@ async fn error_when_burn_from_in_paused_state() -> Result<()> {
         .expect_err("should return `EnforcedPause`");
     assert!(err.reverted_with(Erc20::EnforcedPause {}));
 
-    let Erc20::balanceOfReturn { balance: alice_balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract_alice.totalSupply().call().await?;
-    let Erc20::allowanceReturn { allowance } =
+    let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let supply = contract_alice.totalSupply().call().await?;
+    let allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     assert_eq!(initial_alice_balance, alice_balance);
@@ -1306,10 +1211,8 @@ async fn error_when_mint_in_paused_state() -> Result<()> {
     let contract = Erc20::new(contract_addr, &alice.wallet);
     let alice_addr = alice.address();
 
-    let Erc20::balanceOfReturn { balance: initial_balance } =
-        contract.balanceOf(alice_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract.totalSupply().call().await?;
+    let initial_balance = contract.balanceOf(alice_addr).call().await?;
+    let initial_supply = contract.totalSupply().call().await?;
 
     assert_eq!(U256::ZERO, initial_balance);
     assert_eq!(U256::ZERO, initial_supply);
@@ -1320,10 +1223,8 @@ async fn error_when_mint_in_paused_state() -> Result<()> {
         .expect_err("should return `EnforcedPause`");
     assert!(err.reverted_with(Erc20::EnforcedPause {}));
 
-    let Erc20::balanceOfReturn { balance } =
-        contract.balanceOf(alice_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: total_supply } =
-        contract.totalSupply().call().await?;
+    let balance = contract.balanceOf(alice_addr).call().await?;
+    let total_supply = contract.totalSupply().call().await?;
 
     assert_eq!(initial_balance, balance);
     assert_eq!(initial_supply, total_supply);
@@ -1350,12 +1251,10 @@ async fn error_when_transfer_in_paused_state() -> Result<()> {
 
     watch!(contract_alice.mint(alice.address(), balance))?;
 
-    let Erc20::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: initial_bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract_alice.totalSupply().call().await?;
+    let initial_bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let initial_supply = contract_alice.totalSupply().call().await?;
 
     watch!(contract_alice.pause())?;
 
@@ -1363,12 +1262,9 @@ async fn error_when_transfer_in_paused_state() -> Result<()> {
         .expect_err("should return `EnforcedPause`");
     assert!(err.reverted_with(Erc20::EnforcedPause {}));
 
-    let Erc20::balanceOfReturn { balance: alice_balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract_alice.totalSupply().call().await?;
+    let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let supply = contract_alice.totalSupply().call().await?;
 
     assert_eq!(initial_alice_balance, alice_balance);
     assert_eq!(initial_bob_balance, bob_balance);
@@ -1399,16 +1295,14 @@ async fn error_when_transfer_from() -> Result<()> {
 
     watch!(contract_alice.mint(alice.address(), balance))?;
 
-    let Erc20::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: initial_bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: initial_supply } =
-        contract_alice.totalSupply().call().await?;
+    let initial_bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let initial_supply = contract_alice.totalSupply().call().await?;
 
     watch!(contract_alice.approve(bob_addr, balance))?;
 
-    let Erc20::allowanceReturn { allowance: initial_allowance } =
+    let initial_allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     watch!(contract_alice.pause())?;
@@ -1418,13 +1312,10 @@ async fn error_when_transfer_from() -> Result<()> {
             .expect_err("should return `EnforcedPause`");
     assert!(err.reverted_with(Erc20::EnforcedPause {}));
 
-    let Erc20::balanceOfReturn { balance: alice_balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20::balanceOfReturn { balance: bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20::totalSupplyReturn { totalSupply: supply } =
-        contract_alice.totalSupply().call().await?;
-    let Erc20::allowanceReturn { allowance } =
+    let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let supply = contract_alice.totalSupply().call().await?;
+    let allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     assert_eq!(initial_alice_balance, alice_balance);
@@ -1453,38 +1344,26 @@ async fn supports_interface() -> Result<()> {
     let contract = Erc20::new(contract_addr, &alice.wallet);
 
     let invalid_interface_id: B32 = 0xffffffff_u32.into();
-    let supports_interface = contract
-        .supportsInterface(invalid_interface_id)
-        .call()
-        .await?
-        .supportsInterface;
+    let supports_interface =
+        contract.supportsInterface(invalid_interface_id).call().await?;
 
     assert!(!supports_interface);
 
     let erc20_interface_id: B32 = 0x36372b07_u32.into();
-    let supports_interface = contract
-        .supportsInterface(erc20_interface_id)
-        .call()
-        .await?
-        .supportsInterface;
+    let supports_interface =
+        contract.supportsInterface(erc20_interface_id).call().await?;
 
     assert!(supports_interface);
 
     let erc165_interface_id: B32 = 0x01ffc9a7_u32.into();
-    let supports_interface = contract
-        .supportsInterface(erc165_interface_id)
-        .call()
-        .await?
-        .supportsInterface;
+    let supports_interface =
+        contract.supportsInterface(erc165_interface_id).call().await?;
 
     assert!(supports_interface);
 
     let erc20_metadata_interface_id: B32 = 0xa219a025_u32.into();
-    let supports_interface = contract
-        .supportsInterface(erc20_metadata_interface_id)
-        .call()
-        .await?
-        .supportsInterface;
+    let supports_interface =
+        contract.supportsInterface(erc20_metadata_interface_id).call().await?;
 
     assert!(supports_interface);
 

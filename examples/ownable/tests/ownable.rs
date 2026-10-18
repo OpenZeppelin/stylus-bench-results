@@ -35,7 +35,7 @@ async fn constructs() -> Result<()> {
         newOwner: alice_addr,
     }));
 
-    let Ownable::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, alice_addr);
     Ok(())
 }
@@ -85,7 +85,7 @@ async fn transfers_ownership() -> Result<()> {
         newOwner: bob_addr,
     }));
 
-    let Ownable::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, bob_addr);
 
     Ok(())
@@ -135,7 +135,7 @@ async fn guards_against_stuck_state() -> Result<()> {
         .expect_err("should not transfer to Address::ZERO");
     err.reverted_with(Ownable::OwnableInvalidOwner { owner: Address::ZERO });
 
-    let Ownable::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, alice_addr);
 
     Ok(())
@@ -161,7 +161,7 @@ async fn loses_ownership_after_renouncement() -> Result<()> {
         newOwner: Address::ZERO,
     }));
 
-    let Ownable::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, Address::ZERO);
 
     Ok(())
@@ -190,7 +190,7 @@ async fn prevents_non_owners_from_renouncement() -> Result<()> {
         account: bob_addr,
     });
 
-    let Ownable::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, alice_addr);
 
     Ok(())

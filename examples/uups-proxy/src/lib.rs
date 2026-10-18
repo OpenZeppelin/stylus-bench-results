@@ -138,7 +138,7 @@ impl IErc20 for UUPSProxyErc20Example {
         &mut self,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer(to, value)
     }
 
@@ -147,7 +147,7 @@ impl IErc20 for UUPSProxyErc20Example {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer_from(from, to, value)
     }
 
@@ -159,7 +159,7 @@ impl IErc20 for UUPSProxyErc20Example {
         &mut self,
         spender: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.approve(spender, value)
     }
 }

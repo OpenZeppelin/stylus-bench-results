@@ -29,7 +29,7 @@ async fn safe_increase_allowance_works() -> eyre::Result<()> {
     watch!(erc20_alice.forceApprove(safe_erc20_addr, bob_addr, init_approval))?;
 
     let initial_bob_allowance =
-        erc20_alice.allowance(safe_erc20_addr, bob_addr).call().await?._0;
+        erc20_alice.allowance(safe_erc20_addr, bob_addr).call().await?;
     assert_eq!(initial_bob_allowance, init_approval);
 
     let receipt = receipt!(safe_erc20_alice.safeIncreaseAllowance(
@@ -45,7 +45,7 @@ async fn safe_increase_allowance_works() -> eyre::Result<()> {
     }));
 
     let bob_allowance =
-        erc20_alice.allowance(safe_erc20_addr, bob_addr).call().await?._0;
+        erc20_alice.allowance(safe_erc20_addr, bob_addr).call().await?;
     assert_eq!(bob_allowance, init_approval + value);
 
     Ok(())
@@ -70,7 +70,7 @@ async fn safe_decrease_allowance_works() -> eyre::Result<()> {
     watch!(erc20_alice.forceApprove(safe_erc20_addr, bob_addr, init_approval))?;
 
     let initial_bob_allowance =
-        erc20_alice.allowance(safe_erc20_addr, bob_addr).call().await?._0;
+        erc20_alice.allowance(safe_erc20_addr, bob_addr).call().await?;
     assert_eq!(initial_bob_allowance, init_approval);
 
     let receipt = receipt!(safe_erc20_alice.safeDecreaseAllowance(
@@ -86,7 +86,7 @@ async fn safe_decrease_allowance_works() -> eyre::Result<()> {
     }));
 
     let bob_allowance =
-        erc20_alice.allowance(safe_erc20_addr, bob_addr).call().await?._0;
+        erc20_alice.allowance(safe_erc20_addr, bob_addr).call().await?;
     assert_eq!(bob_allowance, init_approval - value);
 
     Ok(())
@@ -111,7 +111,7 @@ async fn force_approve_works() -> eyre::Result<()> {
     watch!(erc20_alice.forceApprove(safe_erc20_addr, bob_addr, init_approval))?;
 
     let initial_bob_allowance =
-        erc20_alice.allowance(safe_erc20_addr, bob_addr).call().await?._0;
+        erc20_alice.allowance(safe_erc20_addr, bob_addr).call().await?;
     assert_eq!(initial_bob_allowance, init_approval);
 
     let receipt = receipt!(safe_erc20_alice.forceApprove(
@@ -127,7 +127,7 @@ async fn force_approve_works() -> eyre::Result<()> {
     }));
 
     let bob_allowance =
-        erc20_alice.allowance(safe_erc20_addr, bob_addr).call().await?._0;
+        erc20_alice.allowance(safe_erc20_addr, bob_addr).call().await?;
     assert_eq!(bob_allowance, updated_approval);
 
     Ok(())

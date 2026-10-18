@@ -119,11 +119,11 @@ impl Erc721Example {
 impl IErc721 for Erc721Example {
     type Error = Error;
 
-    fn balance_of(&self, owner: Address) -> Result<U256, Self::Error> {
+    fn balance_of(&self, owner: Address) -> Result<U256, Error> {
         Ok(self.erc721.balance_of(owner)?)
     }
 
-    fn owner_of(&self, token_id: U256) -> Result<Address, Self::Error> {
+    fn owner_of(&self, token_id: U256) -> Result<Address, Error> {
         Ok(self.erc721.owner_of(token_id)?)
     }
 
@@ -132,7 +132,7 @@ impl IErc721 for Erc721Example {
         from: Address,
         to: Address,
         token_id: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         // Retrieve the previous owner.
         let previous_owner = self.erc721.owner_of(token_id)?;
 
@@ -160,7 +160,7 @@ impl IErc721 for Erc721Example {
         to: Address,
         token_id: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         // Retrieve the previous owner.
         let previous_owner = self.erc721.owner_of(token_id)?;
 
@@ -186,7 +186,7 @@ impl IErc721 for Erc721Example {
         from: Address,
         to: Address,
         token_id: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         // Retrieve the previous owner.
         let previous_owner = self.erc721.owner_of(token_id)?;
 
@@ -207,11 +207,7 @@ impl IErc721 for Erc721Example {
         Ok(())
     }
 
-    fn approve(
-        &mut self,
-        to: Address,
-        token_id: U256,
-    ) -> Result<(), Self::Error> {
+    fn approve(&mut self, to: Address, token_id: U256) -> Result<(), Error> {
         Ok(self.erc721.approve(to, token_id)?)
     }
 
@@ -219,11 +215,11 @@ impl IErc721 for Erc721Example {
         &mut self,
         to: Address,
         approved: bool,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         Ok(self.erc721.set_approval_for_all(to, approved)?)
     }
 
-    fn get_approved(&self, token_id: U256) -> Result<Address, Self::Error> {
+    fn get_approved(&self, token_id: U256) -> Result<Address, Error> {
         Ok(self.erc721.get_approved(token_id)?)
     }
 
@@ -236,7 +232,7 @@ impl IErc721 for Erc721Example {
 impl IErc721Burnable for Erc721Example {
     type Error = Error;
 
-    fn burn(&mut self, token_id: U256) -> Result<(), Self::Error> {
+    fn burn(&mut self, token_id: U256) -> Result<(), Error> {
         // Retrieve the owner.
         let owner = self.erc721.owner_of(token_id)?;
 
@@ -262,7 +258,7 @@ impl IErc721Enumerable for Erc721Example {
         self.enumerable.total_supply()
     }
 
-    fn token_by_index(&self, index: U256) -> Result<U256, Self::Error> {
+    fn token_by_index(&self, index: U256) -> Result<U256, Error> {
         Ok(self.enumerable.token_by_index(index)?)
     }
 
@@ -270,7 +266,7 @@ impl IErc721Enumerable for Erc721Example {
         &self,
         owner: Address,
         index: U256,
-    ) -> Result<U256, Self::Error> {
+    ) -> Result<U256, Error> {
         Ok(self.enumerable.token_of_owner_by_index(owner, index)?)
     }
 }

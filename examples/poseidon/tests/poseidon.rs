@@ -22,7 +22,7 @@ async fn poseidon_works() -> Result<()> {
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = PoseidonExample::new(contract_addr, &alice.wallet);
 
-    let PoseidonExample::hashReturn { hash } =
+    let hash =
         contract.hash([uint!(123_U256), uint!(123456_U256)]).call().await?;
 
     let expected = U256::from_be_slice(&hex!(

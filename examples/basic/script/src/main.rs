@@ -37,10 +37,10 @@ async fn main() {
     let contract = BasicToken::new(contract_address, &provider);
 
     let call_result = contract.name().call().await.unwrap();
-    assert_eq!(call_result.name, TOKEN_NAME.to_owned());
+    assert_eq!(call_result, TOKEN_NAME);
 
     let call_result = contract.symbol().call().await.unwrap();
-    assert_eq!(call_result.symbol, TOKEN_SYMBOL.to_owned());
+    assert_eq!(call_result, TOKEN_SYMBOL);
 }
 
 /// Deploy a `BasicToken` contract to `RPC_URL` using `cargo-stylus`.

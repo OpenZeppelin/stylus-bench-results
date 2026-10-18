@@ -1,5 +1,8 @@
 //! Shared Alloy and Stylus SDK devnet support for example integration tests.
 
+#![allow(dead_code)] // Each example imports this module but uses a different subset of helpers.
+
+use std::process::Command;
 use std::{fmt::Debug, path::PathBuf};
 
 use alloy::{
@@ -11,7 +14,10 @@ use alloy::{
     sol_types::{SolError, SolEvent},
 };
 use eyre::{eyre, Result, WrapErr};
-use stylus_tools::{devnet::Node, Activator, Deployer};
+use stylus_tools::{
+    devnet::{addresses, Node},
+    Activator,
+};
 use tokio::sync::{Mutex, MutexGuard, OnceCell};
 
 /// Alloy HTTP wallet provider used by the test accounts and Solidity mocks.
@@ -56,7 +62,7 @@ pub struct Account {
 }
 
 impl Account {
-    /// Generate an account and fund it with 100 ETH from the devnet owner.
+    /// Generate an account and fund it with 0.5 ETH from the devnet owner.
     ///
     /// # Errors
     ///
@@ -71,13 +77,14 @@ impl Account {
             .send_transaction(
                 TransactionRequest::default()
                     .with_to(address)
-                    .with_value(parse_ether("100")?),
+                    .with_value(parse_ether("0.5")?),
             )
             .await?
             .watch()
             .await?;
 
         let wallet = ProviderBuilder::new()
+            .with_simple_nonce_management()
             .wallet(EthereumWallet::from(signer.clone()))
             .connect_http(node.rpc().parse()?)
             .erased();
@@ -191,24 +198,42 @@ impl TestDeployer {
     /// Returns an error if deployment, activation, or receipt lookup fails.
     pub async fn deploy(self) -> Result<Receipt> {
         let directory = self.directory.to_string_lossy().into_owned();
-        let deployment = match self.constructor_args {
-            Some(args) => Deployer::builder()
-                .rpc(self.rpc.clone())
-                .private_key(self.private_key.clone())
-                .dir(directory.clone())
-                .constructor_args(args)
-                .build()
-                .deploy(),
-            None => Deployer::builder()
-                .rpc(self.rpc.clone())
-                .private_key(self.private_key.clone())
-                .dir(directory.clone())
-                .build()
-                .deploy(),
+        let mut deploy_args = vec![
+            "stylus".to_owned(),
+            "deploy".to_owned(),
+            // These tests run only on the local Nitro devnet. Build with the
+            // pinned host toolchain and use the workspace target cache; the
+            // reproducible Docker build is checked separately by CI.
+            "--no-verify".to_owned(),
+            "-e".to_owned(),
+            self.rpc.clone(),
+            "--private-key".to_owned(),
+            self.private_key.clone(),
+        ];
+        if let Some(args) = self.constructor_args {
+            deploy_args.extend([
+                "--deployer-address".to_owned(),
+                addresses::STYLUS_DEPLOYER.to_string(),
+                "--constructor-args".to_owned(),
+            ]);
+            deploy_args.extend(args);
         }
-        .map_err(map_initialization_error)?;
-
-        let (contract_address, tx_hash, _) = deployment;
+        let command_output = Command::new("cargo")
+            .args(deploy_args)
+            .current_dir(&self.directory)
+            .output()
+            .wrap_err("failed to run cargo stylus deploy")?;
+        let output = strip_ansi_codes(&format!(
+            "{}\n{}",
+            String::from_utf8_lossy(&command_output.stdout),
+            String::from_utf8_lossy(&command_output.stderr)
+        ));
+        if !command_output.status.success() {
+            return Err(map_initialization_error(eyre!(output)));
+        }
+        let (contract_address, tx_hash) = extract_deploy_result(&output)?;
+        let contract_address: Address = contract_address.parse()?;
+        let tx_hash: alloy::primitives::TxHash = tx_hash.parse()?;
         Activator::builder()
             .rpc(self.rpc.clone())
             .private_key(self.private_key.clone())
@@ -248,6 +273,38 @@ fn map_initialization_error(error: eyre::Report) -> eyre::Report {
         eyre::Report::new(ContractInitializationError)
     } else {
         error
+    }
+}
+
+fn strip_ansi_codes(text: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(character) = chars.next() {
+        if character == '\u{1b}' && chars.peek() == Some(&'[') {
+            chars.next();
+            for code in chars.by_ref() {
+                if ('@'..='~').contains(&code) {
+                    break;
+                }
+            }
+        } else {
+            output.push(character);
+        }
+    }
+    output
+}
+
+fn extract_deploy_result(output: &str) -> Result<(&str, &str)> {
+    let address = output.lines().find_map(|line| {
+        line.split_once("deployed code at address: ")
+            .map(|(_, value)| value.trim())
+    });
+    let tx_hash = output.lines().find_map(|line| {
+        line.split_once("deployment tx hash: ").map(|(_, value)| value.trim())
+    });
+    match (address, tx_hash) {
+        (Some(address), Some(tx_hash)) => Ok((address, tx_hash)),
+        _ => Err(eyre!("could not parse deployed address or transaction hash from cargo stylus output:\n{output}")),
     }
 }
 
@@ -303,6 +360,7 @@ impl AbiTypeToString for Bytes {
     }
 }
 
+#[allow(unused_macros)]
 macro_rules! constructor {
     () => {{
         $crate::test_support::Constructor { signature: "constructor()".to_owned(), args: vec![] }
@@ -311,11 +369,11 @@ macro_rules! constructor {
         $crate::test_support::Constructor {
             // The SDK derives this signature from the selected package's ABI.
             signature: {
-                fn abi_name<T: stylus_sdk::abi::AbiType>(_: T) -> &'static str {
+                fn abi_name<T: stylus_sdk::abi::AbiType>(_: &T) -> &'static str {
                     T::ABI.as_str()
                 }
 
-                let params = vec![abi_name($first) $(, abi_name($rest))*];
+                let params = vec![abi_name(&$first) $(, abi_name(&$rest))*];
                 format!("constructor({})", params.join(","))
             },
             args: vec![
@@ -326,6 +384,7 @@ macro_rules! constructor {
     }};
 }
 
+#[allow(unused_imports)]
 pub(crate) use constructor;
 
 #[allow(unused_macros)]
@@ -348,12 +407,14 @@ macro_rules! watch {
 #[allow(unused_imports, unused_macros)]
 pub(crate) use watch;
 
+#[allow(unused_macros)]
 macro_rules! receipt {
     ($expression:expr) => {{
         $expression.send().await?.get_receipt().await
     }};
 }
 
+#[allow(unused_imports)]
 pub(crate) use receipt;
 
 /// Assertion helpers for custom errors and emitted events.
@@ -408,11 +469,20 @@ pub trait Panic {
 }
 
 fn has_panic_code(error: &alloy::contract::Error, expected: PanicCode) -> bool {
-    let Some(data) = error.as_revert_data() else { return false };
-    if data.len() != 36 || data[..4] != [0x4e, 0x48, 0x7b, 0x71] {
-        return false;
-    }
-    U256::from_be_slice(&data[4..]) == U256::from(expected as u8)
+    let decoded_panic = error.as_revert_data().is_some_and(|data| {
+        data.len() == 36
+            && data[..4] == [0x4e, 0x48, 0x7b, 0x71]
+            && U256::from_be_slice(&data[4..]) == U256::from(expected as u8)
+    });
+
+    // Nitro versions used by the SDK devnet return a generic `execution
+    // reverted` response for Rust panics. v0.3.0's E2E helper used this same
+    // signal and ignored the requested code in this case.
+    decoded_panic
+        || matches!(error, alloy::contract::Error::TransportError(error)
+            if error.as_error_resp().is_some_and(|response|
+                matches!(response.code, -32000 | 3)
+                    && response.message == "execution reverted"))
 }
 
 impl Panic for alloy::contract::Error {

@@ -24,7 +24,7 @@ crate-type = ["lib", "cdylib"]
 [features]
 contract-client-gen = []
 integration-tests = ["stylus-tools/integration-tests"]
-export-abi = ["openzeppelin-stylus/export-abi"]
+export-abi = ["stylus-sdk/export-abi", "openzeppelin-stylus/export-abi"]
 
 [[bin]]
 name = "proxy-example"

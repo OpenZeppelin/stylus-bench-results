@@ -36,8 +36,7 @@ async fn pedersen_works() -> Result<()> {
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = PedersenExample::new(contract_addr, &alice.wallet);
 
-    let PedersenExample::hashReturn { hash } =
-        contract.hash([input_1, input_2]).call().await?;
+    let hash = contract.hash([input_1, input_2]).call().await?;
 
     assert_eq!(hash, expected);
 

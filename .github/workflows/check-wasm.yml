@@ -32,8 +32,5 @@ jobs:
       - name: Verify cargo-stylus installation
         run: cargo stylus --version | grep -F '0.10.10'
 
-      - name: Install pinned wasm-opt
-        run: cargo install --locked --force wasm-opt@0.116.1
-
       - name: Run wasm check
         run: ./scripts/check-wasm.sh

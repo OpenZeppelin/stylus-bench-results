@@ -44,11 +44,8 @@ mod without_initial_approval {
             DATA
         ))?;
 
-        let allowance = erc20_alice
-            .allowance(safe_erc20_addr, spender_addr)
-            .call()
-            .await?
-            ._0;
+        let allowance =
+            erc20_alice.allowance(safe_erc20_addr, spender_addr).call().await?;
         assert_eq!(allowance, value);
 
         Ok(())
@@ -84,8 +81,7 @@ mod without_initial_approval {
         let allowance = erc20_alice
             .allowance(safe_erc20_addr, spender_address)
             .call()
-            .await?
-            ._0;
+            .await?;
         assert_eq!(allowance, value);
 
         Ok(())
@@ -130,7 +126,7 @@ mod with_initial_approval {
         ))?;
 
         let allowance =
-            erc20_alice.allowance(safe_erc20_addr, bob_addr).call().await?._0;
+            erc20_alice.allowance(safe_erc20_addr, bob_addr).call().await?;
         assert_eq!(allowance, value);
 
         Ok(())

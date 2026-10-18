@@ -78,7 +78,7 @@ impl IErc20 for CryptoErc20 {
         &mut self,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer(to, value)
     }
 
@@ -90,7 +90,7 @@ impl IErc20 for CryptoErc20 {
         &mut self,
         spender: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.approve(spender, value)
     }
 
@@ -99,7 +99,7 @@ impl IErc20 for CryptoErc20 {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer_from(from, to, value)
     }
 }
@@ -108,7 +108,7 @@ impl IErc20 for CryptoErc20 {
 impl IErc20Burnable for CryptoErc20 {
     type Error = erc20::Error;
 
-    fn burn(&mut self, value: U256) -> Result<(), Self::Error> {
+    fn burn(&mut self, value: U256) -> Result<(), erc20::Error> {
         self.erc20.burn(value)
     }
 
@@ -116,7 +116,7 @@ impl IErc20Burnable for CryptoErc20 {
         &mut self,
         account: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc20::Error> {
         self.erc20.burn_from(account, value)
     }
 }
