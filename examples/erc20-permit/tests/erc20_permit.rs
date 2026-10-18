@@ -85,7 +85,12 @@ async fn error_when_expired_deadline_for_permit() -> Result<()> {
     let alice = Account::new().await?;
     let bob = Account::new().await?;
 
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+    let contract_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let contract_alice = Erc20Permit::new(contract_addr, &alice.wallet);
     let alice_addr = alice.address();
     let bob_addr = bob.address();
@@ -131,7 +136,12 @@ async fn permit_works() -> Result<()> {
     let alice = Account::new().await?;
     let bob = Account::new().await?;
 
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+    let contract_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let contract_alice = Erc20Permit::new(contract_addr, &alice.wallet);
     let alice_addr = alice.address();
     let bob_addr = bob.address();
@@ -217,7 +227,12 @@ async fn permit_rejects_reused_signature() -> Result<()> {
     let alice = Account::new().await?;
     let bob = Account::new().await?;
 
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+    let contract_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let contract_alice = Erc20Permit::new(contract_addr, &alice.wallet);
     let alice_addr = alice.address();
     let bob_addr = bob.address();
@@ -292,7 +307,12 @@ async fn permit_rejects_invalid_signature() -> Result<()> {
     let alice = Account::new().await?;
     let bob = Account::new().await?;
 
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+    let contract_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let contract_alice = Erc20Permit::new(contract_addr, &alice.wallet);
     let alice_addr = alice.address();
     let bob_addr = bob.address();
