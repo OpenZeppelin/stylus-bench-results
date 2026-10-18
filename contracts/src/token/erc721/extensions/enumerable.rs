@@ -152,7 +152,7 @@ impl IErc721Enumerable for Erc721Enumerable {
         let token = owned_tokens.get(index);
         let owner_token_count = owned_tokens.get(U256::MAX);
 
-        if token.is_zero() && index >= owner_token_count {
+        if index >= owner_token_count {
             Err(ERC721OutOfBoundsIndex { owner, index }.into())
         } else {
             Ok(token)
