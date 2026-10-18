@@ -9,7 +9,7 @@ use alloc::{string::String, vec::Vec};
 
 use alloy_primitives::{aliases::B32, Address, U256, U8};
 use openzeppelin_crypto::{
-    field::{instance::FpBN256, prime::PrimeField},
+    field::instance::FpBN256,
     poseidon2::{instance::bn256::BN256Params, Poseidon2},
 };
 use openzeppelin_stylus::{
@@ -106,9 +106,6 @@ impl IErc20 for CryptoErc20 {
 
 #[public]
 impl IErc20Burnable for CryptoErc20 {
-    #[cfg(not(feature = "contract-client-gen"))]
-    fn __stylus_trait_and_impl_must_be_tagged_with_public_macro(&self) {}
-
     type Error = erc20::Error;
 
     fn burn(&mut self, value: U256) -> Result<(), erc20::Error> {
