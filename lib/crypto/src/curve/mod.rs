@@ -24,6 +24,9 @@ mod helpers;
 pub mod sw;
 pub mod te;
 
+#[cfg(test)]
+mod tests;
+
 /// Elliptic curves can be represented via different "models" with varying
 /// efficiency properties.
 ///
