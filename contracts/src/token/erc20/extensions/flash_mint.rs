@@ -377,9 +377,14 @@ impl Erc20FlashMint {
 #[cfg(test)]
 mod tests {
     use crate::test_support::*;
+    use alloy_sol_macro::sol;
+    use alloy_sol_types::{SolCall, SolValue};
     use stylus_sdk::{
         abi::Bytes,
-        alloy_primitives::{aliases::B32, uint, Address, U256},
+        alloy_primitives::{
+            aliases::{B256, B32},
+            uint, Address, U256,
+        },
         prelude::*,
     };
 
@@ -429,6 +434,49 @@ mod tests {
     }
 
     unsafe impl TopLevelStorage for Erc20FlashMintTestExample {}
+
+    sol! {
+        interface FlashBorrowerCallback {
+            function onFlashLoan(
+                address initiator,
+                address token,
+                uint256 amount,
+                uint256 fee,
+                bytes calldata data
+            ) external returns (bytes32);
+        }
+    }
+
+    struct MockBorrowerCallback {
+        receiver: Address,
+        initiator: Address,
+        token: Address,
+        amount: U256,
+        fee: U256,
+        data: Vec<u8>,
+        result: Result<Vec<u8>, Vec<u8>>,
+    }
+
+    fn mock_borrower_callback(
+        contract: &Contract<Erc20FlashMintTestExample>,
+        callback: MockBorrowerCallback,
+    ) {
+        let calldata = FlashBorrowerCallback::onFlashLoanCall {
+            initiator: callback.initiator,
+            token: callback.token,
+            amount: callback.amount,
+            fee: callback.fee,
+            data: callback.data.into(),
+        }
+        .abi_encode();
+        contract.vm().set_code(callback.receiver, vec![0x00]);
+        contract.vm().mock_call(
+            callback.receiver,
+            calldata,
+            U256::ZERO,
+            callback.result,
+        );
+    }
 
     #[openzeppelin_stylus_proc::vm_test]
     fn max_flash_loan_token_match(
@@ -575,6 +623,248 @@ mod tests {
             err,
             Error::ERC3156InvalidReceiver(ERC3156InvalidReceiver { receiver })
                 if receiver == invalid_receiver
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn flash_loan_burns_the_loan_and_transfers_the_fee(
+        contract: Contract<Erc20FlashMintTestExample>,
+        alice: Address,
+        bob: Address,
+        receiver: Address,
+    ) {
+        let amount = uint!(100_U256);
+        let fee = uint!(7_U256);
+        let data = vec![1, 2, 3];
+        contract.sender(alice).erc20_flash_mint.flash_fee_value.set(fee);
+        contract
+            .sender(alice)
+            .erc20_flash_mint
+            .flash_fee_receiver_address
+            .set(bob);
+        contract
+            .sender(alice)
+            .erc20
+            ._mint(receiver, fee)
+            .expect("should seed receiver with fee tokens");
+        contract
+            .sender(alice)
+            .erc20
+            ._approve(receiver, contract.address(), amount + fee, false)
+            .expect("should approve full repayment");
+        mock_borrower_callback(
+            &contract,
+            MockBorrowerCallback {
+                receiver,
+                initiator: alice,
+                token: contract.address(),
+                amount,
+                fee,
+                data: data.clone(),
+                result: Ok(BORROWER_CALLBACK_VALUE.to_vec()),
+            },
+        );
+
+        assert!(contract
+            .sender(alice)
+            .flash_loan(receiver, contract.address(), amount, data.into())
+            .expect("valid borrower should repay the loan"));
+        assert_eq!(
+            U256::ZERO,
+            contract.sender(alice).erc20.balance_of(receiver)
+        );
+        assert_eq!(fee, contract.sender(alice).erc20.balance_of(bob));
+        assert_eq!(fee, contract.sender(alice).erc20.total_supply());
+        assert_eq!(
+            U256::ZERO,
+            contract
+                .sender(alice)
+                .erc20
+                .allowance(receiver, contract.address())
+        );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn flash_loan_burns_the_fee_when_no_fee_receiver_is_set(
+        contract: Contract<Erc20FlashMintTestExample>,
+        alice: Address,
+        receiver: Address,
+    ) {
+        let amount = uint!(9_U256);
+        let fee = uint!(3_U256);
+        contract.sender(alice).erc20_flash_mint.flash_fee_value.set(fee);
+        contract
+            .sender(alice)
+            .erc20
+            ._mint(receiver, fee)
+            .expect("should seed receiver with fee tokens");
+        contract
+            .sender(alice)
+            .erc20
+            ._approve(receiver, contract.address(), amount + fee, false)
+            .expect("should approve full repayment");
+        mock_borrower_callback(
+            &contract,
+            MockBorrowerCallback {
+                receiver,
+                initiator: alice,
+                token: contract.address(),
+                amount,
+                fee,
+                data: vec![],
+                result: Ok(BORROWER_CALLBACK_VALUE.to_vec()),
+            },
+        );
+
+        contract
+            .sender(alice)
+            .flash_loan(receiver, contract.address(), amount, vec![].into())
+            .expect("valid borrower should repay the loan");
+        assert_eq!(
+            U256::ZERO,
+            contract.sender(alice).erc20.balance_of(receiver)
+        );
+        assert_eq!(U256::ZERO, contract.sender(alice).erc20.total_supply());
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn flash_loan_reverts_when_borrower_callback_fails(
+        contract: Contract<Erc20FlashMintTestExample>,
+        alice: Address,
+        receiver: Address,
+    ) {
+        mock_borrower_callback(
+            &contract,
+            MockBorrowerCallback {
+                receiver,
+                initiator: alice,
+                token: contract.address(),
+                amount: U256::ZERO,
+                fee: U256::ZERO,
+                data: vec![],
+                result: Err(vec![]),
+            },
+        );
+
+        assert!(matches!(
+            contract
+                .sender(alice)
+                .flash_loan(receiver, contract.address(), U256::ZERO, vec![].into())
+                .expect_error("callback failure should invalidate borrower"),
+            Error::ERC3156InvalidReceiver(ERC3156InvalidReceiver { receiver: failed })
+                if failed == receiver
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn flash_loan_reverts_when_borrower_returns_wrong_value(
+        contract: Contract<Erc20FlashMintTestExample>,
+        alice: Address,
+        receiver: Address,
+    ) {
+        mock_borrower_callback(
+            &contract,
+            MockBorrowerCallback {
+                receiver,
+                initiator: alice,
+                token: contract.address(),
+                amount: U256::ZERO,
+                fee: U256::ZERO,
+                data: vec![],
+                result: Ok(B256::ZERO.abi_encode()),
+            },
+        );
+
+        assert!(matches!(
+            contract
+                .sender(alice)
+                .flash_loan(receiver, contract.address(), U256::ZERO, vec![].into())
+                .expect_error("wrong callback value should invalidate borrower"),
+            Error::ERC3156InvalidReceiver(ERC3156InvalidReceiver { receiver: failed })
+                if failed == receiver
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn flash_loan_reverts_when_repayment_allowance_is_too_small(
+        contract: Contract<Erc20FlashMintTestExample>,
+        alice: Address,
+        receiver: Address,
+    ) {
+        let amount = uint!(5_U256);
+        mock_borrower_callback(
+            &contract,
+            MockBorrowerCallback {
+                receiver,
+                initiator: alice,
+                token: contract.address(),
+                amount,
+                fee: U256::ZERO,
+                data: vec![],
+                result: Ok(BORROWER_CALLBACK_VALUE.to_vec()),
+            },
+        );
+
+        assert!(matches!(
+            contract
+                .sender(alice)
+                .flash_loan(receiver, contract.address(), amount, vec![].into())
+                .expect_error("borrower must approve repayment"),
+            Error::InsufficientAllowance(erc20::ERC20InsufficientAllowance {
+                spender,
+                allowance,
+                needed,
+            }) if spender == contract.address()
+                && allowance == U256::ZERO
+                && needed == amount
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    #[should_panic = "allowance should not exceed `U256::MAX`"]
+    fn flash_loan_panics_when_repayment_allowance_overflows(
+        contract: Contract<Erc20FlashMintTestExample>,
+        alice: Address,
+        receiver: Address,
+    ) {
+        contract
+            .sender(alice)
+            .erc20_flash_mint
+            .flash_fee_value
+            .set(U256::from(1));
+        mock_borrower_callback(
+            &contract,
+            MockBorrowerCallback {
+                receiver,
+                initiator: alice,
+                token: contract.address(),
+                amount: U256::MAX,
+                fee: U256::from(1),
+                data: vec![],
+                result: Ok(BORROWER_CALLBACK_VALUE.to_vec()),
+            },
+        );
+
+        let _ = contract.sender(alice).flash_loan(
+            receiver,
+            contract.address(),
+            U256::MAX,
+            vec![].into(),
+        );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn flash_loan_rejects_an_unsupported_token_even_for_zero_amount(
+        contract: Contract<Erc20FlashMintTestExample>,
+        alice: Address,
+    ) {
+        assert!(matches!(
+            contract
+                .sender(alice)
+                .flash_loan(alice, alice, U256::ZERO, vec![].into())
+                .expect_error("only the lender token is supported"),
+            Error::UnsupportedToken(ERC3156UnsupportedToken { token })
+                if token == alice
         ));
     }
 

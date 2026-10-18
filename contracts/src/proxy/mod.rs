@@ -466,4 +466,45 @@ mod tests {
 
         assert_eq!(err, "implementation error".abi_encode());
     }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn erc20_implementation_exposes_the_full_public_interface(
+        erc20: Contract<Erc20Example>,
+        alice: Address,
+        bob: Address,
+        operator: Address,
+    ) {
+        let initial_supply = U256::from(20);
+        erc20
+            .sender(alice)
+            .mint(alice, initial_supply)
+            .expect("should mint tokens");
+        assert_eq!(initial_supply, erc20.sender(alice).total_supply());
+        assert_eq!(initial_supply, erc20.sender(alice).balance_of(alice));
+
+        erc20
+            .sender(alice)
+            .approve(operator, U256::from(10))
+            .expect("should approve operator");
+        assert_eq!(
+            U256::from(10),
+            erc20.sender(alice).allowance(alice, operator)
+        );
+        erc20
+            .sender(operator)
+            .transfer_from(alice, bob, U256::from(6))
+            .expect("approved operator should transfer from owner");
+        assert_eq!(
+            U256::from(4),
+            erc20.sender(alice).allowance(alice, operator)
+        );
+
+        erc20
+            .sender(alice)
+            .transfer(bob, U256::from(2))
+            .expect("owner should transfer tokens");
+        assert_eq!(U256::from(12), erc20.sender(alice).balance_of(alice));
+        assert_eq!(U256::from(8), erc20.sender(alice).balance_of(bob));
+        assert_eq!(initial_supply, erc20.sender(alice).total_supply());
+    }
 }

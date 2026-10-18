@@ -373,8 +373,11 @@ impl Erc1155Supply {
 }
 #[cfg(test)]
 mod tests {
-    use crate::test_support::Contract;
+    use crate::test_support::{Contract, TransactionResultExt};
+    use alloy_sol_macro::sol;
+    use alloy_sol_types::{SolCall, SolValue};
     use stylus_sdk::{
+        abi::Bytes,
         alloy_primitives::{Address, U256},
         prelude::*,
     };
@@ -383,9 +386,30 @@ mod tests {
     use crate::token::erc1155::{
         tests::{random_token_ids, random_values},
         ERC1155InvalidReceiver, ERC1155InvalidSender,
+        BATCH_TRANSFER_FN_SELECTOR, SINGLE_TRANSFER_FN_SELECTOR,
     };
 
     unsafe impl TopLevelStorage for Erc1155Supply {}
+
+    sol! {
+        interface Erc1155ReceiverCallback {
+            function onERC1155Received(
+                address operator,
+                address from,
+                uint256 id,
+                uint256 value,
+                bytes calldata data
+            ) external returns (bytes4);
+
+            function onERC1155BatchReceived(
+                address operator,
+                address from,
+                uint256[] calldata ids,
+                uint256[] calldata values,
+                bytes calldata data
+            ) external returns (bytes4);
+        }
+    }
 
     impl Erc1155Supply {
         fn init(
@@ -625,5 +649,226 @@ mod tests {
 
         let fake_interface_id: B32 = 0x12345678_u32.into();
         assert!(!contract.sender(alice).supports_interface(fake_interface_id));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn erc1155_supply_forwards_approval_batch_balance_and_safe_transfers(
+        contract: Contract<Erc1155Supply>,
+        alice: Address,
+        bob: Address,
+        operator: Address,
+    ) {
+        let (ids, values) = contract.sender(alice).init(alice, 3);
+        let balances = contract
+            .sender(alice)
+            .balance_of_batch(vec![alice; ids.len()], ids.clone())
+            .expect("matching account and token arrays should succeed");
+        assert_eq!(values, balances);
+
+        contract
+            .sender(alice)
+            .set_approval_for_all(operator, true)
+            .expect("owner should approve operator");
+        assert!(contract.sender(alice).is_approved_for_all(alice, operator));
+
+        contract
+            .sender(operator)
+            .safe_transfer_from(
+                alice,
+                bob,
+                ids[0],
+                U256::from(1),
+                vec![].into(),
+            )
+            .expect("approved operator should transfer a token");
+        contract
+            .sender(operator)
+            .safe_batch_transfer_from(
+                alice,
+                bob,
+                ids[1..].to_vec(),
+                vec![U256::from(1), U256::from(1)],
+                vec![].into(),
+            )
+            .expect("approved operator should transfer a batch");
+
+        assert_eq!(
+            U256::from(1),
+            contract.sender(alice).balance_of(bob, ids[0])
+        );
+        assert_eq!(
+            U256::from(1),
+            contract.sender(alice).balance_of(bob, ids[1])
+        );
+        assert_eq!(
+            U256::from(1),
+            contract.sender(alice).balance_of(bob, ids[2])
+        );
+        assert_eq!(
+            values.iter().sum::<U256>(),
+            contract.sender(alice).total_supply_all()
+        );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn safe_transfers_check_single_and_batch_receivers(
+        contract: Contract<Erc1155Supply>,
+        alice: Address,
+        receiver: Address,
+    ) {
+        let (ids, _) = contract.sender(alice).init(alice, 3);
+        let data: Bytes = vec![4, 5].into();
+        let single_call = Erc1155ReceiverCallback::onERC1155ReceivedCall {
+            operator: alice,
+            from: alice,
+            id: ids[0],
+            value: U256::from(1),
+            data: data.clone(),
+        }
+        .abi_encode();
+        let batch_ids = ids[1..].to_vec();
+        let batch_values = vec![U256::from(1), U256::from(1)];
+        let batch_call = Erc1155ReceiverCallback::onERC1155BatchReceivedCall {
+            operator: alice,
+            from: alice,
+            ids: batch_ids.clone(),
+            values: batch_values.clone(),
+            data: data.clone(),
+        }
+        .abi_encode();
+        contract.vm().set_code(receiver, vec![0x00]);
+        contract.vm().mock_call(
+            receiver,
+            single_call,
+            U256::ZERO,
+            Ok(SINGLE_TRANSFER_FN_SELECTOR.abi_encode()),
+        );
+        contract.vm().mock_call(
+            receiver,
+            batch_call,
+            U256::ZERO,
+            Ok(BATCH_TRANSFER_FN_SELECTOR.abi_encode()),
+        );
+
+        contract
+            .sender(alice)
+            .safe_transfer_from(
+                alice,
+                receiver,
+                ids[0],
+                U256::from(1),
+                data.clone(),
+            )
+            .expect("receiver should accept a single token");
+        contract
+            .sender(alice)
+            .safe_batch_transfer_from(
+                alice,
+                receiver,
+                batch_ids.clone(),
+                batch_values.clone(),
+                data,
+            )
+            .expect("receiver should accept a token batch");
+
+        assert_eq!(
+            U256::from(1),
+            contract.sender(alice).balance_of(receiver, ids[0])
+        );
+        for id in batch_ids {
+            assert_eq!(
+                U256::from(1),
+                contract.sender(alice).balance_of(receiver, id)
+            );
+        }
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn safe_transfer_rejects_invalid_receiver_responses(
+        contract: Contract<Erc1155Supply>,
+        alice: Address,
+        receiver: Address,
+    ) {
+        let (ids, _) = contract.sender(alice).init(alice, 1);
+        let call = Erc1155ReceiverCallback::onERC1155ReceivedCall {
+            operator: alice,
+            from: alice,
+            id: ids[0],
+            value: U256::from(1),
+            data: vec![].into(),
+        }
+        .abi_encode();
+        contract.vm().set_code(receiver, vec![0x00]);
+        contract.vm().mock_call(
+            receiver,
+            call.clone(),
+            U256::ZERO,
+            Ok(B32::ZERO.abi_encode()),
+        );
+        assert!(matches!(
+            contract
+                .sender(alice)
+                .safe_transfer_from(
+                    alice,
+                    receiver,
+                    ids[0],
+                    U256::from(1),
+                    vec![].into()
+                )
+                .expect_error("receiver must return the expected selector"),
+            Error::InvalidReceiver(_)
+        ));
+
+        contract.vm().mock_call(
+            receiver,
+            call,
+            U256::ZERO,
+            Err(b"receiver rejected".to_vec()),
+        );
+        assert!(matches!(
+            contract
+                .sender(alice)
+                .safe_transfer_from(alice, receiver, ids[0], U256::from(1), vec![].into())
+                .expect_error("receiver revert reason should be propagated"),
+            Error::InvalidReceiverWithReason(erc1155::InvalidReceiverWithReason { reason })
+                if reason == "receiver rejected"
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn safe_transfer_rejects_zero_receiver_and_sender(
+        contract: Contract<Erc1155Supply>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let data: Bytes = vec![].into();
+        assert!(matches!(
+            contract
+                .sender(alice)
+                .do_safe_transfer_from(
+                    alice,
+                    Address::ZERO,
+                    vec![U256::ZERO],
+                    vec![U256::from(1)],
+                    &data,
+                )
+                .expect_err("zero receiver should be rejected"),
+            Error::InvalidReceiver(ERC1155InvalidReceiver { receiver })
+                if receiver.is_zero()
+        ));
+        assert!(matches!(
+            contract
+                .sender(alice)
+                .do_safe_transfer_from(
+                    Address::ZERO,
+                    bob,
+                    vec![U256::ZERO],
+                    vec![U256::from(1)],
+                    &data,
+                )
+                .expect_err("zero sender should be rejected"),
+            Error::InvalidSender(ERC1155InvalidSender { sender })
+                if sender.is_zero()
+        ));
     }
 }

@@ -1148,4 +1148,112 @@ mod tests {
             implementation: next_logic.address(),
         });
     }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn upgrade_rejects_value_when_setup_data_is_empty(
+        logic: Contract<UUPSErc20Example>,
+        next_logic: Contract<UUPSErc20Example>,
+        alice: Address,
+    ) {
+        logic.sender(alice).set_version().unwrap();
+        set_implementation_slot(&logic.vm(), logic.address());
+        logic.vm().mock_static_call(
+            next_logic.address(),
+            ProxiableUUIDInterface::proxiableUUIDCall {}.abi_encode(),
+            Ok(IMPLEMENTATION_SLOT.abi_encode()),
+        );
+
+        let error = logic
+            .sender_and_value(alice, U256::from(1))
+            .upgrade_to_and_call(next_logic.address(), vec![].into())
+            .expect_error("empty setup data must not trap attached value");
+        assert_eq!(error, ERC1967NonPayable {}.abi_encode());
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn upgrade_rejects_target_without_code_after_uuid_check(
+        logic: Contract<UUPSErc20Example>,
+        alice: Address,
+    ) {
+        let target = Address::from([0xBA; 20]);
+        logic.sender(alice).set_version().unwrap();
+        set_implementation_slot(&logic.vm(), logic.address());
+        logic.vm().mock_static_call(
+            target,
+            ProxiableUUIDInterface::proxiableUUIDCall {}.abi_encode(),
+            Ok(IMPLEMENTATION_SLOT.abi_encode()),
+        );
+
+        let error = logic
+            .sender(alice)
+            .upgrade_to_and_call(target, vec![].into())
+            .expect_error("implementation slot must point to deployed code");
+        assert_eq!(
+            error,
+            ERC1967InvalidImplementation { implementation: target }
+                .abi_encode()
+        );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn upgrade_bubbles_delegate_failure_without_revert_data(
+        logic: Contract<UUPSErc20Example>,
+        next_logic: Contract<UUPSErc20Example>,
+        alice: Address,
+    ) {
+        let setup = ERC20Interface::totalSupplyCall {}.abi_encode();
+        logic.sender(alice).set_version().unwrap();
+        set_implementation_slot(&logic.vm(), logic.address());
+        logic.vm().mock_static_call(
+            next_logic.address(),
+            ProxiableUUIDInterface::proxiableUUIDCall {}.abi_encode(),
+            Ok(IMPLEMENTATION_SLOT.abi_encode()),
+        );
+        logic.vm().mock_delegate_call(
+            next_logic.address(),
+            setup.clone(),
+            Err(vec![]),
+        );
+
+        let error = logic
+            .sender(alice)
+            .upgrade_to_and_call(next_logic.address(), setup.into())
+            .expect_error("delegate failure should abort upgrade");
+        assert_eq!(error, address::FailedCall {}.abi_encode());
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn upgrade_bubbles_delegate_revert_reason(
+        logic: Contract<UUPSErc20Example>,
+        next_logic: Contract<UUPSErc20Example>,
+        alice: Address,
+    ) {
+        let setup = ERC20Interface::totalSupplyCall {}.abi_encode();
+        let reason = b"setup rejected".to_vec();
+        logic.sender(alice).set_version().unwrap();
+        set_implementation_slot(&logic.vm(), logic.address());
+        logic.vm().mock_static_call(
+            next_logic.address(),
+            ProxiableUUIDInterface::proxiableUUIDCall {}.abi_encode(),
+            Ok(IMPLEMENTATION_SLOT.abi_encode()),
+        );
+        logic.vm().mock_delegate_call(
+            next_logic.address(),
+            setup.clone(),
+            Err(reason.clone()),
+        );
+
+        let error = logic
+            .sender(alice)
+            .upgrade_to_and_call(next_logic.address(), setup.into())
+            .expect_error("delegate revert reason should abort upgrade");
+        let expected =
+            Error::FailedCallWithReason(address::FailedCallWithReason {
+                reason: stylus_sdk::testing::Error::Revert(reason)
+                    .encode()
+                    .into(),
+            })
+            .encode();
+        assert_eq!(error, expected);
+    }
 }
