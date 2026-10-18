@@ -1,0 +1,4 @@
+# Reproducible optimization for contracts generated from this template.
+[wasm-opt]
+version = "116"
+flags = ["--enable-bulk-memory", "-O3"]
