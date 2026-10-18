@@ -271,6 +271,34 @@ async fn return_token_uri_after_burn_and_remint() -> eyre::Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn unauthorized_burn_reverts_and_preserves_token() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr = alice
+        .as_deployer()
+        .with_constructor(ctr(""))
+        .deploy()
+        .await?
+        .contract_address;
+    let token_id = random_token_id();
+    let contract_alice = Erc721::new(contract_addr, &alice.wallet);
+    let contract_bob = Erc721::new(contract_addr, &bob.wallet);
+
+    watch!(contract_alice.mint(alice.address(), token_id))?;
+
+    let err = send!(contract_bob.burn(token_id))
+        .expect_err("an unapproved account must not burn Alice's token");
+    assert!(err.reverted_with(Erc721::ERC721InsufficientApproval {
+        operator: bob.address(),
+        tokenId: token_id,
+    }));
+    assert_eq!(contract_alice.ownerOf(token_id).call().await?, alice.address());
+
+    Ok(())
+}
+
 // ============================================================================
 // Integration Tests: ERC-165 Support Interface
 // ============================================================================
