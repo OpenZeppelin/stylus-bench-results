@@ -34,6 +34,7 @@ sol!(
         error ERC721InsufficientApproval(address operator, uint256 tokenId);
         error ERC721InvalidApprover(address approver);
         error ERC721InvalidOperator(address operator);
+        error OwnableUnauthorizedAccount(address account);
 
         #[derive(Debug, PartialEq)]
         event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
