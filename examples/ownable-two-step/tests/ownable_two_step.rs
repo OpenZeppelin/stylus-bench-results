@@ -1,14 +1,16 @@
 #![cfg(feature = "e2e")]
+#[path = "../../devnet_test_support.rs"]
+mod devnet_test_support;
 
+use crate::devnet_test_support::{
+    constructor, receipt, send, Account, Constructor,
+    ContractInitializationError, EventExt, Revert,
+};
 use abi::{
     Ownable2Step,
     Ownable2Step::{OwnershipTransferStarted, OwnershipTransferred},
 };
 use alloy::primitives::Address;
-use e2e::{
-    constructor, receipt, send, Account, Constructor,
-    ContractInitializationError, EventExt, Revert,
-};
 use eyre::Result;
 
 mod abi;
@@ -21,8 +23,10 @@ fn ctr(owner: Address) -> Constructor {
 // Integration Tests: Ownable2Step
 // ============================================================================
 
-#[e2e::test]
-async fn constructs(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn constructs() -> Result<()> {
+    let alice = Account::new().await?;
+
     let alice_addr = alice.address();
     let receipt =
         alice.as_deployer().with_constructor(ctr(alice_addr)).deploy().await?;
@@ -33,20 +37,19 @@ async fn constructs(alice: Account) -> Result<()> {
         newOwner: alice_addr,
     }));
 
-    let Ownable2Step::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, alice_addr);
 
-    let Ownable2Step::pendingOwnerReturn { pendingOwner } =
-        contract.pendingOwner().call().await?;
-    assert_eq!(pendingOwner, Address::ZERO);
+    let pending_owner = contract.pendingOwner().call().await?;
+    assert_eq!(pending_owner, Address::ZERO);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn construct_reverts_when_owner_is_zero_address(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn construct_reverts_when_owner_is_zero_address() -> Result<()> {
+    let alice = Account::new().await?;
+
     let err = alice
         .as_deployer()
         .with_constructor(ctr(Address::ZERO))
@@ -54,22 +57,19 @@ async fn construct_reverts_when_owner_is_zero_address(
         .await
         .expect_err("should not deploy due to `OwnableInvalidOwner`");
 
-    // TODO: assert the actual `OwnableInvalidOwner` error was returned once
-    // `StylusDeployer` is able to return the exact revert reason from
-    // constructors. assert!(err.
-    // reverted_with(Ownable2Step::OwnableInvalidOwner {     owner:
-    // Address::ZERO }));
+    // StylusDeployer reports this constructor failure without exposing its
+    // revert data.
 
     assert!(err.downcast_ref::<ContractInitializationError>().is_some());
 
     Ok(())
 }
 
-#[e2e::test]
-async fn transfer_ownership_initiates_transfer(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn transfer_ownership_initiates_transfer() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let alice_addr = alice.address();
     let bob_addr = bob.address();
 
@@ -88,22 +88,21 @@ async fn transfer_ownership_initiates_transfer(
     }));
 
     // Current owner is still Alice
-    let Ownable2Step::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, alice_addr);
 
     // Pending owner is Bob
-    let Ownable2Step::pendingOwnerReturn { pendingOwner } =
-        contract.pendingOwner().call().await?;
-    assert_eq!(pendingOwner, bob_addr);
+    let pending_owner = contract.pendingOwner().call().await?;
+    assert_eq!(pending_owner, bob_addr);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn transfer_ownership_reverts_when_not_owner(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn transfer_ownership_reverts_when_not_owner() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let alice_addr = alice.address();
     let bob_addr = bob.address();
 
@@ -124,8 +123,11 @@ async fn transfer_ownership_reverts_when_not_owner(
     Ok(())
 }
 
-#[e2e::test]
-async fn accept_ownership(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn accept_ownership() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let alice_addr = alice.address();
     let bob_addr = bob.address();
 
@@ -146,21 +148,20 @@ async fn accept_ownership(alice: Account, bob: Account) -> Result<()> {
         newOwner: bob_addr,
     }));
 
-    let Ownable2Step::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, bob_addr);
 
-    let Ownable2Step::pendingOwnerReturn { pendingOwner } =
-        contract.pendingOwner().call().await?;
-    assert_eq!(pendingOwner, Address::ZERO);
+    let pending_owner = contract.pendingOwner().call().await?;
+    assert_eq!(pending_owner, Address::ZERO);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn transfer_ownership_cancel_transfer(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn transfer_ownership_cancel_transfer() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let alice_addr = alice.address();
     let bob_addr = bob.address();
 
@@ -179,19 +180,18 @@ async fn transfer_ownership_cancel_transfer(
         newOwner: Address::ZERO,
     }));
 
-    let Ownable2Step::pendingOwnerReturn { pendingOwner } =
-        contract.pendingOwner().call().await?;
-    assert_eq!(pendingOwner, Address::ZERO);
+    let pending_owner = contract.pendingOwner().call().await?;
+    assert_eq!(pending_owner, Address::ZERO);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn overwrite_previous_transfer_ownership(
-    alice: Account,
-    bob: Account,
-    charlie: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn overwrite_previous_transfer_ownership() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+    let charlie = Account::new().await?;
+
     let alice_addr = alice.address();
     let bob_addr = bob.address();
     let charlie_addr = charlie.address();
@@ -217,9 +217,8 @@ async fn overwrite_previous_transfer_ownership(
         newOwner: charlie_addr,
     }));
 
-    let Ownable2Step::pendingOwnerReturn { pendingOwner } =
-        contract.pendingOwner().call().await?;
-    assert_eq!(pendingOwner, charlie_addr);
+    let pending_owner = contract.pendingOwner().call().await?;
+    assert_eq!(pending_owner, charlie_addr);
 
     // Connect as Bob and try to accept ownership
     let contract = Ownable2Step::new(contract_addr, &bob.wallet);
@@ -238,22 +237,21 @@ async fn overwrite_previous_transfer_ownership(
         newOwner: charlie_addr,
     }));
 
-    let Ownable2Step::pendingOwnerReturn { pendingOwner } =
-        contract.pendingOwner().call().await?;
-    assert_eq!(pendingOwner, Address::ZERO);
+    let pending_owner = contract.pendingOwner().call().await?;
+    assert_eq!(pending_owner, Address::ZERO);
 
-    let Ownable2Step::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, charlie_addr);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn accept_ownership_reverts_when_not_pending_owner(
-    alice: Account,
-    bob: Account,
-    charlie: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn accept_ownership_reverts_when_not_pending_owner() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+    let charlie = Account::new().await?;
+
     let alice_addr = alice.address();
     let bob_addr = bob.address();
     let charlie_addr = charlie.address();
@@ -277,8 +275,10 @@ async fn accept_ownership_reverts_when_not_pending_owner(
     Ok(())
 }
 
-#[e2e::test]
-async fn renounce_ownership(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn renounce_ownership() -> Result<()> {
+    let alice = Account::new().await?;
+
     let alice_addr = alice.address();
     let contract_addr = alice
         .as_deployer()
@@ -294,22 +294,21 @@ async fn renounce_ownership(alice: Account) -> Result<()> {
         newOwner: Address::ZERO,
     }));
 
-    let Ownable2Step::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, Address::ZERO);
 
     // Pending owner is set to zero
-    let Ownable2Step::pendingOwnerReturn { pendingOwner } =
-        contract.pendingOwner().call().await?;
-    assert_eq!(pendingOwner, Address::ZERO);
+    let pending_owner = contract.pendingOwner().call().await?;
+    assert_eq!(pending_owner, Address::ZERO);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn renounce_ownership_reverts_when_not_owner(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn renounce_ownership_reverts_when_not_owner() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let alice_addr = alice.address();
     let bob_addr = bob.address();
 
@@ -327,7 +326,7 @@ async fn renounce_ownership_reverts_when_not_owner(
         account: bob_addr,
     });
 
-    let Ownable2Step::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, alice_addr);
 
     Ok(())

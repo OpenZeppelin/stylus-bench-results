@@ -11,4 +11,6 @@ basic-example = { path = "../token" }
 alloy-primitives.workspace = true
 alloy.workspace = true
 tokio.workspace = true
-e2e.workspace = true
+
+[features]
+contract-client-gen = []

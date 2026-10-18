@@ -148,11 +148,7 @@ impl IErc20 for Erc20Example {
         self.erc20.balance_of(account)
     }
 
-    fn transfer(
-        &mut self,
-        to: Address,
-        value: U256,
-    ) -> Result<bool, Self::Error> {
+    fn transfer(&mut self, to: Address, value: U256) -> Result<bool, Error> {
         self.pausable.when_not_paused()?;
         Ok(self.erc20.transfer(to, value)?)
     }
@@ -165,7 +161,7 @@ impl IErc20 for Erc20Example {
         &mut self,
         spender: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, Error> {
         Ok(self.erc20.approve(spender, value)?)
     }
 
@@ -174,7 +170,7 @@ impl IErc20 for Erc20Example {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, Error> {
         self.pausable.when_not_paused()?;
         Ok(self.erc20.transfer_from(from, to, value)?)
     }
@@ -192,7 +188,7 @@ impl IErc20Metadata for Erc20Example {
 
     // Overrides the default [`IErc20Metadata::decimals`], and sets it to `10`.
     //
-    // If you don't provide this method in the `entrypoint` contract, it will
+    // If you don't provide this method in the `entrypoint`  it will
     // default to `18`.
     fn decimals(&self) -> U8 {
         DECIMALS
@@ -211,7 +207,7 @@ impl IErc165 for Erc20Example {
 impl IErc20Burnable for Erc20Example {
     type Error = Error;
 
-    fn burn(&mut self, value: U256) -> Result<(), Self::Error> {
+    fn burn(&mut self, value: U256) -> Result<(), Error> {
         self.pausable.when_not_paused()?;
         Ok(self.erc20.burn(value)?)
     }
@@ -220,7 +216,7 @@ impl IErc20Burnable for Erc20Example {
         &mut self,
         account: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         self.pausable.when_not_paused()?;
         Ok(self.erc20.burn_from(account, value)?)
     }

@@ -48,7 +48,7 @@ impl IErc20 for Erc20WrapperExample {
         &mut self,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, wrapper::Error> {
         Ok(self.erc20.transfer(to, value)?)
     }
 
@@ -60,7 +60,7 @@ impl IErc20 for Erc20WrapperExample {
         &mut self,
         spender: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, wrapper::Error> {
         Ok(self.erc20.approve(spender, value)?)
     }
 
@@ -69,7 +69,7 @@ impl IErc20 for Erc20WrapperExample {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, wrapper::Error> {
         Ok(self.erc20.transfer_from(from, to, value)?)
     }
 }
@@ -90,7 +90,7 @@ impl IErc20Wrapper for Erc20WrapperExample {
         &mut self,
         account: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, wrapper::Error> {
         self.erc20_wrapper.deposit_for(account, value, &mut self.erc20)
     }
 
@@ -98,7 +98,7 @@ impl IErc20Wrapper for Erc20WrapperExample {
         &mut self,
         account: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, wrapper::Error> {
         self.erc20_wrapper.withdraw_to(account, value, &mut self.erc20)
     }
 }

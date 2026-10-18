@@ -25,6 +25,7 @@ crate-type = ["lib", "cdylib"]
 
 [features]
 e2e = []
+contract-client-gen = []
 export-abi = ["openzeppelin-stylus/export-abi"]
 
 [[bin]]

@@ -14,6 +14,7 @@ stylus-sdk.workspace = true
 
 [features]
 e2e = []
+contract-client-gen = []
 export-abi = ["stylus-sdk/export-abi"]
 
 [lib]

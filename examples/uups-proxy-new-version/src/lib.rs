@@ -35,7 +35,6 @@ use openzeppelin_stylus::{
 use stylus_sdk::{
     abi::Bytes,
     alloy_primitives::{Address, B256, U256},
-    call::Call,
     prelude::*,
     storage::{StorageBool, StorageU32},
 };
@@ -128,6 +127,11 @@ impl UUPSProxyErc20ExampleNewVersion {
     }
 
     fn initialize(&mut self, owner: Address) -> Result<(), Error> {
+        if self.version.get() >= VERSION_NUMBER {
+            return Err(Error::InvalidInitialization(
+                uups_upgradeable::InvalidInitialization {},
+            ));
+        }
         self.set_version()?;
         self.ownable.constructor(owner)?;
         Ok(())
@@ -186,7 +190,7 @@ impl IUUPSUpgradeable for UUPSProxyErc20ExampleNewVersion {
 
 impl UUPSProxyErc20ExampleNewVersion {
     pub fn logic_flag(&self) -> StorageBool {
-        StorageSlot::get_slot::<StorageBool>(LOGIC_FLAG_SLOT)
+        StorageSlot::get_slot::<StorageBool>(self, LOGIC_FLAG_SLOT)
     }
 
     pub fn is_logic(&self) -> bool {
@@ -195,7 +199,7 @@ impl UUPSProxyErc20ExampleNewVersion {
 
     pub fn only_proxy(&self) -> Result<(), Error> {
         if self.is_logic()
-            || Erc1967Utils::get_implementation() == Address::ZERO
+            || Erc1967Utils::get_implementation(self) == Address::ZERO
             || U32::from(self.get_version()) != self.version.get()
         {
             Err(Error::UnauthorizedCallContext(UUPSUnauthorizedCallContext {}))
@@ -230,7 +234,7 @@ impl UUPSProxyErc20ExampleNewVersion {
     ) -> Result<(), Error> {
         #[allow(deprecated)]
         let slot = Erc1822ProxiableInterface::new(new_implementation)
-            .proxiable_uuid(Call::new_in(self))
+            .proxiable_uuid(self.vm(), Call::new())
             .map_err(|_e| {
                 Error::InvalidImplementation(ERC1967InvalidImplementation {
                     implementation: new_implementation,
@@ -248,15 +252,14 @@ impl UUPSProxyErc20ExampleNewVersion {
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use stylus_test::{TestVM, TestVMBuilder};
 
     use super::*;
 
-    fn proxy_storage(
-        tag: u8,
-    ) -> (TestVM, UUPSProxyErc20ExampleNewVersion) {
+    fn proxy_storage(tag: u8) -> (TestVM, UUPSProxyErc20ExampleNewVersion) {
         let vm = TestVMBuilder::new()
             .contract_address(Address::repeat_byte(tag))
             .build();
@@ -288,7 +291,6 @@ mod tests {
     }
 }
 
-
 #[public]
 impl IErc20 for UUPSProxyErc20ExampleNewVersion {
     type Error = erc20::Error;
@@ -305,7 +307,7 @@ impl IErc20 for UUPSProxyErc20ExampleNewVersion {
         &mut self,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer(to, value)
     }
 
@@ -314,7 +316,7 @@ impl IErc20 for UUPSProxyErc20ExampleNewVersion {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer_from(from, to, value)
     }
 
@@ -326,7 +328,7 @@ impl IErc20 for UUPSProxyErc20ExampleNewVersion {
         &mut self,
         spender: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.approve(spender, value)
     }
 }

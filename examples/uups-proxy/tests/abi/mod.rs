@@ -51,6 +51,8 @@ sol!(
         function UPGRADE_INTERFACE_VERSION() external view returns (string version);
         function initialize(address owner) external;
         function getVersion() external pure returns (uint32 version);
+        #[derive(Debug)]
+        function setVersion() external;
 
         // ERC1822 proxiable function
         #[derive(Debug)]

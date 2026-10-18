@@ -1,8 +1,10 @@
 #![cfg(feature = "e2e")]
+#[path = "../../devnet_test_support.rs"]
+mod devnet_test_support;
 
+use crate::devnet_test_support::{send, watch, Account, Revert};
 use abi::SafeErc20;
 use alloy::primitives::{uint, Bytes};
-use e2e::{send, watch, Account, Revert};
 use mock::{
     erc1363_force_approve, erc1363_force_approve::ERC1363ForceApproveMock,
     erc1363_spender,
@@ -16,11 +18,12 @@ const DATA: Bytes = Bytes::from_static(b"0x12345678");
 mod without_initial_approval {
     use super::*;
 
-    #[e2e::test]
+    #[tokio::test]
     async fn approve_and_call_relaxed_works_when_recipient_is_eoa(
-        alice: Account,
-        spender: Account,
     ) -> eyre::Result<()> {
+        let alice = Account::new().await?;
+        let spender = Account::new().await?;
+
         let safe_erc20_addr =
             alice.as_deployer().deploy().await?.contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
@@ -40,20 +43,18 @@ mod without_initial_approval {
             DATA
         ))?;
 
-        let allowance = erc20_alice
-            .allowance(safe_erc20_addr, spender_addr)
-            .call()
-            .await?
-            ._0;
+        let allowance =
+            erc20_alice.allowance(safe_erc20_addr, spender_addr).call().await?;
         assert_eq!(allowance, value);
 
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn approve_and_call_relaxed_works_when_recipient_is_contract(
-        alice: Account,
     ) -> eyre::Result<()> {
+        let alice = Account::new().await?;
+
         let safe_erc20_addr =
             alice.as_deployer().deploy().await?.contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
@@ -78,8 +79,7 @@ mod without_initial_approval {
         let allowance = erc20_alice
             .allowance(safe_erc20_addr, spender_address)
             .call()
-            .await?
-            ._0;
+            .await?;
         assert_eq!(allowance, value);
 
         Ok(())
@@ -89,11 +89,12 @@ mod without_initial_approval {
 mod with_initial_approval {
     use super::*;
 
-    #[e2e::test]
+    #[tokio::test]
     async fn approve_and_call_relaxed_works_when_recipient_is_eoa(
-        alice: Account,
-        bob: Account,
     ) -> eyre::Result<()> {
+        let alice = Account::new().await?;
+        let bob = Account::new().await?;
+
         let safe_erc20_addr =
             alice.as_deployer().deploy().await?.contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
@@ -122,16 +123,17 @@ mod with_initial_approval {
         ))?;
 
         let allowance =
-            erc20_alice.allowance(safe_erc20_addr, bob_addr).call().await?._0;
+            erc20_alice.allowance(safe_erc20_addr, bob_addr).call().await?;
         assert_eq!(allowance, value);
 
         Ok(())
     }
 
-    #[e2e::test]
+    #[tokio::test]
     async fn approve_and_call_relaxed_reverts_when_recipient_is_contract(
-        alice: Account,
     ) -> eyre::Result<()> {
+        let alice = Account::new().await?;
+
         let safe_erc20_addr =
             alice.as_deployer().deploy().await?.contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);

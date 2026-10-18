@@ -16,10 +16,9 @@ stylus-sdk.workspace = true
 alloy.workspace = true
 eyre.workspace = true
 tokio.workspace = true
-e2e.workspace = true
-
 [features]
 e2e = []
+contract-client-gen = []
 export-abi = ["openzeppelin-stylus/export-abi"]
 
 [lib]

@@ -55,11 +55,11 @@ impl Erc721MetadataExample {
 impl IErc721 for Erc721MetadataExample {
     type Error = erc721::Error;
 
-    fn balance_of(&self, owner: Address) -> Result<U256, Self::Error> {
+    fn balance_of(&self, owner: Address) -> Result<U256, erc721::Error> {
         self.erc721.balance_of(owner)
     }
 
-    fn owner_of(&self, token_id: U256) -> Result<Address, Self::Error> {
+    fn owner_of(&self, token_id: U256) -> Result<Address, erc721::Error> {
         self.erc721.owner_of(token_id)
     }
 
@@ -68,7 +68,7 @@ impl IErc721 for Erc721MetadataExample {
         from: Address,
         to: Address,
         token_id: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc721::Error> {
         self.erc721.safe_transfer_from(from, to, token_id)
     }
 
@@ -78,7 +78,7 @@ impl IErc721 for Erc721MetadataExample {
         to: Address,
         token_id: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc721::Error> {
         self.erc721.safe_transfer_from_with_data(from, to, token_id, data)
     }
 
@@ -87,7 +87,7 @@ impl IErc721 for Erc721MetadataExample {
         from: Address,
         to: Address,
         token_id: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc721::Error> {
         self.erc721.transfer_from(from, to, token_id)
     }
 
@@ -95,7 +95,7 @@ impl IErc721 for Erc721MetadataExample {
         &mut self,
         to: Address,
         token_id: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc721::Error> {
         self.erc721.approve(to, token_id)
     }
 
@@ -103,11 +103,11 @@ impl IErc721 for Erc721MetadataExample {
         &mut self,
         to: Address,
         approved: bool,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc721::Error> {
         self.erc721.set_approval_for_all(to, approved)
     }
 
-    fn get_approved(&self, token_id: U256) -> Result<Address, Self::Error> {
+    fn get_approved(&self, token_id: U256) -> Result<Address, erc721::Error> {
         self.erc721.get_approved(token_id)
     }
 
@@ -120,7 +120,7 @@ impl IErc721 for Erc721MetadataExample {
 impl IErc721Burnable for Erc721MetadataExample {
     type Error = erc721::Error;
 
-    fn burn(&mut self, token_id: U256) -> Result<(), Self::Error> {
+    fn burn(&mut self, token_id: U256) -> Result<(), erc721::Error> {
         self.erc721._burn(token_id)
     }
 }
@@ -138,7 +138,7 @@ impl IErc721Metadata for Erc721MetadataExample {
     }
 
     #[selector(name = "tokenURI")]
-    fn token_uri(&self, token_id: U256) -> Result<String, Self::Error> {
+    fn token_uri(&self, token_id: U256) -> Result<String, erc721::Error> {
         self.uri_storage.token_uri(token_id, &self.erc721, &self.metadata)
     }
 }
