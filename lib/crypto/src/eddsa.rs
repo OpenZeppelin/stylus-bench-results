@@ -436,6 +436,27 @@ mod test {
     }
 
     #[test]
+    fn rejects_order_two_public_key_and_signature() {
+        use crate::curve::te::instance::curve25519::Curve25519FqParam;
+
+        // T = (0, -1) is a nonidentity point of order two. With this fixed
+        // message the reduced EdDSA challenge is even, so [−k]T = T while
+        // [s]B = 0. The verifier must reject points outside the prime-order
+        // subgroup even though the signature equation holds.
+        let order_two = AffinePoint::new_unchecked(
+            Fp256::<Curve25519FqParam>::ZERO,
+            -Fp256::<Curve25519FqParam>::ONE,
+        );
+        let verifying_key = VerifyingKey::from_affine(order_two);
+        let signature = Signature::from_affine_R_s(
+            order_two,
+            Scalar::from_bigint(U256::ZERO),
+        );
+
+        assert!(!verifying_key.is_valid(&[1u8, 0, 0, 0], &signature));
+    }
+
+    #[test]
     fn sign_and_verify() {
         proptest!(|(secret_key: SecretKey, message: String, wrong_message: String)| {
             let signing_key = SigningKey::from_bytes(&secret_key);
