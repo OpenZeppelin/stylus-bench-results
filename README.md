@@ -25,13 +25,6 @@ Add the crate to your Cargo.toml:
 openzeppelin-stylus = "=0.3.0"
 ```
 
-If you want to use the latest features before they are fully stabilized or audited, try the most recent alpha. We release a new alpha version every ~3 weeks.
-
-```toml
-[dependencies]
-openzeppelin-stylus = "=0.3.0-rc.1"
-```
-
 **Enable ABI export support**:
 
 ```toml
@@ -132,6 +125,10 @@ impl IErc20 for Erc20Example {
 ```
 
 For a working demo with deployment and queries, check out the [basic] example.
+
+Run the Stylus SDK unit tests with `cargo test --workspace`. Run the local
+devnet integration suite with `./scripts/e2e-tests.sh`; this starts the SDK's
+devnet unless `RPC_URL` points to a node you started yourself.
 
 When upgrading an existing v0.3.0 contract, see the
 [upgrade guide](docs/modules/ROOT/pages/upgrade-from-v0.3.0.adoc).
