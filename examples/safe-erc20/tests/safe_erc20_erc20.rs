@@ -17,6 +17,36 @@ mod transfers {
     use super::*;
 
     #[tokio::test]
+    async fn rejects_unauthorized_transfer_of_contract_tokens(
+    ) -> eyre::Result<()> {
+        let _test_context = crate::test_support::TestContext::new().await?;
+        let owner = crate::test_support::Account::new().await?;
+        let attacker = crate::test_support::Account::new().await?;
+
+        let safe_erc20_addr =
+            owner.as_deployer().deploy().await?.contract_address;
+        let safe_erc20_attacker =
+            SafeErc20::new(safe_erc20_addr, &attacker.wallet);
+        let erc20_address = erc20::deploy(&owner.wallet).await?;
+        let erc20_owner = ERC20Mock::new(erc20_address, &owner.wallet);
+        watch!(erc20_owner.mint(safe_erc20_addr, uint!(10_U256)))?;
+
+        let result = send!(safe_erc20_attacker.safeTransfer(
+            erc20_address,
+            attacker.address(),
+            uint!(1_U256)
+        ));
+
+        assert!(result.is_err(), "non-owner must not transfer contract tokens");
+        assert_eq!(
+            erc20_owner.balanceOf(safe_erc20_addr).call().await?,
+            uint!(10_U256)
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn does_not_revert_on_transfer() -> eyre::Result<()> {
         let _test_context = crate::test_support::TestContext::new().await?;
         let alice = crate::test_support::Account::new().await?;
