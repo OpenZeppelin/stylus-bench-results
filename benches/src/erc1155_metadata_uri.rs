@@ -63,7 +63,7 @@ async fn deploy(account: &Account, cache_opt: Opt) -> eyre::Result<Address> {
     crate::deploy(
         account,
         "erc1155-metadata-uri",
-        Some(constructor!(URI.to_string())),
+        Some(constructor!(URI.to_string(), account.address())),
         cache_opt,
     )
     .await

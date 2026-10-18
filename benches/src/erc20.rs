@@ -97,7 +97,8 @@ async fn deploy(account: &Account, cache_opt: Opt) -> eyre::Result<Address> {
         Some(constructor!(
             TOKEN_NAME.to_string(),
             TOKEN_SYMBOL.to_string(),
-            CAP
+            CAP,
+            account.address()
         )),
         cache_opt,
     )

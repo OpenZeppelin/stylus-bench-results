@@ -1,5 +1,4 @@
-use crate::devnet_test_support::receipt;
-use crate::devnet_test_support::Account;
+use crate::devnet_test_support::{constructor, receipt, Account};
 use alloy::{
     network::{AnyNetwork, EthereumWallet},
     primitives::Address,
@@ -93,5 +92,11 @@ pub async fn run(cache_opt: Opt) -> eyre::Result<Vec<FunctionReport>> {
 }
 
 async fn deploy(account: &Account, cache_opt: Opt) -> eyre::Result<Address> {
-    crate::deploy(account, "erc1155", None, cache_opt).await
+    crate::deploy(
+        account,
+        "erc1155",
+        Some(constructor!(account.address())),
+        cache_opt,
+    )
+    .await
 }
