@@ -101,6 +101,10 @@ pub(crate) fn interface_id(
         #vis #unsafety trait #name #generics #supertrait_tokens #where_clause {
             #(#trait_items)*
 
+            #[cfg(not(feature = "contract-client-gen"))]
+            #[allow(missing_docs)]
+            fn __stylus_trait_and_impl_must_be_tagged_with_public_macro(&self);
+
             #[doc = concat!("Solidity interface id associated with ", stringify!(#name), " trait.")]
             #[doc = "Computed as a XOR of selectors for each function in the trait."]
             fn interface_id() -> alloy_primitives::aliases::B32

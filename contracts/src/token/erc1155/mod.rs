@@ -9,8 +9,7 @@ use alloy_primitives::{aliases::B32, Address, U256};
 use openzeppelin_stylus_proc::interface_id;
 use stylus_sdk::{
     abi::Bytes,
-    call::{self, Call, MethodError},
-    evm, function_selector, msg,
+    function_selector,
     prelude::*,
     storage::{StorageBool, StorageMap, StorageU256},
 };
@@ -240,7 +239,7 @@ pub trait IErc1155: IErc165 {
     /// * `operator` - Account to add to the set of authorized operators.
     /// * `approved` - Flag that determines whether or not permission will be
     ///   granted to `operator`. If true, this means `operator` will be allowed
-    ///   to manage `msg::sender()`'s assets.
+    ///   to manage the caller's assets.
     ///
     /// # Errors
     ///
@@ -285,7 +284,7 @@ pub trait IErc1155: IErc165 {
     ///   interface id or returned with error.
     /// * [`Error::InvalidSender`] - Returned when `from` is [`Address::ZERO`].
     /// * [`Error::MissingApprovalForAll`] - Returned when `from` is not the
-    ///   caller (`msg::sender()`), and the caller does not have the right to
+    ///   caller (the caller), and the caller does not have the right to
     ///   approve.
     /// * [`Error::InsufficientBalance`] - Returned when `value` is greater than
     ///   the balance of the `from` account.
@@ -325,7 +324,7 @@ pub trait IErc1155: IErc165 {
     /// * [`Error::InsufficientBalance`] - Returned when any of the `values` is
     ///   greater than the balance of the `from` account.
     /// * [`Error::MissingApprovalForAll`] - Returned when `from` is not the
-    ///   caller (`msg::sender()`), and the caller does not have the right to
+    ///   caller (the caller), and the caller does not have the right to
     ///   approve.
     ///
     /// # Events
@@ -358,7 +357,7 @@ impl IErc1155 for Erc1155 {
         &self,
         accounts: Vec<Address>,
         ids: Vec<U256>,
-    ) -> Result<Vec<U256>, Self::Error> {
+    ) -> Result<Vec<U256>, Error> {
         Self::require_equal_arrays_length(&ids, &accounts)?;
 
         let balances: Vec<U256> = accounts
@@ -374,8 +373,8 @@ impl IErc1155 for Erc1155 {
         &mut self,
         operator: Address,
         approved: bool,
-    ) -> Result<(), Self::Error> {
-        self._set_approval_for_all(msg::sender(), operator, approved)
+    ) -> Result<(), Error> {
+        self._set_approval_for_all(self.vm().msg_sender(), operator, approved)
     }
 
     fn is_approved_for_all(&self, account: Address, operator: Address) -> bool {
@@ -389,7 +388,7 @@ impl IErc1155 for Erc1155 {
         id: U256,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         self.authorize_transfer(from)?;
         self.do_safe_transfer_from(from, to, vec![id], vec![value], &data)
     }
@@ -401,7 +400,7 @@ impl IErc1155 for Erc1155 {
         ids: Vec<U256>,
         values: Vec<U256>,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         self.authorize_transfer(from)?;
         self.do_safe_transfer_from(from, to, ids, values, &data)
     }
@@ -491,7 +490,7 @@ impl Erc1155 {
             }
         }
 
-        let operator = msg::sender();
+        let operator = self.vm().msg_sender();
 
         for (&token_id, &value) in ids.iter().zip(values.iter()) {
             self.do_update(from, to, token_id, value)?;
@@ -500,9 +499,9 @@ impl Erc1155 {
         if ids.len() == 1 {
             let id = ids[0];
             let value = values[0];
-            evm::log(TransferSingle { operator, from, to, id, value });
+            self.vm().log(TransferSingle { operator, from, to, id, value });
         } else {
-            evm::log(TransferBatch { operator, from, to, ids, values });
+            self.vm().log(TransferBatch { operator, from, to, ids, values });
         }
 
         Ok(())
@@ -512,6 +511,10 @@ impl Erc1155 {
     /// calling [`IErc1155Receiver::on_erc1155_received`] or
     /// [`IErc1155Receiver::on_erc1155_batch_received`] on the receiver address
     /// if it contains code.
+    ///
+    /// Storage is updated before the receiver callback. If the callback
+    /// returns an error, propagate it from the public entry point so the EVM
+    /// reverts the update; swallowing it leaves the token update applied.
     ///
     /// # Arguments
     ///
@@ -555,7 +558,7 @@ impl Erc1155 {
 
         if !to.is_zero() {
             self._check_on_erc1155_received(
-                msg::sender(),
+                self.vm().msg_sender(),
                 from,
                 to,
                 Erc1155ReceiverData::new(ids, values),
@@ -705,7 +708,7 @@ impl Erc1155 {
     /// # Arguments
     ///
     /// * `&mut self` - Write access to the contract's state.
-    /// * `owner` - Tokens owner (`msg::sender`).
+    /// * `owner` - Tokens owner (the caller).
     /// * `operator` - Account to add to the set of authorized operators.
     /// * `approved` - Flag that determines whether or not permission will be
     ///   granted to `operator`. If true, this means `operator` will be allowed
@@ -730,7 +733,7 @@ impl Erc1155 {
             }));
         }
         self.operator_approvals.setter(owner).setter(operator).set(approved);
-        evm::log(ApprovalForAll { account: owner, operator, approved });
+        self.vm().log(ApprovalForAll { account: owner, operator, approved });
         Ok(())
     }
 }
@@ -752,7 +755,7 @@ impl Erc1155 {
     ///
     /// * `&mut self` - Write access to the contract's state.
     /// * `operator` - Generally the address that initiated the token transfer
-    ///   (e.g. `msg::sender()`).
+    ///   (e.g. the caller).
     /// * `from` - Account of the sender.
     /// * `to` - Account of the recipient.
     /// * `details` - Details about token transfer, check
@@ -778,26 +781,31 @@ impl Erc1155 {
         details: Erc1155ReceiverData,
         data: alloy_primitives::Bytes,
     ) -> Result<(), Error> {
-        if !to.has_code() {
+        if self.vm().code_size(to) == 0 {
             return Ok(());
         }
 
         let receiver = IErc1155ReceiverInterface::new(to);
-        let call = Call::new_in(self);
+        let vm = self.vm().clone();
+        let call = Call::new_mutating(self);
         let result = match details.transfer {
-            Transfer::Single { id, value } => receiver
-                .on_erc_1155_received(call, operator, from, id, value, data),
+            Transfer::Single { id, value } => receiver.on_erc_1155_received(
+                &vm, call, operator, from, id, value, data,
+            ),
 
             Transfer::Batch { ids, values } => receiver
                 .on_erc_1155_batch_received(
-                    call, operator, from, ids, values, data,
+                    &vm, call, operator, from, ids, values, data,
                 ),
         };
 
         let id = match result {
             Ok(id) => id,
             Err(e) => {
-                if let call::Error::Revert(ref reason) = e {
+                if let stylus_sdk::stylus_core::calls::errors::Error::Revert(
+                    ref reason,
+                ) = e
+                {
                     if !reason.is_empty() {
                         return Err(Error::InvalidReceiverWithReason(
                             InvalidReceiverWithReason {
@@ -1055,7 +1063,7 @@ impl Erc1155 {
         Ok(())
     }
 
-    /// Checks if `msg::sender()` is authorized to transfer tokens.
+    /// Checks if the caller is authorized to transfer tokens.
     ///
     /// # Arguments
     ///
@@ -1065,9 +1073,9 @@ impl Erc1155 {
     /// # Errors
     ///
     /// * [`Error::MissingApprovalForAll`] -  If the `from` is not the caller
-    ///   (`msg::sender()`), and the caller does not have the right to approve.
+    ///   (the caller), and the caller does not have the right to approve.
     fn authorize_transfer(&self, from: Address) -> Result<(), Error> {
-        let sender = msg::sender();
+        let sender = self.vm().msg_sender();
         if from != sender && !self.is_approved_for_all(from, sender) {
             return Err(Error::MissingApprovalForAll(
                 ERC1155MissingApprovalForAll { operator: sender, owner: from },
@@ -1158,10 +1166,11 @@ enum Transfer {
     Batch { ids: Vec<U256>, values: Vec<U256> },
 }
 
+use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
+    use crate::test_support::{test_address, TestContract as TestVMContract};
     use alloy_primitives::{aliases::B32, uint, Address, U256};
-    use motsu::prelude::Contract;
 
     use super::*;
     use crate::utils::introspection::erc165::IErc165;
@@ -1224,22 +1233,25 @@ mod tests {
         assert_eq!(Transfer::Batch { ids, values }, details.transfer);
     }
 
-    #[motsu::test]
-    fn balance_of_zero_balance(contract: Contract<Erc1155>, alice: Address) {
+    #[test]
+    fn balance_of_zero_balance() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let owner = alice;
         let token_id = random_token_ids(1)[0];
         let balance = contract.sender(alice).balance_of(owner, token_id);
         assert_eq!(U256::ZERO, balance);
     }
 
-    #[motsu::test]
-    fn error_when_array_length_mismatch(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        bob: Address,
-        dave: Address,
-        charlie: Address,
-    ) {
+    #[test]
+    fn error_when_array_length_mismatch() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+        let dave = test_address(stringify!(dave));
+        let charlie = test_address(stringify!(charlie));
+
         let token_ids = random_token_ids(3);
         let accounts = vec![alice, bob, dave, charlie];
         let ids_length = U256::from(token_ids.len());
@@ -1259,14 +1271,14 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn balance_of_batch_zero_balance(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        bob: Address,
-        dave: Address,
-        charlie: Address,
-    ) {
+    #[test]
+    fn balance_of_batch_zero_balance() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+        let dave = test_address(stringify!(dave));
+        let charlie = test_address(stringify!(charlie));
+
         let token_ids = random_token_ids(4);
         let accounts = vec![alice, bob, dave, charlie];
         let balances = contract
@@ -1278,12 +1290,12 @@ mod tests {
         assert_eq!(expected, balances);
     }
 
-    #[motsu::test]
-    fn set_approval_for_all(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn set_approval_for_all() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         contract
             .sender(alice)
             .operator_approvals
@@ -1303,11 +1315,11 @@ mod tests {
         assert!(!contract.sender(alice).is_approved_for_all(alice, bob));
     }
 
-    #[motsu::test]
-    fn error_when_invalid_operator_set_approval_for_all(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_invalid_operator_set_approval_for_all() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let invalid_operator = Address::ZERO;
 
         let err = contract
@@ -1323,8 +1335,11 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn mints(contract: Contract<Erc1155>, alice: Address) {
+    #[test]
+    fn mints() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let token_id = random_token_ids(1)[0];
         let value = random_values(1)[0];
 
@@ -1338,11 +1353,11 @@ mod tests {
         assert_eq!(balance, value);
     }
 
-    #[motsu::test]
-    fn error_when_mints_to_invalid_receiver(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_mints_to_invalid_receiver() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let invalid_receiver = Address::ZERO;
         let token_id = random_token_ids(1)[0];
         let value = random_values(1)[0];
@@ -1360,8 +1375,11 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn mints_batch(contract: Contract<Erc1155>, alice: Address) {
+    #[test]
+    fn mints_batch() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let token_ids = random_token_ids(4);
         let values = random_values(4);
 
@@ -1390,8 +1408,11 @@ mod tests {
         assert_eq!(values, balances);
     }
 
-    #[motsu::test]
-    fn mints_batch_same_token(contract: Contract<Erc1155>, alice: Address) {
+    #[test]
+    fn mints_batch_same_token() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let token_id = uint!(1_U256);
         let values = random_values(4);
         let expected_balance: U256 = values.iter().sum();
@@ -1419,11 +1440,11 @@ mod tests {
         assert_eq!(vec![expected_balance; 4], balances);
     }
 
-    #[motsu::test]
-    fn error_when_batch_mints_to_invalid_receiver(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_batch_mints_to_invalid_receiver() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let token_ids = random_token_ids(1);
         let values = random_values(1);
         let invalid_receiver = Address::ZERO;
@@ -1446,11 +1467,11 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_batch_mints_not_equal_arrays(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_batch_mints_not_equal_arrays() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let token_ids = random_token_ids(3);
         let values = random_values(4);
 
@@ -1469,8 +1490,11 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn burns(contract: Contract<Erc1155>, alice: Address) {
+    #[test]
+    fn burns() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 1);
 
         let token_id = token_ids[0];
@@ -1486,11 +1510,11 @@ mod tests {
         assert_eq!(U256::ZERO, balances);
     }
 
-    #[motsu::test]
-    fn error_when_burns_from_invalid_sender(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_burns_from_invalid_sender() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 1);
         let invalid_sender = Address::ZERO;
 
@@ -1507,11 +1531,11 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_burns_with_insufficient_balance(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_burns_with_insufficient_balance() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 1);
 
         let err = contract
@@ -1530,8 +1554,11 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn burns_batch(contract: Contract<Erc1155>, alice: Address) {
+    #[test]
+    fn burns_batch() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 4);
 
         contract
@@ -1547,8 +1574,11 @@ mod tests {
         assert_eq!(vec![U256::ZERO; 4], balances);
     }
 
-    #[motsu::test]
-    fn burns_batch_same_token(contract: Contract<Erc1155>, alice: Address) {
+    #[test]
+    fn burns_batch_same_token() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let token_id = uint!(1_U256);
         let value = uint!(80_U256);
 
@@ -1577,11 +1607,11 @@ mod tests {
         );
     }
 
-    #[motsu::test]
-    fn error_when_batch_burns_from_invalid_sender(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_batch_burns_from_invalid_sender() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 4);
         let invalid_sender = Address::ZERO;
 
@@ -1598,11 +1628,11 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_batch_burns_with_insufficient_balance(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_batch_burns_with_insufficient_balance() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 4);
 
         let err = contract
@@ -1627,11 +1657,11 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_batch_burns_not_equal_arrays(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_batch_burns_not_equal_arrays() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 3);
 
         let err = contract
@@ -1649,13 +1679,13 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn safe_transfer_from(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        bob: Address,
-        dave: Address,
-    ) {
+    #[test]
+    fn safe_transfer_from() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+        let dave = test_address(stringify!(dave));
+
         let (token_ids, values) = contract.sender(alice).init(bob, 2);
         let amount_one = values[0] - uint!(1_U256);
         let amount_two = values[1] - uint!(1_U256);
@@ -1695,11 +1725,11 @@ mod tests {
         assert_eq!(amount_two, balance_id_two);
     }
 
-    #[motsu::test]
-    fn error_when_invalid_receiver_safe_transfer_from(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_invalid_receiver_safe_transfer_from() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 1);
         let invalid_receiver = Address::ZERO;
 
@@ -1722,11 +1752,11 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_invalid_sender_safe_transfer_from(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_invalid_sender_safe_transfer_from() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 1);
         let invalid_sender = Address::ZERO;
 
@@ -1754,12 +1784,12 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_missing_approval_safe_transfer_from(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn error_when_missing_approval_safe_transfer_from() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 1);
 
         let err = contract
@@ -1782,13 +1812,13 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_insufficient_balance_safe_transfer_from(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        bob: Address,
-        dave: Address,
-    ) {
+    #[test]
+    fn error_when_insufficient_balance_safe_transfer_from() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+        let dave = test_address(stringify!(dave));
+
         let (token_ids, values) = contract.sender(alice).init(bob, 1);
         contract
             .sender(bob)
@@ -1817,13 +1847,13 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn safe_transfer_from_with_data(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        dave: Address,
-        charlie: Address,
-    ) {
+    #[test]
+    fn safe_transfer_from_with_data() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let dave = test_address(stringify!(dave));
+        let charlie = test_address(stringify!(charlie));
+
         let (token_ids, values) = contract.sender(alice).init(dave, 1);
 
         contract
@@ -1847,12 +1877,12 @@ mod tests {
         assert_eq!(values[0], balance);
     }
 
-    #[motsu::test]
-    fn error_when_invalid_receiver_safe_transfer_from_with_data(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        dave: Address,
-    ) {
+    #[test]
+    fn error_when_invalid_receiver_safe_transfer_from_with_data() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let dave = test_address(stringify!(dave));
+
         let (token_ids, values) = contract.sender(alice).init(dave, 1);
         let invalid_receiver = Address::ZERO;
 
@@ -1875,11 +1905,11 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_invalid_sender_safe_transfer_from_with_data(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_invalid_sender_safe_transfer_from_with_data() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 1);
         let invalid_sender = Address::ZERO;
 
@@ -1907,12 +1937,12 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_missing_approval_safe_transfer_from_with_data(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn error_when_missing_approval_safe_transfer_from_with_data() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 1);
 
         let err = contract
@@ -1935,13 +1965,13 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_insufficient_balance_safe_transfer_from_with_data(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        bob: Address,
-        dave: Address,
-    ) {
+    #[test]
+    fn error_when_insufficient_balance_safe_transfer_from_with_data() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+        let dave = test_address(stringify!(dave));
+
         let (token_ids, values) = contract.sender(alice).init(bob, 1);
 
         contract
@@ -1971,13 +2001,13 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn safe_batch_transfer_from(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        bob: Address,
-        dave: Address,
-    ) {
+    #[test]
+    fn safe_batch_transfer_from() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+        let dave = test_address(stringify!(dave));
+
         let (token_ids, values) = contract.sender(alice).init(dave, 2);
         let amount_one = values[0] - uint!(1_U256);
         let amount_two = values[1] - uint!(1_U256);
@@ -2007,11 +2037,11 @@ mod tests {
         assert_eq!(amount_two, balance_id_two);
     }
 
-    #[motsu::test]
-    fn error_when_invalid_receiver_safe_batch_transfer_from(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_invalid_receiver_safe_batch_transfer_from() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 4);
         let invalid_receiver = Address::ZERO;
 
@@ -2034,11 +2064,11 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_invalid_sender_safe_batch_transfer_from(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_invalid_sender_safe_batch_transfer_from() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 4);
         let invalid_sender = Address::ZERO;
 
@@ -2066,12 +2096,12 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_missing_approval_safe_batch_transfer_from(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn error_when_missing_approval_safe_batch_transfer_from() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 2);
 
         let err = contract
@@ -2094,13 +2124,13 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_insufficient_balance_safe_batch_transfer_from(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        bob: Address,
-        charlie: Address,
-    ) {
+    #[test]
+    fn error_when_insufficient_balance_safe_batch_transfer_from() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+        let charlie = test_address(stringify!(charlie));
+
         let (token_ids, values) = contract.sender(alice).init(charlie, 2);
 
         contract
@@ -2130,13 +2160,13 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_not_equal_arrays_safe_batch_transfer_from(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        dave: Address,
-        charlie: Address,
-    ) {
+    #[test]
+    fn error_when_not_equal_arrays_safe_batch_transfer_from() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let dave = test_address(stringify!(dave));
+        let charlie = test_address(stringify!(charlie));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 4);
 
         contract
@@ -2165,13 +2195,13 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn safe_batch_transfer_from_with_data(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        bob: Address,
-        dave: Address,
-    ) {
+    #[test]
+    fn safe_batch_transfer_from_with_data() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+        let dave = test_address(stringify!(dave));
+
         let (token_ids, values) = contract.sender(alice).init(dave, 2);
 
         contract
@@ -2199,11 +2229,11 @@ mod tests {
         assert_eq!(values[1], balance_id_two);
     }
 
-    #[motsu::test]
-    fn error_when_invalid_receiver_safe_batch_transfer_from_with_data(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_invalid_receiver_safe_batch_transfer_from_with_data() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 4);
         let invalid_receiver = Address::ZERO;
 
@@ -2226,11 +2256,11 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_invalid_sender_safe_batch_transfer_from_with_data(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_invalid_sender_safe_batch_transfer_from_with_data() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 4);
         let invalid_sender = Address::ZERO;
 
@@ -2258,12 +2288,12 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_missing_approval_safe_batch_transfer_from_with_data(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn error_when_missing_approval_safe_batch_transfer_from_with_data() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 2);
 
         let err = contract
@@ -2286,13 +2316,13 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_insufficient_balance_safe_batch_transfer_from_with_data(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        bob: Address,
-        charlie: Address,
-    ) {
+    #[test]
+    fn error_when_insufficient_balance_safe_batch_transfer_from_with_data() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+        let charlie = test_address(stringify!(charlie));
+
         let (token_ids, values) = contract.sender(alice).init(charlie, 2);
 
         contract
@@ -2322,13 +2352,13 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_not_equal_arrays_safe_batch_transfer_from_with_data(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        dave: Address,
-        charlie: Address,
-    ) {
+    #[test]
+    fn error_when_not_equal_arrays_safe_batch_transfer_from_with_data() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let dave = test_address(stringify!(dave));
+        let charlie = test_address(stringify!(charlie));
+
         let (token_ids, values) = contract.sender(alice).init(alice, 4);
 
         contract
@@ -2357,15 +2387,18 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual = <Erc1155 as IErc1155>::interface_id();
         let expected: B32 = 0xd9b67a26_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
-    fn supports_interface(contract: Contract<Erc1155>, alice: Address) {
+    #[test]
+    fn supports_interface() {
+        let contract = TestVMContract::<Erc1155>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         assert!(contract
             .sender(alice)
             .supports_interface(<Erc1155 as IErc1155>::interface_id()));

@@ -30,17 +30,18 @@ impl IErc721Receiver for Erc721Holder {
 
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::Contract;
+    use crate::test_support::{test_address, TestContract as TestVMContract};
 
     use super::*;
 
     unsafe impl TopLevelStorage for Erc721Holder {}
 
-    #[motsu::test]
-    fn holder_returns_proper_selector(
-        contract: Contract<Erc721Holder>,
-        alice: Address,
-    ) {
+    #[test]
+    fn holder_returns_proper_selector() {
+        let contract =
+            TestVMContract::<Erc721Holder>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         assert_eq!(
             contract.sender(alice).on_erc721_received(
                 alice,

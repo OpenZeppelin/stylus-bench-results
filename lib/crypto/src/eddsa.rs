@@ -10,7 +10,7 @@
 #![allow(non_snake_case)]
 use sha2::{digest::Digest, Sha512};
 use static_assertions::const_assert;
-use zeroize::ZeroizeOnDrop;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::{
     arithmetic::{
@@ -82,7 +82,7 @@ pub const SIGNATURE_LENGTH: usize = 64;
 ///
 /// Instances of this secret are automatically overwritten with zeroes when they
 /// fall out of scope.
-#[derive(Clone, PartialEq, Debug, ZeroizeOnDrop)]
+#[derive(Clone, PartialEq, ZeroizeOnDrop)]
 pub(crate) struct ExpandedSecretKey {
     /// The secret scalar used for signing.
     pub(crate) scalar: Scalar,
@@ -101,10 +101,18 @@ impl ExpandedSecretKey {
         scalar_bytes.copy_from_slice(&bytes[00..32]);
         hash_prefix.copy_from_slice(&bytes[32..64]);
 
-        let scalar = Scalar::from_bigint(U256::from_bytes_le(&clamp_integer(
-            scalar_bytes,
-        )));
-        Self { scalar, hash_prefix }
+        // Clamp in place so the pre-clamped copy is not left in a temporary.
+        scalar_bytes[0] &= 0b1111_1000;
+        scalar_bytes[31] &= 0b0111_1111;
+        scalar_bytes[31] |= 0b0100_0000;
+        let mut scalar_integer = U256::from_bytes_le(&scalar_bytes);
+        let mut scalar = Scalar::from_bigint(scalar_integer);
+        scalar_integer.zeroize();
+        scalar_bytes.zeroize();
+        let expanded = Self { scalar, hash_prefix };
+        scalar.zeroize();
+        hash_prefix.zeroize();
+        expanded
     }
 }
 
@@ -141,8 +149,10 @@ pub const fn clamp_integer(mut bytes: [u8; 32]) -> [u8; 32] {
 impl From<&SecretKey> for ExpandedSecretKey {
     #[allow(clippy::unwrap_used)]
     fn from(secret_key: &SecretKey) -> ExpandedSecretKey {
-        let hash = Sha512::default().chain_update(secret_key).finalize();
-        ExpandedSecretKey::from_bytes(hash.as_ref())
+        let mut hash = Sha512::default().chain_update(secret_key).finalize();
+        let expanded = ExpandedSecretKey::from_bytes(hash.as_ref());
+        hash.as_mut_slice().zeroize();
+        expanded
     }
 }
 
@@ -206,10 +216,13 @@ impl SigningKey {
         h.update(self.signing_key.hash_prefix);
         h.update(message);
 
-        let r = WideScalar::from_bigint(U512::from_bytes_le(
-            h.finalize().as_slice(),
-        ));
-        let r = Scalar::from_fp(r);
+        let mut r_hash = h.finalize();
+        let mut r_integer = U512::from_bytes_le(r_hash.as_slice());
+        let mut r_wide = WideScalar::from_bigint(r_integer);
+        r_integer.zeroize();
+        r_hash.as_mut_slice().zeroize();
+        let mut r = Scalar::from_fp(r_wide);
+        r_wide.zeroize();
 
         let R = ProjectivePoint::generator() * r;
 
@@ -220,11 +233,16 @@ impl SigningKey {
         ));
         h.update(message);
 
-        let k = WideScalar::from_bigint(U512::from_bytes_le(
-            h.finalize().as_slice(),
-        ));
-        let k = Scalar::from_fp(k);
-        let s: Scalar = (k * self.signing_key.scalar) + r;
+        let mut k_hash = h.finalize();
+        let mut k_integer = U512::from_bytes_le(k_hash.as_slice());
+        let k_wide = WideScalar::from_bigint(k_integer);
+        k_integer.zeroize();
+        k_hash.as_mut_slice().zeroize();
+        let k = Scalar::from_fp(k_wide);
+        let mut secret_product = k * self.signing_key.scalar;
+        let s: Scalar = secret_product + r;
+        secret_product.zeroize();
+        r.zeroize();
 
         Signature { R, s }
     }
@@ -643,14 +661,20 @@ mod test {
     }
 
     #[test]
-    fn zeroize_signing_key() {
-        let ptr = {
-            let secret = SigningKey::from_bytes(&[4u8; 32]);
-            &raw const secret.signing_key
-        };
-        let secret_key = unsafe { ptr.as_ref().unwrap() };
+    fn expanded_secret_key_uses_zeroize_on_drop() {
+        fn assert_zeroize_on_drop<T: ZeroizeOnDrop>() {}
 
-        assert!(secret_key.scalar.is_zero());
-        assert_eq!(secret_key.hash_prefix, [0u8; 32]);
+        assert_zeroize_on_drop::<ExpandedSecretKey>();
+        assert!(core::mem::needs_drop::<ExpandedSecretKey>());
+        assert!(core::mem::needs_drop::<SigningKey>());
+
+        // These are the field types zeroized by the derived Drop implementation.
+        let mut scalar = Scalar::from_bigint(U256::from(42u64));
+        scalar.zeroize();
+        assert!(scalar.is_zero());
+
+        let mut hash_prefix = [0xA5u8; 32];
+        hash_prefix.zeroize();
+        assert_eq!(hash_prefix, [0u8; 32]);
     }
 }

@@ -6,11 +6,9 @@
 //! [`Erc20`] applications.
 use alloc::{vec, vec::Vec};
 
-use alloy_primitives::{aliases::B32, Address, U256};
+use alloy_primitives::{Address, U256, aliases::B32};
 use openzeppelin_stylus_proc::interface_id;
 use stylus_sdk::{
-    call::MethodError,
-    evm, msg,
     prelude::*,
     storage::{StorageMap, StorageU256},
 };
@@ -288,12 +286,8 @@ impl IErc20 for Erc20 {
         self.balances.get(account)
     }
 
-    fn transfer(
-        &mut self,
-        to: Address,
-        value: U256,
-    ) -> Result<bool, Self::Error> {
-        let from = msg::sender();
+    fn transfer(&mut self, to: Address, value: U256) -> Result<bool, Error> {
+        let from = self.vm().msg_sender();
         self._transfer(from, to, value)?;
         Ok(true)
     }
@@ -306,8 +300,8 @@ impl IErc20 for Erc20 {
         &mut self,
         spender: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
-        let owner = msg::sender();
+    ) -> Result<bool, Error> {
+        let owner = self.vm().msg_sender();
         self._approve(owner, spender, value, true)
     }
 
@@ -316,8 +310,8 @@ impl IErc20 for Erc20 {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
-        let spender = msg::sender();
+    ) -> Result<bool, Error> {
+        let spender = self.vm().msg_sender();
         let remaining_allowance =
             self._allowance_after_spending(from, spender, value)?;
 
@@ -423,7 +417,7 @@ impl Erc20 {
 
         self.allowances.setter(owner).insert(spender, value);
         if emit_event {
-            evm::log(Approval { owner, spender, value });
+            self.vm().log(Approval { owner, spender, value });
         }
         Ok(true)
     }
@@ -563,7 +557,7 @@ impl Erc20 {
             self.balances.setter(to).add_assign_unchecked(value);
         }
 
-        evm::log(Transfer { from, to, value });
+        self.vm().log(Transfer { from, to, value });
 
         Ok(())
     }
@@ -630,21 +624,28 @@ impl Erc20 {
 }
 
 impl IErc165 for Erc20 {
+    #[cfg(not(feature = "contract-client-gen"))]
+    fn __stylus_trait_and_impl_must_be_tagged_with_public_macro(&self) {}
+
     fn supports_interface(&self, interface_id: B32) -> bool {
         <Self as IErc20>::interface_id() == interface_id
             || <Self as IErc165>::interface_id() == interface_id
     }
 }
 
+use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{uint, Address, U256};
-    use motsu::prelude::*;
+    use crate::test_support::{TestContract as TestVMContract, test_address};
+    use alloy_primitives::{Address, U256, uint};
 
     use super::*;
 
-    #[motsu::test]
-    fn mint(contract: Contract<Erc20>, alice: Address) {
+    #[test]
+    fn mint() {
+        let contract = TestVMContract::<Erc20>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let one = uint!(1_U256);
 
         // Store initial balance & supply.
@@ -669,12 +670,12 @@ mod tests {
         });
     }
 
-    #[motsu::test]
+    #[test]
     #[should_panic = "should not exceed `U256::MAX` for `total_supply`"]
-    fn update_mint_errors_arithmetic_overflow(
-        contract: Contract<Erc20>,
-        alice: Address,
-    ) {
+    fn update_mint_errors_arithmetic_overflow() {
+        let contract = TestVMContract::<Erc20>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let one = uint!(1_U256);
         assert_eq!(U256::ZERO, contract.sender(alice).balance_of(alice));
         assert_eq!(U256::ZERO, contract.sender(alice).total_supply());
@@ -684,14 +685,17 @@ mod tests {
         contract
             .sender(alice)
             ._mint(alice, U256::MAX)
-            .motsu_expect("should mint tokens");
+            .expect("should mint tokens");
         // Mint action should NOT work:
         // overflow on `total_supply`.
         let _result = contract.sender(alice)._mint(alice, one);
     }
 
-    #[motsu::test]
-    fn mint_errors_invalid_receiver(contract: Contract<Erc20>, alice: Address) {
+    #[test]
+    fn mint_errors_invalid_receiver() {
+        let contract = TestVMContract::<Erc20>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let receiver = Address::ZERO;
         let one = uint!(1_U256);
 
@@ -700,8 +704,7 @@ mod tests {
         let initial_supply = contract.sender(alice).total_supply();
 
         // Mint action should work.
-        let err =
-            contract.sender(alice)._mint(receiver, one).motsu_unwrap_err();
+        let err = contract.sender(alice)._mint(receiver, one).unwrap_err();
         assert!(matches!(err, Error::InvalidReceiver(_)));
 
         // Check updated balance & supply.
@@ -712,12 +715,12 @@ mod tests {
         assert_eq!(initial_supply, contract.sender(alice).total_supply());
     }
 
-    #[motsu::test]
+    #[test]
     #[should_panic = "should not exceed `U256::MAX` for `total_supply`"]
-    fn mint_errors_arithmetic_overflow(
-        contract: Contract<Erc20>,
-        alice: Address,
-    ) {
+    fn mint_errors_arithmetic_overflow() {
+        let contract = TestVMContract::<Erc20>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let one = uint!(1_U256);
         assert_eq!(U256::ZERO, contract.sender(alice).balance_of(alice));
         assert_eq!(U256::ZERO, contract.sender(alice).total_supply());
@@ -727,29 +730,29 @@ mod tests {
         contract
             .sender(alice)
             ._mint(alice, U256::MAX)
-            .motsu_expect("should mint tokens");
+            .expect("should mint tokens");
         // Mint action should NOT work -- overflow on `_total_supply`.
         let _result = contract.sender(alice)._mint(alice, one);
     }
 
-    #[motsu::test]
-    fn burn(contract: Contract<Erc20>, alice: Address) {
+    #[test]
+    fn burn() {
+        let contract = TestVMContract::<Erc20>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let one = uint!(1_U256);
         let two = uint!(2_U256);
 
         // Initialize state for the test case:
         // Alice's balance as `two`.
-        contract
-            .sender(alice)
-            ._mint(alice, two)
-            .motsu_expect("should mint tokens");
+        contract.sender(alice)._mint(alice, two).expect("should mint tokens");
 
         // Store initial balance & supply.
         let initial_balance = contract.sender(alice).balance_of(alice);
         let initial_supply = contract.sender(alice).total_supply();
 
         // Burn action should work.
-        contract.sender(alice)._burn(alice, one).motsu_unwrap();
+        contract.sender(alice)._burn(alice, one).unwrap();
 
         // Check updated balance & supply.
         assert_eq!(
@@ -765,27 +768,24 @@ mod tests {
         });
     }
 
-    #[motsu::test]
-    fn burn_errors_insufficient_balance(
-        contract: Contract<Erc20>,
-        alice: Address,
-    ) {
+    #[test]
+    fn burn_errors_insufficient_balance() {
+        let contract = TestVMContract::<Erc20>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let one = uint!(1_U256);
         let two = uint!(2_U256);
 
         // Initialize state for the test case:
         // Alice's balance as `one`.
-        contract
-            .sender(alice)
-            ._mint(alice, one)
-            .motsu_expect("should mint tokens");
+        contract.sender(alice)._mint(alice, one).expect("should mint tokens");
 
         // Store initial balance & supply.
         let initial_balance = contract.sender(alice).balance_of(alice);
         let initial_supply = contract.sender(alice).total_supply();
 
         // Burn action should NOT work - `InsufficientBalance`.
-        let err = contract.sender(alice)._burn(alice, two).motsu_unwrap_err();
+        let err = contract.sender(alice)._burn(alice, two).unwrap_err();
         assert!(matches!(err, Error::InsufficientBalance(_)));
 
         // Check proper state (before revert).
@@ -793,20 +793,18 @@ mod tests {
         assert_eq!(initial_supply, contract.sender(alice).total_supply());
     }
 
-    #[motsu::test]
-    fn transfer(contract: Contract<Erc20>, alice: Address, bob: Address) {
+    #[test]
+    fn transfer() {
+        let contract = TestVMContract::<Erc20>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         let one = uint!(1_U256);
 
         // Initialize state for the test case:
         //  Alice's & Bob's balance as `one`.
-        contract
-            .sender(alice)
-            ._mint(alice, one)
-            .motsu_expect("should mint tokens");
-        contract
-            .sender(alice)
-            ._mint(bob, one)
-            .motsu_expect("should mint tokens");
+        contract.sender(alice)._mint(alice, one).expect("should mint tokens");
+        contract.sender(alice)._mint(bob, one).expect("should mint tokens");
 
         // Store initial balance & supply.
         let initial_alice_balance = contract.sender(alice).balance_of(alice);
@@ -831,24 +829,18 @@ mod tests {
         contract.assert_emitted(&Transfer { from: alice, to: bob, value: one });
     }
 
-    #[motsu::test]
-    fn transfer_errors_insufficient_balance(
-        contract: Contract<Erc20>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn transfer_errors_insufficient_balance() {
+        let contract = TestVMContract::<Erc20>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         let one = uint!(1_U256);
 
         // Initialize state for the test case:
         // Alice's & Bob's balance as `one`.
-        contract
-            .sender(alice)
-            ._mint(alice, one)
-            .motsu_expect("should mint tokens");
-        contract
-            .sender(alice)
-            ._mint(bob, one)
-            .motsu_expect("should mint tokens");
+        contract.sender(alice)._mint(alice, one).expect("should mint tokens");
+        contract.sender(alice)._mint(bob, one).expect("should mint tokens");
 
         // Store initial balance & supply.
         let initial_alice_balance = contract.sender(alice).balance_of(alice);
@@ -856,8 +848,7 @@ mod tests {
         let initial_supply = contract.sender(alice).total_supply();
 
         // Transfer action should NOT work - `InsufficientBalance`.
-        let err =
-            contract.sender(alice).transfer(bob, one + one).motsu_unwrap_err();
+        let err = contract.sender(alice).transfer(bob, one + one).unwrap_err();
         assert!(matches!(err, Error::InsufficientBalance(_)));
 
         // Check proper state (before revert).
@@ -869,18 +860,22 @@ mod tests {
         assert_eq!(initial_supply, contract.sender(alice).total_supply());
     }
 
-    #[motsu::test]
-    fn transfer_from(contract: Contract<Erc20>, alice: Address, bob: Address) {
+    #[test]
+    fn transfer_from() {
+        let contract = TestVMContract::<Erc20>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         // Alice approves Bob.
         let one = uint!(1_U256);
-        contract.sender(alice).approve(bob, one).motsu_unwrap();
+        contract.sender(alice).approve(bob, one).unwrap();
 
         // Mint some tokens for Alice.
         let two = uint!(2_U256);
-        contract.sender(alice)._mint(alice, two).motsu_unwrap();
+        contract.sender(alice)._mint(alice, two).unwrap();
         assert_eq!(two, contract.sender(alice).balance_of(alice));
 
-        contract.sender(bob).transfer_from(alice, bob, one).motsu_unwrap();
+        contract.sender(bob).transfer_from(alice, bob, one).unwrap();
 
         assert_eq!(one, contract.sender(alice).balance_of(alice));
         assert_eq!(one, contract.sender(alice).balance_of(bob));
@@ -889,69 +884,65 @@ mod tests {
         contract.assert_emitted(&Transfer { from: alice, to: bob, value: one });
     }
 
-    #[motsu::test]
-    fn error_when_transfer_with_insufficient_balance(
-        contract: Contract<Erc20>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn error_when_transfer_with_insufficient_balance() {
+        let contract = TestVMContract::<Erc20>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         // Alice approves Bob.
         let one = uint!(1_U256);
-        contract.sender(alice).approve(bob, one).motsu_unwrap();
+        contract.sender(alice).approve(bob, one).unwrap();
 
-        let err = contract
-            .sender(bob)
-            .transfer_from(alice, bob, one)
-            .motsu_unwrap_err();
+        let err =
+            contract.sender(bob).transfer_from(alice, bob, one).unwrap_err();
         assert!(matches!(err, Error::InsufficientBalance(_)));
     }
 
-    #[motsu::test]
-    fn error_when_transfer_to_invalid_receiver(
-        contract: Contract<Erc20>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn error_when_transfer_to_invalid_receiver() {
+        let contract = TestVMContract::<Erc20>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         // Alice approves Bob.
         let one = uint!(1_U256);
-        contract.sender(alice).approve(bob, one).motsu_unwrap();
+        contract.sender(alice).approve(bob, one).unwrap();
 
         let err = contract
             .sender(bob)
             .transfer_from(alice, Address::ZERO, one)
-            .motsu_unwrap_err();
+            .unwrap_err();
         assert!(matches!(err, Error::InvalidReceiver(_)));
     }
 
-    #[motsu::test]
-    fn errors_when_transfer_with_insufficient_allowance(
-        contract: Contract<Erc20>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn errors_when_transfer_with_insufficient_allowance() {
+        let contract = TestVMContract::<Erc20>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         // Mint some tokens for Alice.
         let one = uint!(1_U256);
-        contract.sender(alice)._mint(alice, one).motsu_unwrap();
+        contract.sender(alice)._mint(alice, one).unwrap();
         assert_eq!(one, contract.sender(alice).balance_of(alice));
 
-        let err = contract
-            .sender(alice)
-            .transfer_from(alice, bob, one)
-            .motsu_unwrap_err();
+        let err =
+            contract.sender(alice).transfer_from(alice, bob, one).unwrap_err();
         assert!(matches!(err, Error::InsufficientAllowance(_)));
     }
 
-    #[motsu::test]
-    fn approves_and_reads_allowance(
-        contract: Contract<Erc20>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn approves_and_reads_allowance() {
+        let contract = TestVMContract::<Erc20>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         let allowance = contract.sender(alice).allowance(alice, bob);
         assert_eq!(U256::ZERO, allowance);
 
         let one = uint!(1_U256);
-        contract.sender(alice).approve(bob, one).motsu_unwrap();
+        contract.sender(alice).approve(bob, one).unwrap();
         let allowance = contract.sender(alice).allowance(alice, bob);
         assert_eq!(one, allowance);
 
@@ -962,49 +953,54 @@ mod tests {
         });
     }
 
-    #[motsu::test]
-    fn error_when_approve_for_invalid_spender(
-        contract: Contract<Erc20>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_approve_for_invalid_spender() {
+        let contract = TestVMContract::<Erc20>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         // alice approves [`Address::ZERO`].
         let one = uint!(1_U256);
-        let err = contract
-            .sender(alice)
-            .approve(Address::ZERO, one)
-            .motsu_unwrap_err();
+        let err =
+            contract.sender(alice).approve(Address::ZERO, one).unwrap_err();
         assert!(matches!(err, Error::InvalidSpender(_)));
     }
 
-    #[motsu::test]
-    fn error_when_invalid_approver(
-        contract: Contract<Erc20>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn error_when_invalid_approver() {
+        let contract = TestVMContract::<Erc20>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         let one = uint!(1_U256);
         let err = contract
             .sender(alice)
             ._approve(Address::ZERO, bob, one, false)
-            .motsu_unwrap_err();
+            .unwrap_err();
         assert!(matches!(err, Error::InvalidApprover(_)));
     }
 
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual = <Erc20 as IErc20>::interface_id();
         let expected: B32 = 0x36372b07_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
-    fn supports_interface(contract: Contract<Erc20>, alice: Address) {
-        assert!(contract
-            .sender(alice)
-            .supports_interface(<Erc20 as IErc20>::interface_id()));
-        assert!(contract
-            .sender(alice)
-            .supports_interface(<Erc20 as IErc165>::interface_id()));
+    #[test]
+    fn supports_interface() {
+        let contract = TestVMContract::<Erc20>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
+        assert!(
+            contract
+                .sender(alice)
+                .supports_interface(<Erc20 as IErc20>::interface_id())
+        );
+        assert!(
+            contract
+                .sender(alice)
+                .supports_interface(<Erc20 as IErc165>::interface_id())
+        );
 
         let fake_interface_id: B32 = 0x12345678_u32.into();
         assert!(!contract.sender(alice).supports_interface(fake_interface_id));

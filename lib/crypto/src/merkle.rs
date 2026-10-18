@@ -531,16 +531,8 @@ mod tests {
 
     #[test]
     fn verifies_valid_proofs() {
-        // ```js
-        // const merkleTree = StandardMerkleTree.of(
-        //   toElements('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='),
-        //   ['string'],
-        // );
-        //
-        // const root  = merkleTree.root;
-        // const hash  = merkleTree.leafHash(['A']);
-        // const proof = merkleTree.getProof(['A']);
-        // ```
+        // These known-answer vectors were generated with OpenZeppelin's
+        // JavaScript StandardMerkleTree implementation.
         bytes! {
             root   = "b89eb120147840e813a77109b44063488a346b4ca15686185cf314320560d3f3";
             leaf_a = "6efbf77e320741a027b50f02224545461f97cd83762d5fbfeb894b9eb3287c16";
@@ -567,14 +559,7 @@ mod tests {
 
     #[test]
     fn rejects_invalid_proofs() {
-        // ```js
-        // const correctMerkleTree = StandardMerkleTree.of(toElements('abc'), ['string']);
-        // const otherMerkleTree = StandardMerkleTree.of(toElements('def'), ['string']);
-        //
-        // const root = correctMerkleTree.root;
-        // const leaf = correctMerkleTree.leafHash(['a']);
-        // const proof = otherMerkleTree.getProof(['d']);
-        // ```
+        // The root and leaf come from one tree; the proof comes from another.
         bytes! {
             root  = "f2129b5a697531ef818f644564a6552b35c549722385bc52aa7fe46c0b5f46b1";
             leaf  = "9c15a6a0eaeed500fd9eed4cbeab71f797cefcc67bfd46683e4d2e6ff7f06d1c";
@@ -587,13 +572,7 @@ mod tests {
 
     #[test]
     fn rejects_proofs_with_invalid_length() {
-        // ```js
-        // const merkleTree = StandardMerkleTree.of(toElements('abc'), ['string']);
-        //
-        // const root = merkleTree.root;
-        // const leaf = merkleTree.leafHash(['a']);
-        // const proof = merkleTree.getProof(['a']);
-        // ```
+        // The proof is truncated from a valid proof for this root and leaf.
         bytes! {
             root = "f2129b5a697531ef818f644564a6552b35c549722385bc52aa7fe46c0b5f46b1";
             leaf = "9c15a6a0eaeed500fd9eed4cbeab71f797cefcc67bfd46683e4d2e6ff7f06d1c";
@@ -610,13 +589,8 @@ mod tests {
 
     #[test]
     fn verifies_valid_multi_proof() {
-        // ```js
-        // const merkleTree = StandardMerkleTree.of(toElements('abcdef'), ['string']);
-        //
-        // const root = merkleTree.root;
-        // const { proof, proofFlags, leaves } = merkleTree.getMultiProof(toElements('bdf'));
-        // const hashes = leaves.map(e => merkleTree.leafHash(e));
-        // ```
+        // These known-answer vectors were generated with OpenZeppelin's
+        // JavaScript StandardMerkleTree implementation.
         bytes! {
             root = "6deb52b5da8fd108f79fab00341f38d2587896634c646ee52e49f845680a70c8";
         };
@@ -638,14 +612,7 @@ mod tests {
 
     #[test]
     fn rejects_invalid_multi_proof() {
-        // ```js
-        // const merkleTree = StandardMerkleTree.of(toElements('abcdef'), ['string']);
-        // const otherMerkleTree = StandardMerkleTree.of(toElements('ghi'), ['string']);
-        //
-        // const root = merkleTree.root;
-        // const { proof, proofFlags, leaves } = otherMerkleTree.getMultiProof(toElements('ghi'));
-        // const hashes = leaves.map(e => merkleTree.leafHash(e));
-        // ```
+        // The root comes from one tree; all leaves come from another.
         bytes! {
             root = "6deb52b5da8fd108f79fab00341f38d2587896634c646ee52e49f845680a70c8";
         };
@@ -664,19 +631,8 @@ mod tests {
 
     #[test]
     fn multi_proof_invalid_total_hashes_length() {
-        // ```js
-        // const merkleTree = StandardMerkleTree.of(toElements('abcd'), ['string']);
-        //
-        // const root = merkleTree.root;
-        // const hashA = merkleTree.leafHash(['a']);
-        // const hashB = merkleTree.leafHash(['b']);
-        // const hashCD = hashPair(
-        //   ethers.toBeArray(merkleTree.leafHash(['c'])),
-        //   ethers.toBeArray(merkleTree.leafHash(['d'])),
-        // );
-        // const hashE = merkleTree.leafHash(['e']); // incorrect (not part of the tree)
-        // const fill = ethers.randomBytes(32);
-        // ```
+        // The leaves include an item absent from the tree, and the proof has
+        // an extra node to trigger the total-hashes length check.
         bytes! {
             root    = "8f7234e8cfe39c08ca84a3a3e3274f574af26fd15165fe29e09cbab742daccd9";
             hash_a  = "9c15a6a0eaeed500fd9eed4cbeab71f797cefcc67bfd46683e4d2e6ff7f06d1c";
@@ -701,19 +657,7 @@ mod tests {
 
     #[test]
     fn multi_proof_invalid_proof_length() {
-        // ```js
-        // const merkleTree = StandardMerkleTree.of(toElements('abcd'), ['string']);
-        //
-        // const root = merkleTree.root;
-        // const hashA = merkleTree.leafHash(['a']);
-        // const hashB = merkleTree.leafHash(['b']);
-        // const hashCD = hashPair(
-        //   ethers.toBeArray(merkleTree.leafHash(['c'])),
-        //   ethers.toBeArray(merkleTree.leafHash(['d'])),
-        // );
-        // const hashE = merkleTree.leafHash(['e']); // incorrect (not part of the tree)
-        // const fill = ethers.randomBytes(32);
-        // ```
+        // The proof flags do not describe a valid reconstruction of this tree.
         bytes! {
             root    = "8f7234e8cfe39c08ca84a3a3e3274f574af26fd15165fe29e09cbab742daccd9";
             hash_a  = "9c15a6a0eaeed500fd9eed4cbeab71f797cefcc67bfd46683e4d2e6ff7f06d1c";
@@ -738,11 +682,7 @@ mod tests {
 
     #[test]
     fn verifies_empty_leaves_multi_proof() {
-        // ```js
-        // const merkleTree = StandardMerkleTree.of(toElements('abcd'), ['string']);
-        //
-        // const root = merkleTree.root;
-        // ```
+        // An empty leaf set is valid when the proof contains the root itself.
         bytes!(root = "8f7234e8cfe39c08ca84a3a3e3274f574af26fd15165fe29e09cbab742daccd9");
         let proof = [root];
         let proof_flags = [];
@@ -761,14 +701,8 @@ mod tests {
         //
         // Taken from https://github.com/advisories/GHSA-wprv-93r4-jj2p
         //
-        // ```js
-        // const { MerkleTree } = require('merkletreejs'); // v0.2.32
-        // const keccak256 = require('keccak256'); // v1.0.6
-        //
-        // const leaves = [keccak256('real leaf'), Buffer.alloc(32, 0)];
-        // const merkleTree = new MerkleTree(leaves, keccak256, { sortPairs: true });
-        // const root = merkleTree.getRoot();
-        // ```
+        // The known-answer vector is derived from the advisory's vulnerable
+        // tree construction: a real leaf paired with a zero-value node.
         bytes! {
             root = "f2d552e1e4c59d4f0fa2b80859febc9e4bdc915dff37c56c858550d8b64659a5";
             leaf = "5e941ddd8f313c0b39f92562c0eca709c3d91360965d396aaef584b3fa76889a"; // 'real leaf'
@@ -792,13 +726,7 @@ mod tests {
 
     #[test]
     fn verify_empty_proof_should_mean_leaf_equal_to_root() {
-        // ```js
-        // const merkleTree = StandardMerkleTree.of(toElements('abc'), ['string']);
-        //
-        // const root = merkleTree.root;
-        // const leaf = merkleTree.leafHash(['a']);
-        // const proof = merkleTree.getProof(['a']);
-        // ```
+        // With no proof nodes, verification succeeds only when leaf equals root.
         bytes! {
             root = "f2129b5a697531ef818f644564a6552b35c549722385bc52aa7fe46c0b5f46b1";
             leaf = "9c15a6a0eaeed500fd9eed4cbeab71f797cefcc67bfd46683e4d2e6ff7f06d1c";

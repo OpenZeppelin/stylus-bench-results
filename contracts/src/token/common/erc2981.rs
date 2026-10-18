@@ -26,7 +26,6 @@ use alloy_primitives::{
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
 use stylus_sdk::{
-    call::MethodError,
     prelude::*,
     storage::{StorageAddress, StorageMap},
 };
@@ -330,10 +329,11 @@ impl Erc2981 {
     }
 }
 
+use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
+    use crate::test_support::{test_address, TestContract as TestVMContract};
     use alloy_primitives::uint;
-    use motsu::prelude::*;
 
     use super::*;
     use crate::utils::introspection::erc165::IErc165;
@@ -344,22 +344,22 @@ mod tests {
     const DEFAULT_FEE_DENOMINATOR: U96 = uint!(10000_U96);
 
     // DEFAULT ROYALTY TESTS
-    #[motsu::test]
-    fn fee_denominator_is_set_in_constructor(
-        contract: Contract<Erc2981>,
-        bob: Address,
-    ) {
+    #[test]
+    fn fee_denominator_is_set_in_constructor() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         let fee_denominator = uint!(6000_U96);
         contract.sender(bob).fee_denominator.set(fee_denominator);
 
         assert_eq!(contract.sender(bob)._fee_denominator(), fee_denominator);
     }
 
-    #[motsu::test]
-    fn royalty_info_default_royalty_is_same_for_all_tokens(
-        contract: Contract<Erc2981>,
-        bob: Address,
-    ) {
+    #[test]
+    fn royalty_info_default_royalty_is_same_for_all_tokens() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
         contract
@@ -379,11 +379,11 @@ mod tests {
         assert_eq!(royalty_amount, royalty_amount_2);
     }
 
-    #[motsu::test]
-    fn royalty_info_with_token_specific_fee_numerator(
-        contract: Contract<Erc2981>,
-        bob: Address,
-    ) {
+    #[test]
+    fn royalty_info_with_token_specific_fee_numerator() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
         contract
@@ -411,12 +411,12 @@ mod tests {
         assert_eq!(uint!(800_U256), royalty_amount);
     }
 
-    #[motsu::test]
-    fn royalty_info_with_different_token_royaltyes_for_different_tokens(
-        contract: Contract<Erc2981>,
-        bob: Address,
-        dave: Address,
-    ) {
+    #[test]
+    fn royalty_info_with_different_token_royaltyes_for_different_tokens() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+        let dave = test_address(stringify!(dave));
+
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
         contract
@@ -450,11 +450,11 @@ mod tests {
         assert_eq!(uint!(800_U256), royalty_amount_2);
     }
 
-    #[motsu::test]
-    fn royalty_info_with_almost_maximum_fee_numerator_value(
-        contract: Contract<Erc2981>,
-        bob: Address,
-    ) {
+    #[test]
+    fn royalty_info_with_almost_maximum_fee_numerator_value() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
         let almost_max_numerator = DEFAULT_FEE_DENOMINATOR - uint!(1_U96);
@@ -471,11 +471,12 @@ mod tests {
         assert_eq!(SALE_PRICE - uint!(1_U256), amount);
     }
 
-    #[motsu::test]
+    #[test]
     fn royalty_info_royalty_amount_equals_sale_price_when_royalty_fraction_is_100_percent(
-        contract: Contract<Erc2981>,
-        bob: Address,
     ) {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
         contract
@@ -490,11 +491,11 @@ mod tests {
         assert_eq!(SALE_PRICE, amount);
     }
 
-    #[motsu::test]
-    fn royalty_info_royalty_amount_is_zero_when_royalty_fraction_is_zero(
-        contract: Contract<Erc2981>,
-        bob: Address,
-    ) {
+    #[test]
+    fn royalty_info_royalty_amount_is_zero_when_royalty_fraction_is_zero() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
         contract
@@ -509,11 +510,11 @@ mod tests {
         assert_eq!(U256::ZERO, amount);
     }
 
-    #[motsu::test]
-    fn royalty_info_for_non_existent_token_uses_default_royalty(
-        contract: Contract<Erc2981>,
-        bob: Address,
-    ) {
+    #[test]
+    fn royalty_info_for_non_existent_token_uses_default_royalty() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
         contract
@@ -530,11 +531,11 @@ mod tests {
         assert_eq!(uint!(900_U256), royalty_amount);
     }
 
-    #[motsu::test]
-    fn royalty_info_returns_zero_royalty_when_zero_sale_price(
-        contract: Contract<Erc2981>,
-        bob: Address,
-    ) {
+    #[test]
+    fn royalty_info_returns_zero_royalty_when_zero_sale_price() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
         contract
@@ -549,11 +550,11 @@ mod tests {
         assert_eq!(U256::ZERO, amount);
     }
 
-    #[motsu::test]
-    fn royalty_info_with_no_royaltyes_set_returns_zero_address_and_amount(
-        contract: Contract<Erc2981>,
-        bob: Address,
-    ) {
+    #[test]
+    fn royalty_info_with_no_royaltyes_set_returns_zero_address_and_amount() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
         // Don't set any royaltyes
@@ -565,11 +566,11 @@ mod tests {
         assert_eq!(U256::ZERO, royalty_amount);
     }
 
-    #[motsu::test]
-    fn set_default_royalty_reverts_if_invalid_receiver(
-        contract: Contract<Erc2981>,
-        bob: Address,
-    ) {
+    #[test]
+    fn set_default_royalty_reverts_if_invalid_receiver() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
         let err = contract
@@ -587,11 +588,11 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn set_default_royalty_reverts_if_invalid_fee_numerator(
-        contract: Contract<Erc2981>,
-        bob: Address,
-    ) {
+    #[test]
+    fn set_default_royalty_reverts_if_invalid_fee_numerator() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
         let new_fee_numerator = uint!(11000_U96);
@@ -611,8 +612,11 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn delete_default_royalty(contract: Contract<Erc2981>, bob: Address) {
+    #[test]
+    fn delete_default_royalty() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
         // delete without setting any royalties
@@ -639,11 +643,11 @@ mod tests {
         assert!(royalty_amount.is_zero());
     }
 
-    #[motsu::test]
-    fn set_token_royalty_reverts_if_invalid_receiver(
-        contract: Contract<Erc2981>,
-        bob: Address,
-    ) {
+    #[test]
+    fn set_token_royalty_reverts_if_invalid_receiver() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
         let err = contract
@@ -659,11 +663,11 @@ mod tests {
             }) if token_id == TOKEN_ID && receiver.is_zero()));
     }
 
-    #[motsu::test]
-    fn set_token_royalty_reverts_if_invalid_fee_numerator(
-        contract: Contract<Erc2981>,
-        bob: Address,
-    ) {
+    #[test]
+    fn set_token_royalty_reverts_if_invalid_fee_numerator() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
         let new_fee_numerator = uint!(11000_U96);
@@ -683,12 +687,12 @@ mod tests {
             denominator == U256::from(DEFAULT_FEE_DENOMINATOR)));
     }
 
-    #[motsu::test]
-    fn royalty_info_uses_default_royalty_after_resetting_token_royalty(
-        contract: Contract<Erc2981>,
-        bob: Address,
-        dave: Address,
-    ) {
+    #[test]
+    fn royalty_info_uses_default_royalty_after_resetting_token_royalty() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+        let dave = test_address(stringify!(dave));
+
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
         let new_numerator = uint!(8000_U96);
@@ -718,8 +722,11 @@ mod tests {
         assert_eq!(uint!(900_U256), royalty_amount);
     }
 
-    #[motsu::test]
-    fn reset_token_royalty(contract: Contract<Erc2981>, bob: Address) {
+    #[test]
+    fn reset_token_royalty() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
         let mut contract = contract.sender(bob);
@@ -738,12 +745,12 @@ mod tests {
         assert_eq!(U96::ZERO, token_royalty.royalty_fraction.get());
     }
 
-    #[motsu::test]
+    #[test]
     #[should_panic = "division by zero in `royalty_amount` calculation."]
-    fn royalty_info_reverts_on_division_by_zero_in_default_royalty(
-        contract: Contract<Erc2981>,
-        bob: Address,
-    ) {
+    fn royalty_info_reverts_on_division_by_zero_in_default_royalty() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         contract.sender(bob).fee_denominator.set(U96::ZERO);
 
         contract
@@ -755,12 +762,12 @@ mod tests {
         _ = contract.sender(bob).royalty_info(TOKEN_ID, SALE_PRICE);
     }
 
-    #[motsu::test]
+    #[test]
     #[should_panic = "multiplication overflowed in `royalty_amount` calculation."]
-    fn royalty_info_reverts_on_overflow_in_default_royalty(
-        contract: Contract<Erc2981>,
-        bob: Address,
-    ) {
+    fn royalty_info_reverts_on_overflow_in_default_royalty() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
         contract
@@ -771,12 +778,12 @@ mod tests {
         _ = contract.sender(bob).royalty_info(TOKEN_ID, U256::MAX);
     }
 
-    #[motsu::test]
+    #[test]
     #[should_panic = "division by zero in `royalty_amount` calculation."]
-    fn royalty_info_reverts_on_division_by_zero_in_token_royalty(
-        contract: Contract<Erc2981>,
-        bob: Address,
-    ) {
+    fn royalty_info_reverts_on_division_by_zero_in_token_royalty() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         contract.sender(bob).fee_denominator.set(U96::ZERO);
 
         contract
@@ -788,12 +795,12 @@ mod tests {
         _ = contract.sender(bob).royalty_info(TOKEN_ID, SALE_PRICE);
     }
 
-    #[motsu::test]
+    #[test]
     #[should_panic = "multiplication overflowed in `royalty_amount` calculation."]
-    fn royalty_info_reverts_on_overflow_in_token_royalty(
-        contract: Contract<Erc2981>,
-        bob: Address,
-    ) {
+    fn royalty_info_reverts_on_overflow_in_token_royalty() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
         contract
@@ -804,11 +811,11 @@ mod tests {
         _ = contract.sender(bob).royalty_info(TOKEN_ID, U256::MAX);
     }
 
-    #[motsu::test]
-    fn royalty_info_changes_royalty_calculation_on_fee_denominator_change(
-        contract: Contract<Erc2981>,
-        bob: Address,
-    ) {
+    #[test]
+    fn royalty_info_changes_royalty_calculation_on_fee_denominator_change() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let bob = test_address(stringify!(bob));
+
         contract.sender(bob).fee_denominator.set(DEFAULT_FEE_DENOMINATOR);
 
         contract
@@ -830,7 +837,7 @@ mod tests {
         assert_eq!(amount_before * uint!(2_U256), amount_after);
     }
 
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual = <Erc2981 as IErc2981>::interface_id();
         // Value taken from official EIP
@@ -839,8 +846,11 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
-    fn supports_interface(contract: Contract<Erc2981>, alice: Address) {
+    #[test]
+    fn supports_interface() {
+        let contract = TestVMContract::<Erc2981>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         assert!(contract
             .sender(alice)
             .supports_interface(<Erc2981 as IErc2981>::interface_id()));

@@ -58,17 +58,18 @@ impl IErc165 for Erc1155Holder {
 
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::Contract;
+    use crate::test_support::{test_address, TestContract as TestVMContract};
 
     use super::*;
 
     unsafe impl TopLevelStorage for Erc1155Holder {}
 
-    #[motsu::test]
-    fn holder_returns_proper_selectors(
-        contract: Contract<Erc1155Holder>,
-        alice: Address,
-    ) {
+    #[test]
+    fn holder_returns_proper_selectors() {
+        let contract =
+            TestVMContract::<Erc1155Holder>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let one = U256::from(1);
         assert_eq!(
             contract.sender(alice).on_erc1155_received(
@@ -93,8 +94,12 @@ mod tests {
         );
     }
 
-    #[motsu::test]
-    fn supports_interface(contract: Contract<Erc1155Holder>, alice: Address) {
+    #[test]
+    fn supports_interface() {
+        let contract =
+            TestVMContract::<Erc1155Holder>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         assert!(contract.sender(alice).supports_interface(
             <Erc1155Holder as IErc1155Receiver>::interface_id()
         ));

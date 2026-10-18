@@ -4,7 +4,7 @@ use alloc::{vec, vec::Vec};
 
 use alloy_primitives::Address;
 pub use sol::*;
-use stylus_sdk::{call::MethodError, evm, prelude::*, storage::StorageAddress};
+use stylus_sdk::{prelude::*, storage::StorageAddress};
 
 use crate::{
     access::ownable::{self, IOwnable, Ownable},
@@ -62,13 +62,15 @@ impl From<ownable::Error> for Error {
 }
 
 /// This contract is used in conjunction with one or more instances of
-/// [`BeaconProxy`][BeaconProxy] to determine their implementation contract,
+/// [`BeaconProxy`][BeaconProxy] to determine their implementation
 /// which is where they will delegate all function calls.
 ///
 /// An owner is able to change the implementation the beacon points to, thus
 /// upgrading the proxies that use this beacon.
 ///
 /// [BeaconProxy]: super::BeaconProxy
+#[allow(missing_docs)]
+#[public]
 pub trait IUpgradeableBeacon: IBeacon + IOwnable {
     /// Upgrades the beacon to a new implementation.
     ///
@@ -177,7 +179,7 @@ impl UpgradeableBeacon {
         &mut self,
         new_implementation: Address,
     ) -> Result<(), Error> {
-        if !new_implementation.has_code() {
+        if self.vm().code_size(new_implementation) == 0 {
             return Err(Error::InvalidImplementation(
                 BeaconInvalidImplementation {
                     implementation: new_implementation,
@@ -185,7 +187,7 @@ impl UpgradeableBeacon {
             ));
         }
         self.implementation.set(new_implementation);
-        evm::log(Upgraded { implementation: new_implementation });
+        self.vm().log(Upgraded { implementation: new_implementation });
         Ok(())
     }
 }
@@ -215,20 +217,25 @@ impl IOwnable for UpgradeableBeacon {
     }
 }
 
+use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::*;
+    use crate::test_support::{
+        mock_code, test_address, TestContract as TestVMContract,
+    };
     use stylus_sdk::alloy_primitives::Address;
 
     use super::*;
     use crate::{proxy::beacon::IBeacon, token::erc20::Erc20};
 
-    #[motsu::test]
-    fn constructor(
-        beacon: Contract<UpgradeableBeacon>,
-        erc20: Contract<Erc20>,
-        alice: Address,
-    ) {
+    #[test]
+    fn constructor() {
+        let beacon =
+            TestVMContract::<UpgradeableBeacon>::new(stringify!(beacon));
+        let erc20 = TestVMContract::<Erc20>::new(stringify!(erc20));
+        mock_code(beacon.vm(), erc20.address());
+        let alice = test_address(stringify!(alice));
+
         beacon.sender(alice).constructor(erc20.address(), alice).unwrap();
 
         let implementation = beacon
@@ -241,11 +248,12 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
-    fn constructor_with_invalid_implementation(
-        beacon: Contract<UpgradeableBeacon>,
-        alice: Address,
-    ) {
+    #[test]
+    fn constructor_with_invalid_implementation() {
+        let beacon =
+            TestVMContract::<UpgradeableBeacon>::new(stringify!(beacon));
+        let alice = test_address(stringify!(alice));
+
         let invalid_address = alice;
         let err = beacon
             .sender(alice)
@@ -262,12 +270,14 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn constructor_with_zero_owner(
-        beacon: Contract<UpgradeableBeacon>,
-        erc20: Contract<Erc20>,
-        alice: Address,
-    ) {
+    #[test]
+    fn constructor_with_zero_owner() {
+        let beacon =
+            TestVMContract::<UpgradeableBeacon>::new(stringify!(beacon));
+        let erc20 = TestVMContract::<Erc20>::new(stringify!(erc20));
+        mock_code(beacon.vm(), erc20.address());
+        let alice = test_address(stringify!(alice));
+
         let err = beacon
             .sender(alice)
             .constructor(erc20.address(), Address::ZERO)
@@ -281,11 +291,12 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn constructor_with_zero_implementation(
-        beacon: Contract<UpgradeableBeacon>,
-        alice: Address,
-    ) {
+    #[test]
+    fn constructor_with_zero_implementation() {
+        let beacon =
+            TestVMContract::<UpgradeableBeacon>::new(stringify!(beacon));
+        let alice = test_address(stringify!(alice));
+
         let err = beacon
             .sender(alice)
             .constructor(Address::ZERO, alice)
@@ -299,13 +310,16 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn upgrade_to_valid_implementation(
-        beacon: Contract<UpgradeableBeacon>,
-        erc20: Contract<Erc20>,
-        erc20_2: Contract<Erc20>,
-        alice: Address,
-    ) {
+    #[test]
+    fn upgrade_to_valid_implementation() {
+        let beacon =
+            TestVMContract::<UpgradeableBeacon>::new(stringify!(beacon));
+        let erc20 = TestVMContract::<Erc20>::new(stringify!(erc20));
+        mock_code(beacon.vm(), erc20.address());
+        let erc20_2 = TestVMContract::<Erc20>::new(stringify!(erc20_2));
+        mock_code(beacon.vm(), erc20_2.address());
+        let alice = test_address(stringify!(alice));
+
         beacon.sender(alice).constructor(erc20.address(), alice).unwrap();
 
         // upgrade to new implementation.
@@ -324,12 +338,14 @@ mod tests {
         beacon.assert_emitted(&Upgraded { implementation: erc20_2.address() });
     }
 
-    #[motsu::test]
-    fn upgrade_to_invalid_implementation(
-        beacon: Contract<UpgradeableBeacon>,
-        erc20: Contract<Erc20>,
-        alice: Address,
-    ) {
+    #[test]
+    fn upgrade_to_invalid_implementation() {
+        let beacon =
+            TestVMContract::<UpgradeableBeacon>::new(stringify!(beacon));
+        let erc20 = TestVMContract::<Erc20>::new(stringify!(erc20));
+        mock_code(beacon.vm(), erc20.address());
+        let alice = test_address(stringify!(alice));
+
         beacon.sender(alice).constructor(erc20.address(), alice).unwrap();
 
         // try to upgrade to address with no code.
@@ -354,14 +370,17 @@ mod tests {
         assert_eq!(implementation, erc20.address());
     }
 
-    #[motsu::test]
-    fn upgrade_to_unauthorized(
-        beacon: Contract<UpgradeableBeacon>,
-        erc20: Contract<Erc20>,
-        erc20_2: Contract<Erc20>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn upgrade_to_unauthorized() {
+        let beacon =
+            TestVMContract::<UpgradeableBeacon>::new(stringify!(beacon));
+        let erc20 = TestVMContract::<Erc20>::new(stringify!(erc20));
+        mock_code(beacon.vm(), erc20.address());
+        let erc20_2 = TestVMContract::<Erc20>::new(stringify!(erc20_2));
+        mock_code(beacon.vm(), erc20_2.address());
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         beacon.sender(alice).constructor(erc20.address(), alice).unwrap();
 
         // try to upgrade from non-owner account.
@@ -385,12 +404,14 @@ mod tests {
         assert_eq!(implementation, erc20.address());
     }
 
-    #[motsu::test]
-    fn upgrade_to_same_implementation(
-        beacon: Contract<UpgradeableBeacon>,
-        erc20: Contract<Erc20>,
-        alice: Address,
-    ) {
+    #[test]
+    fn upgrade_to_same_implementation() {
+        let beacon =
+            TestVMContract::<UpgradeableBeacon>::new(stringify!(beacon));
+        let erc20 = TestVMContract::<Erc20>::new(stringify!(erc20));
+        mock_code(beacon.vm(), erc20.address());
+        let alice = test_address(stringify!(alice));
+
         beacon.sender(alice).constructor(erc20.address(), alice).unwrap();
 
         // upgrade to the same implementation.
@@ -409,12 +430,14 @@ mod tests {
         assert_eq!(implementation, erc20.address());
     }
 
-    #[motsu::test]
-    fn upgrade_to_zero_address(
-        beacon: Contract<UpgradeableBeacon>,
-        erc20: Contract<Erc20>,
-        alice: Address,
-    ) {
+    #[test]
+    fn upgrade_to_zero_address() {
+        let beacon =
+            TestVMContract::<UpgradeableBeacon>::new(stringify!(beacon));
+        let erc20 = TestVMContract::<Erc20>::new(stringify!(erc20));
+        mock_code(beacon.vm(), erc20.address());
+        let alice = test_address(stringify!(alice));
+
         beacon.sender(alice).constructor(erc20.address(), alice).unwrap();
 
         // try to upgrade to [`Address::ZERO`].
@@ -438,14 +461,18 @@ mod tests {
         assert_eq!(implementation, erc20.address());
     }
 
-    #[motsu::test]
-    fn multiple_upgrades_emit_events(
-        beacon: Contract<UpgradeableBeacon>,
-        erc20: Contract<Erc20>,
-        erc20_2: Contract<Erc20>,
-        erc20_3: Contract<Erc20>,
-        alice: Address,
-    ) {
+    #[test]
+    fn multiple_upgrades_emit_events() {
+        let beacon =
+            TestVMContract::<UpgradeableBeacon>::new(stringify!(beacon));
+        let erc20 = TestVMContract::<Erc20>::new(stringify!(erc20));
+        mock_code(beacon.vm(), erc20.address());
+        let erc20_2 = TestVMContract::<Erc20>::new(stringify!(erc20_2));
+        mock_code(beacon.vm(), erc20_2.address());
+        let erc20_3 = TestVMContract::<Erc20>::new(stringify!(erc20_3));
+        mock_code(beacon.vm(), erc20_3.address());
+        let alice = test_address(stringify!(alice));
+
         beacon.sender(alice).constructor(erc20.address(), alice).unwrap();
 
         // first upgrade.
@@ -471,14 +498,17 @@ mod tests {
         assert_eq!(implementation, erc20_3.address());
     }
 
-    #[motsu::test]
-    fn transfer_ownership(
-        beacon: Contract<UpgradeableBeacon>,
-        erc20: Contract<Erc20>,
-        erc20_2: Contract<Erc20>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn transfer_ownership() {
+        let beacon =
+            TestVMContract::<UpgradeableBeacon>::new(stringify!(beacon));
+        let erc20 = TestVMContract::<Erc20>::new(stringify!(erc20));
+        mock_code(beacon.vm(), erc20.address());
+        let erc20_2 = TestVMContract::<Erc20>::new(stringify!(erc20_2));
+        mock_code(beacon.vm(), erc20_2.address());
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         beacon.sender(alice).constructor(erc20.address(), alice).unwrap();
 
         // transfer ownership to bob.
@@ -510,12 +540,14 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn transfer_ownership_to_zero_address(
-        beacon: Contract<UpgradeableBeacon>,
-        erc20: Contract<Erc20>,
-        alice: Address,
-    ) {
+    #[test]
+    fn transfer_ownership_to_zero_address() {
+        let beacon =
+            TestVMContract::<UpgradeableBeacon>::new(stringify!(beacon));
+        let erc20 = TestVMContract::<Erc20>::new(stringify!(erc20));
+        mock_code(beacon.vm(), erc20.address());
+        let alice = test_address(stringify!(alice));
+
         beacon.sender(alice).constructor(erc20.address(), alice).unwrap();
 
         // try to transfer ownership to [`Address::ZERO`].
@@ -538,14 +570,16 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
-    fn transfer_ownership_unauthorized(
-        beacon: Contract<UpgradeableBeacon>,
-        erc20: Contract<Erc20>,
-        alice: Address,
-        bob: Address,
-        charlie: Address,
-    ) {
+    #[test]
+    fn transfer_ownership_unauthorized() {
+        let beacon =
+            TestVMContract::<UpgradeableBeacon>::new(stringify!(beacon));
+        let erc20 = TestVMContract::<Erc20>::new(stringify!(erc20));
+        mock_code(beacon.vm(), erc20.address());
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+        let charlie = test_address(stringify!(charlie));
+
         beacon.sender(alice).constructor(erc20.address(), alice).unwrap();
 
         // try to transfer ownership from non-owner account.
@@ -567,13 +601,16 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
-    fn renounce_ownership(
-        beacon: Contract<UpgradeableBeacon>,
-        erc20: Contract<Erc20>,
-        erc20_2: Contract<Erc20>,
-        alice: Address,
-    ) {
+    #[test]
+    fn renounce_ownership() {
+        let beacon =
+            TestVMContract::<UpgradeableBeacon>::new(stringify!(beacon));
+        let erc20 = TestVMContract::<Erc20>::new(stringify!(erc20));
+        mock_code(beacon.vm(), erc20.address());
+        let erc20_2 = TestVMContract::<Erc20>::new(stringify!(erc20_2));
+        mock_code(beacon.vm(), erc20_2.address());
+        let alice = test_address(stringify!(alice));
+
         beacon.sender(alice).constructor(erc20.address(), alice).unwrap();
 
         // renounce ownership.
@@ -599,13 +636,15 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn renounce_ownership_unauthorized(
-        beacon: Contract<UpgradeableBeacon>,
-        erc20: Contract<Erc20>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn renounce_ownership_unauthorized() {
+        let beacon =
+            TestVMContract::<UpgradeableBeacon>::new(stringify!(beacon));
+        let erc20 = TestVMContract::<Erc20>::new(stringify!(erc20));
+        mock_code(beacon.vm(), erc20.address());
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         beacon.sender(alice).constructor(erc20.address(), alice).unwrap();
 
         // try to renounce ownership from non-owner account.
@@ -627,16 +666,20 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
-    fn upgrade_after_ownership_transfer_chain(
-        beacon: Contract<UpgradeableBeacon>,
-        erc20: Contract<Erc20>,
-        erc20_2: Contract<Erc20>,
-        erc20_3: Contract<Erc20>,
-        alice: Address,
-        bob: Address,
-        charlie: Address,
-    ) {
+    #[test]
+    fn upgrade_after_ownership_transfer_chain() {
+        let beacon =
+            TestVMContract::<UpgradeableBeacon>::new(stringify!(beacon));
+        let erc20 = TestVMContract::<Erc20>::new(stringify!(erc20));
+        mock_code(beacon.vm(), erc20.address());
+        let erc20_2 = TestVMContract::<Erc20>::new(stringify!(erc20_2));
+        mock_code(beacon.vm(), erc20_2.address());
+        let erc20_3 = TestVMContract::<Erc20>::new(stringify!(erc20_3));
+        mock_code(beacon.vm(), erc20_3.address());
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+        let charlie = test_address(stringify!(charlie));
+
         beacon.sender(alice).constructor(erc20.address(), alice).unwrap();
 
         // alice transfers ownership to bob.
@@ -687,13 +730,16 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn upgrade_after_renounce_and_transfer(
-        beacon: Contract<UpgradeableBeacon>,
-        erc20: Contract<Erc20>,
-        erc20_2: Contract<Erc20>,
-        alice: Address,
-    ) {
+    #[test]
+    fn upgrade_after_renounce_and_transfer() {
+        let beacon =
+            TestVMContract::<UpgradeableBeacon>::new(stringify!(beacon));
+        let erc20 = TestVMContract::<Erc20>::new(stringify!(erc20));
+        mock_code(beacon.vm(), erc20.address());
+        let erc20_2 = TestVMContract::<Erc20>::new(stringify!(erc20_2));
+        mock_code(beacon.vm(), erc20_2.address());
+        let alice = test_address(stringify!(alice));
+
         beacon.sender(alice).constructor(erc20.address(), alice).unwrap();
 
         // alice renounces ownership.
