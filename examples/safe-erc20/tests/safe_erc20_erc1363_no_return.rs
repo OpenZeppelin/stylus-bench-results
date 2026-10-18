@@ -21,7 +21,8 @@ async fn reverts_on_transfer_and_call_relaxed() -> eyre::Result<()> {
     let _test_context = crate::test_support::TestContext::new().await?;
     let alice = crate::test_support::Account::new().await?;
 
-    let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let safe_erc20_addr =
+        alice.as_deployer_with_initial_owner().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
 
     let value = uint!(10_U256);
@@ -52,7 +53,8 @@ async fn reverts_on_transfer_from_and_call_relaxed() -> eyre::Result<()> {
     let _test_context = crate::test_support::TestContext::new().await?;
     let alice = crate::test_support::Account::new().await?;
 
-    let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let safe_erc20_addr =
+        alice.as_deployer_with_initial_owner().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
 
     let value = uint!(10_U256);
@@ -85,7 +87,8 @@ async fn reverts_on_approve_and_call_relaxed() -> eyre::Result<()> {
     let _test_context = crate::test_support::TestContext::new().await?;
     let alice = crate::test_support::Account::new().await?;
 
-    let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let safe_erc20_addr =
+        alice.as_deployer_with_initial_owner().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
 
     let value = uint!(10_U256);

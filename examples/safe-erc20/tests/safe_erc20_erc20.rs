@@ -22,14 +22,59 @@ mod transfers {
         let _test_context = crate::test_support::TestContext::new().await?;
         let owner = crate::test_support::Account::new().await?;
         let attacker = crate::test_support::Account::new().await?;
+        let victim = crate::test_support::Account::new().await?;
+        let recipient = crate::test_support::Account::new().await?;
 
-        let safe_erc20_addr =
-            owner.as_deployer().deploy().await?.contract_address;
+        let safe_erc20_addr = owner
+            .as_deployer_with_initial_owner()
+            .deploy()
+            .await?
+            .contract_address;
+        let safe_erc20_owner = SafeErc20::new(safe_erc20_addr, &owner.wallet);
         let safe_erc20_attacker =
             SafeErc20::new(safe_erc20_addr, &attacker.wallet);
         let erc20_address = erc20::deploy(&owner.wallet).await?;
         let erc20_owner = ERC20Mock::new(erc20_address, &owner.wallet);
+        let erc20_victim = ERC20Mock::new(erc20_address, &victim.wallet);
+        let erc20_attacker = ERC20Mock::new(erc20_address, &attacker.wallet);
         watch!(erc20_owner.mint(safe_erc20_addr, uint!(10_U256)))?;
+        watch!(erc20_owner.mint(victim.address(), uint!(2_U256)))?;
+        watch!(erc20_victim.approve(safe_erc20_addr, uint!(2_U256)))?;
+        watch!(safe_erc20_owner.safeTransfer(
+            erc20_address,
+            recipient.address(),
+            uint!(1_U256)
+        ))?;
+
+        assert!(
+            !safe_erc20_attacker
+                .trySafeTransfer(
+                    erc20_address,
+                    attacker.address(),
+                    uint!(1_U256)
+                )
+                .call()
+                .await?
+        );
+        assert!(
+            !safe_erc20_attacker
+                .trySafeTransferFrom(
+                    erc20_address,
+                    victim.address(),
+                    attacker.address(),
+                    uint!(1_U256)
+                )
+                .call()
+                .await?
+        );
+
+        let transfer_from_result = send!(safe_erc20_attacker.safeTransferFrom(
+            erc20_address,
+            victim.address(),
+            attacker.address(),
+            uint!(1_U256)
+        ));
+        assert!(transfer_from_result.is_err());
 
         let result = send!(safe_erc20_attacker.safeTransfer(
             erc20_address,
@@ -38,9 +83,45 @@ mod transfers {
         ));
 
         assert!(result.is_err(), "non-owner must not transfer contract tokens");
+
+        let increase_allowance_result = send!(safe_erc20_attacker
+            .safeIncreaseAllowance(
+                erc20_address,
+                attacker.address(),
+                uint!(1_U256)
+            ));
+        assert!(increase_allowance_result.is_err());
+        assert!(send!(erc20_attacker.transferFrom(
+            safe_erc20_addr,
+            attacker.address(),
+            uint!(1_U256)
+        ))
+        .is_err());
         assert_eq!(
             erc20_owner.balanceOf(safe_erc20_addr).call().await?,
-            uint!(10_U256)
+            uint!(9_U256)
+        );
+        assert_eq!(
+            erc20_owner.balanceOf(recipient.address()).call().await?,
+            uint!(1_U256)
+        );
+        assert_eq!(
+            erc20_owner.balanceOf(attacker.address()).call().await?,
+            U256::ZERO
+        );
+        assert_eq!(
+            erc20_owner
+                .allowance(victim.address(), safe_erc20_addr)
+                .call()
+                .await?,
+            uint!(2_U256)
+        );
+        assert_eq!(
+            erc20_owner
+                .allowance(safe_erc20_addr, attacker.address())
+                .call()
+                .await?,
+            U256::ZERO
         );
 
         Ok(())
@@ -52,8 +133,11 @@ mod transfers {
         let alice = crate::test_support::Account::new().await?;
         let bob = crate::test_support::Account::new().await?;
 
-        let safe_erc20_addr =
-            alice.as_deployer().deploy().await?.contract_address;
+        let safe_erc20_addr = alice
+            .as_deployer_with_initial_owner()
+            .deploy()
+            .await?
+            .contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
         let bob_addr = bob.address();
 
@@ -100,8 +184,11 @@ mod transfers {
         let alice = crate::test_support::Account::new().await?;
         let bob = crate::test_support::Account::new().await?;
 
-        let safe_erc20_addr =
-            alice.as_deployer().deploy().await?.contract_address;
+        let safe_erc20_addr = alice
+            .as_deployer_with_initial_owner()
+            .deploy()
+            .await?
+            .contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
         let bob_addr = bob.address();
 
@@ -142,8 +229,11 @@ mod transfers {
         let alice = crate::test_support::Account::new().await?;
         let bob = crate::test_support::Account::new().await?;
 
-        let safe_erc20_addr =
-            alice.as_deployer().deploy().await?.contract_address;
+        let safe_erc20_addr = alice
+            .as_deployer_with_initial_owner()
+            .deploy()
+            .await?
+            .contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
         let alice_addr = alice.address();
         let bob_addr = bob.address();
@@ -192,8 +282,11 @@ mod transfers {
         let alice = crate::test_support::Account::new().await?;
         let bob = crate::test_support::Account::new().await?;
 
-        let safe_erc20_addr =
-            alice.as_deployer().deploy().await?.contract_address;
+        let safe_erc20_addr = alice
+            .as_deployer_with_initial_owner()
+            .deploy()
+            .await?
+            .contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
         let bob_addr = bob.address();
 
@@ -242,8 +335,11 @@ mod transfers {
         let alice = crate::test_support::Account::new().await?;
         let bob = crate::test_support::Account::new().await?;
 
-        let safe_erc20_addr =
-            alice.as_deployer().deploy().await?.contract_address;
+        let safe_erc20_addr = alice
+            .as_deployer_with_initial_owner()
+            .deploy()
+            .await?
+            .contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
         let alice_addr = alice.address();
         let bob_addr = bob.address();
@@ -287,8 +383,11 @@ mod transfers {
         let alice = crate::test_support::Account::new().await?;
         let bob = crate::test_support::Account::new().await?;
 
-        let safe_erc20_addr =
-            alice.as_deployer().deploy().await?.contract_address;
+        let safe_erc20_addr = alice
+            .as_deployer_with_initial_owner()
+            .deploy()
+            .await?
+            .contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
         let alice_addr = alice.address();
         let bob_addr = bob.address();
@@ -344,8 +443,11 @@ mod approvals {
             let _test_context = crate::test_support::TestContext::new().await?;
             let alice = crate::test_support::Account::new().await?;
 
-            let safe_erc20_addr =
-                alice.as_deployer().deploy().await?.contract_address;
+            let safe_erc20_addr = alice
+                .as_deployer_with_initial_owner()
+                .deploy()
+                .await?
+                .contract_address;
             let safe_erc20_alice =
                 SafeErc20::new(safe_erc20_addr, &alice.wallet);
             let spender_addr = alice.address();
@@ -388,8 +490,11 @@ mod approvals {
             let _test_context = crate::test_support::TestContext::new().await?;
             let alice = crate::test_support::Account::new().await?;
 
-            let safe_erc20_addr =
-                alice.as_deployer().deploy().await?.contract_address;
+            let safe_erc20_addr = alice
+                .as_deployer_with_initial_owner()
+                .deploy()
+                .await?
+                .contract_address;
             let safe_erc20_alice =
                 SafeErc20::new(safe_erc20_addr, &alice.wallet);
             let spender_addr = alice.address();
@@ -430,8 +535,11 @@ mod approvals {
             let _test_context = crate::test_support::TestContext::new().await?;
             let alice = crate::test_support::Account::new().await?;
 
-            let safe_erc20_addr =
-                alice.as_deployer().deploy().await?.contract_address;
+            let safe_erc20_addr = alice
+                .as_deployer_with_initial_owner()
+                .deploy()
+                .await?
+                .contract_address;
             let safe_erc20_alice =
                 SafeErc20::new(safe_erc20_addr, &alice.wallet);
             let spender_addr = alice.address();
@@ -474,8 +582,11 @@ mod approvals {
             let _test_context = crate::test_support::TestContext::new().await?;
             let alice = crate::test_support::Account::new().await?;
 
-            let safe_erc20_addr =
-                alice.as_deployer().deploy().await?.contract_address;
+            let safe_erc20_addr = alice
+                .as_deployer_with_initial_owner()
+                .deploy()
+                .await?
+                .contract_address;
             let safe_erc20_alice =
                 SafeErc20::new(safe_erc20_addr, &alice.wallet);
             let spender_addr = alice.address();
@@ -508,8 +619,11 @@ mod approvals {
             let _test_context = crate::test_support::TestContext::new().await?;
             let alice = crate::test_support::Account::new().await?;
 
-            let safe_erc20_addr =
-                alice.as_deployer().deploy().await?.contract_address;
+            let safe_erc20_addr = alice
+                .as_deployer_with_initial_owner()
+                .deploy()
+                .await?
+                .contract_address;
             let safe_erc20_alice =
                 SafeErc20::new(safe_erc20_addr, &alice.wallet);
             let spender_addr = alice.address();
@@ -552,8 +666,11 @@ mod approvals {
             let _test_context = crate::test_support::TestContext::new().await?;
             let alice = crate::test_support::Account::new().await?;
 
-            let safe_erc20_addr =
-                alice.as_deployer().deploy().await?.contract_address;
+            let safe_erc20_addr = alice
+                .as_deployer_with_initial_owner()
+                .deploy()
+                .await?
+                .contract_address;
             let safe_erc20_alice =
                 SafeErc20::new(safe_erc20_addr, &alice.wallet);
             let spender_addr = alice.address();
@@ -598,8 +715,11 @@ mod approvals {
             let _test_context = crate::test_support::TestContext::new().await?;
             let alice = crate::test_support::Account::new().await?;
 
-            let safe_erc20_addr =
-                alice.as_deployer().deploy().await?.contract_address;
+            let safe_erc20_addr = alice
+                .as_deployer_with_initial_owner()
+                .deploy()
+                .await?
+                .contract_address;
             let safe_erc20_alice =
                 SafeErc20::new(safe_erc20_addr, &alice.wallet);
             let spender_addr = alice.address();
@@ -642,8 +762,11 @@ mod approvals {
             let _test_context = crate::test_support::TestContext::new().await?;
             let alice = crate::test_support::Account::new().await?;
 
-            let safe_erc20_addr =
-                alice.as_deployer().deploy().await?.contract_address;
+            let safe_erc20_addr = alice
+                .as_deployer_with_initial_owner()
+                .deploy()
+                .await?
+                .contract_address;
             let safe_erc20_alice =
                 SafeErc20::new(safe_erc20_addr, &alice.wallet);
             let spender_addr = alice.address();
@@ -688,8 +811,11 @@ mod approvals {
             let _test_context = crate::test_support::TestContext::new().await?;
             let alice = crate::test_support::Account::new().await?;
 
-            let safe_erc20_addr =
-                alice.as_deployer().deploy().await?.contract_address;
+            let safe_erc20_addr = alice
+                .as_deployer_with_initial_owner()
+                .deploy()
+                .await?
+                .contract_address;
             let safe_erc20_alice =
                 SafeErc20::new(safe_erc20_addr, &alice.wallet);
             let spender_addr = alice.address();
@@ -734,8 +860,11 @@ mod approvals {
             let _test_context = crate::test_support::TestContext::new().await?;
             let alice = crate::test_support::Account::new().await?;
 
-            let safe_erc20_addr =
-                alice.as_deployer().deploy().await?.contract_address;
+            let safe_erc20_addr = alice
+                .as_deployer_with_initial_owner()
+                .deploy()
+                .await?
+                .contract_address;
             let safe_erc20_alice =
                 SafeErc20::new(safe_erc20_addr, &alice.wallet);
             let spender_addr = alice.address();

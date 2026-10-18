@@ -141,6 +141,16 @@ impl Account {
             constructor_args: None,
         }
     }
+
+    /// Create a deployer configured for a contract constructor that takes an
+    /// initial owner address.
+    #[must_use]
+    pub fn as_deployer_with_initial_owner(&self) -> TestDeployer {
+        self.as_deployer().with_constructor(Constructor {
+            signature: "constructor(address)".to_owned(),
+            args: vec![self.address().to_string()],
+        })
+    }
 }
 
 /// A contract receipt with the deployed Stylus address and deployment logs.

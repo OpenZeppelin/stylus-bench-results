@@ -16,7 +16,8 @@ async fn reverts_on_transfer() -> eyre::Result<()> {
     let bob = crate::test_support::Account::new().await?;
     let has_no_code = crate::test_support::Account::new().await?;
 
-    let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let safe_erc20_addr =
+        alice.as_deployer_with_initial_owner().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
     let bob_addr = bob.address();
     let has_no_code_addr = has_no_code.address();
@@ -40,7 +41,8 @@ async fn returns_false_on_try_safe_transfer() -> eyre::Result<()> {
     let bob = crate::test_support::Account::new().await?;
     let has_no_code = crate::test_support::Account::new().await?;
 
-    let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let safe_erc20_addr =
+        alice.as_deployer_with_initial_owner().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
     let bob_addr = bob.address();
     let has_no_code_addr = has_no_code.address();
@@ -65,7 +67,8 @@ async fn reverts_on_transfer_from() -> eyre::Result<()> {
     let bob = crate::test_support::Account::new().await?;
     let has_no_code = crate::test_support::Account::new().await?;
 
-    let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let safe_erc20_addr =
+        alice.as_deployer_with_initial_owner().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
     let alice_addr = alice.address();
     let bob_addr = bob.address();
@@ -94,7 +97,8 @@ async fn returns_false_on_try_safe_transfer_from() -> eyre::Result<()> {
     let bob = crate::test_support::Account::new().await?;
     let has_no_code = crate::test_support::Account::new().await?;
 
-    let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let safe_erc20_addr =
+        alice.as_deployer_with_initial_owner().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
     let alice_addr = alice.address();
     let bob_addr = bob.address();
@@ -121,7 +125,8 @@ async fn reverts_on_increase_allowance() -> eyre::Result<()> {
     let bob = crate::test_support::Account::new().await?;
     let has_no_code = crate::test_support::Account::new().await?;
 
-    let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let safe_erc20_addr =
+        alice.as_deployer_with_initial_owner().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
     let bob_addr = bob.address();
     let has_no_code_addr = has_no_code.address();
@@ -148,7 +153,8 @@ async fn reverts_on_decrease_allowance() -> eyre::Result<()> {
     let bob = crate::test_support::Account::new().await?;
     let has_no_code = crate::test_support::Account::new().await?;
 
-    let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let safe_erc20_addr =
+        alice.as_deployer_with_initial_owner().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
     let bob_addr = bob.address();
     let has_no_code_addr = has_no_code.address();
@@ -175,7 +181,8 @@ async fn reverts_on_force_approve() -> eyre::Result<()> {
     let bob = crate::test_support::Account::new().await?;
     let has_no_code = crate::test_support::Account::new().await?;
 
-    let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let safe_erc20_addr =
+        alice.as_deployer_with_initial_owner().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
     let bob_addr = bob.address();
     let has_no_code_addr = has_no_code.address();
