@@ -28,6 +28,8 @@ pub struct Erc721Metadata {
 
 /// Interface for the optional metadata functions from the ERC-721 standard.
 #[interface_id]
+#[allow(missing_docs)]
+#[public]
 pub trait IErc721Metadata: IErc165 {
     /// The error type associated to this trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -115,11 +117,10 @@ impl Erc721Metadata {
         Ok(token_uri)
     }
 }
-
 #[cfg(test)]
 mod tests {
+    use crate::test_support::Contract;
     use alloy_primitives::{aliases::B32, Address};
-    use motsu::prelude::Contract;
 
     use super::*;
     use crate::{
@@ -170,14 +171,14 @@ mod tests {
 
     unsafe impl TopLevelStorage for Erc721MetadataExample {}
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn interface_id() {
         let actual = <Erc721MetadataExample as IErc721Metadata>::interface_id();
         let expected: B32 = 0x5b5e139f_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn supports_interface(
         contract: Contract<Erc721MetadataExample>,
         alice: Address,
@@ -193,7 +194,7 @@ mod tests {
         assert!(!contract.sender(alice).supports_interface(fake_interface_id));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn constructor(contract: Contract<Erc721MetadataExample>, alice: Address) {
         let name: String = "Erc721MetadataExample".to_string();
         let symbol: String = "OZ".to_string();
@@ -201,5 +202,37 @@ mod tests {
 
         assert_eq!(contract.sender(alice).name(), name);
         assert_eq!(contract.sender(alice).symbol(), symbol);
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn token_uri_requires_existing_token_and_uses_base_uri(
+        contract: Contract<Erc721MetadataExample>,
+        alice: Address,
+    ) {
+        let token_id = U256::from(17);
+        contract
+            .sender(alice)
+            .erc721
+            ._mint(alice, token_id)
+            .expect("should mint token");
+
+        assert_eq!(
+            contract.sender(alice).token_uri(token_id).unwrap(),
+            String::new()
+        );
+
+        contract
+            .sender(alice)
+            .metadata
+            .base_uri
+            .set_str("https://example.test/token/");
+        assert_eq!(
+            contract.sender(alice).token_uri(token_id).unwrap(),
+            "https://example.test/token/17"
+        );
+        assert!(contract
+            .sender(alice)
+            .token_uri(token_id + U256::ONE)
+            .is_err());
     }
 }

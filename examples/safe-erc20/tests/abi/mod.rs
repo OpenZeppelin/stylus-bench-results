@@ -17,6 +17,8 @@ sol!(
 
         error SafeErc20FailedOperation(address token);
         error SafeErc20FailedDecreaseAllowance(address spender, uint256 currentAllowance, uint256 requestedDecrease);
+        error OwnableUnauthorizedAccount(address account);
+        error OwnableInvalidOwner(address owner);
 
         // test-related events
         #[derive(Debug, PartialEq)]

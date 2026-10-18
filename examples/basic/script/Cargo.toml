@@ -7,8 +7,7 @@ publish = false
 version.workspace = true
 
 [dependencies]
-basic-example = { path = "../token" }
 alloy-primitives.workspace = true
 alloy.workspace = true
 tokio.workspace = true
-e2e.workspace = true
+stylus-tools.workspace = true

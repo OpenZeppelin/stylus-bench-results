@@ -1,0 +1,5 @@
+error[E0080]: evaluation panicked: Stylus interface_id: selector collision between `burn` (burn(U256)) and `collate_propagate_storage` (collate_propagate_storage(B128))
+ --> tests/ui/interface_id_selector_collision.rs:4:1
+  |
+4 | #[interface_id]
+  | ^^^^^^^^^^^^^^^ evaluation of `_` failed here

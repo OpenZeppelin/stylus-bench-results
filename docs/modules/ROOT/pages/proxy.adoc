@@ -2,7 +2,7 @@
 
 Proxy contracts are a fundamental pattern in smart contract development that allow you to separate the storage and logic of your contracts. This enables powerful features like upgradeability, gas optimization, and code reuse.
 
-The OpenZeppelin Stylus Contracts provides the `IProxy` trait, which implements a low-level proxy pattern using the Stylus https://docs.rs/stylus-sdk/0.9.0/stylus_sdk/call/fn.delegate_call.html[`delegate_call`] function. This allows you to delegate all calls to another contract while maintaining the same storage context.
+The OpenZeppelin Stylus Contracts provides the `IProxy` trait, which implements a low-level proxy pattern using the Stylus SDK call API. This allows you to delegate all calls to another contract while maintaining the same storage context.
 
 == Understanding Proxy Patterns
 
@@ -119,7 +119,7 @@ impl MyUpgradeableProxy {
     /// Admin function to update the implementation
     fn upgrade_implementation(&mut self, new_implementation: Address) -> Result<(), Vec<u8>> {
         // Only admin can upgrade
-        if self.admin.get() != msg::sender() {
+        if self.admin.get() != self.vm().msg_sender() {
             return Err("Only admin can upgrade".abi_encode());
         }
 
@@ -129,7 +129,7 @@ impl MyUpgradeableProxy {
 
     /// Admin function to transfer admin rights
     fn transfer_admin(&mut self, new_admin: Address) -> Result<(), Vec<u8>> {
-        if self.admin.get() != msg::sender() {
+        if self.admin.get() != self.vm().msg_sender() {
             return Err("Only admin can transfer admin".abi_encode());
         }
 
@@ -265,7 +265,7 @@ By structuring your proxy's storage this way, you ensure that both the proxy and
 
 * **Storage collisions**: Ensure proxy and implementation storage don't conflict.
 * **Missing validation**: Always validate implementation addresses.
-* **Incorrect delegatecall usage**: The proxy must use https://docs.rs/stylus-sdk/0.9.0/stylus_sdk/call/fn.delegate_call.html[`delegate_call`], not https://docs.rs/stylus-sdk/0.9.0/stylus_sdk/call/fn.call.html[`call`].
+* **Incorrect delegatecall usage**: The proxy must use the SDK's delegate-call API, not an ordinary call.
 * **Forgetting to implement IProxy**: The trait must be implemented for the fallback to work.
 
 == Working Example

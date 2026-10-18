@@ -1,3 +1,4 @@
+use crate::test_support::{receipt, Account};
 use alloy::{
     network::{AnyNetwork, EthereumWallet},
     primitives::Address,
@@ -6,7 +7,6 @@ use alloy::{
     sol_types::SolCall,
     uint,
 };
-use e2e::{receipt, Account};
 
 use crate::{
     report::{ContractReport, FunctionReport},
@@ -29,26 +29,33 @@ sol!(
     }
 );
 
+/// Run this contract benchmark in each cache and optimization mode.
+///
+/// # Errors
+///
+/// Returns an error if deployment, an RPC call, or receipt decoding fails.
 pub async fn bench() -> eyre::Result<ContractReport> {
-    ContractReport::generate("Erc1155", run).await
+    Box::pin(ContractReport::generate("Erc1155", run)).await
 }
 
+/// Deploy the contract and run its benchmarked calls.
+///
+/// # Errors
+///
+/// Returns an error if account setup, deployment, an RPC call, or receipt decoding fails.
+#[allow(clippy::large_futures)]
 pub async fn run(cache_opt: Opt) -> eyre::Result<Vec<FunctionReport>> {
     let alice = Account::new().await?;
     let alice_addr = alice.address();
-    let alice_wallet = ProviderBuilder::new()
-        .network::<AnyNetwork>()
-        .with_recommended_fillers()
+    let alice_wallet = ProviderBuilder::new_with_network::<AnyNetwork>()
         .wallet(EthereumWallet::from(alice.signer.clone()))
-        .on_http(alice.url().parse()?);
+        .connect_http(alice.url().parse()?);
 
     let bob = Account::new().await?;
     let bob_addr = bob.address();
-    let bob_wallet = ProviderBuilder::new()
-        .network::<AnyNetwork>()
-        .with_recommended_fillers()
+    let bob_wallet = ProviderBuilder::new_with_network::<AnyNetwork>()
         .wallet(EthereumWallet::from(bob.signer.clone()))
-        .on_http(bob.url().parse()?);
+        .connect_http(bob.url().parse()?);
 
     let contract_addr = deploy(&alice, cache_opt).await?;
 
@@ -71,25 +78,25 @@ pub async fn run(cache_opt: Opt) -> eyre::Result<Vec<FunctionReport>> {
     let data: alloy_primitives::Bytes = vec![].into();
 
     // IMPORTANT: Order matters!
-    use Erc1155::*;
+
     #[rustfmt::skip]
     let receipts = vec![
-        (mintCall::SIGNATURE, receipt!(contract.mint(alice_addr, token_1, value_1, data.clone()))?),
-        (mintBatchCall::SIGNATURE, receipt!(contract.mintBatch(alice_addr, ids.clone(), values.clone(), data.clone()))?),
-        (balanceOfCall::SIGNATURE, receipt!(contract.balanceOf(alice_addr, token_1))?),
-        (balanceOfBatchCall::SIGNATURE, receipt!(contract.balanceOfBatch(vec![alice_addr, bob_addr], vec![token_1, token_2]))?),
-        (setApprovalForAllCall::SIGNATURE, receipt!(contract.setApprovalForAll(bob_addr, true))?),
-        (isApprovedForAllCall::SIGNATURE, receipt!(contract.isApprovedForAll(alice_addr, bob_addr))?),
-        (safeTransferFromCall::SIGNATURE, receipt!(contract.safeTransferFrom(alice_addr, bob_addr, token_1, value_1, data.clone()))?),
-        (safeBatchTransferFromCall::SIGNATURE, receipt!(contract.safeBatchTransferFrom(alice_addr, bob_addr, ids.clone(), values.clone(), data))?),
+        (Erc1155::mintCall::SIGNATURE, receipt!(contract.mint(alice_addr, token_1, value_1, data.clone()))?),
+        (Erc1155::mintBatchCall::SIGNATURE, receipt!(contract.mintBatch(alice_addr, ids.clone(), values.clone(), data.clone()))?),
+        (Erc1155::balanceOfCall::SIGNATURE, receipt!(contract.balanceOf(alice_addr, token_1))?),
+        (Erc1155::balanceOfBatchCall::SIGNATURE, receipt!(contract.balanceOfBatch(vec![alice_addr, bob_addr], vec![token_1, token_2]))?),
+        (Erc1155::setApprovalForAllCall::SIGNATURE, receipt!(contract.setApprovalForAll(bob_addr, true))?),
+        (Erc1155::isApprovedForAllCall::SIGNATURE, receipt!(contract.isApprovedForAll(alice_addr, bob_addr))?),
+        (Erc1155::safeTransferFromCall::SIGNATURE, receipt!(contract.safeTransferFrom(alice_addr, bob_addr, token_1, value_1, data.clone()))?),
+        (Erc1155::safeBatchTransferFromCall::SIGNATURE, receipt!(contract.safeBatchTransferFrom(alice_addr, bob_addr, ids.clone(), values.clone(), data))?),
         // We should burn Bob's tokens on behalf of Bob, not Alice.
-        (burnCall::SIGNATURE, receipt!(contract_bob.burn(bob_addr, token_1, value_1))?),
-        (burnBatchCall::SIGNATURE, receipt!(contract_bob.burnBatch(bob_addr, ids, values))?),
+        (Erc1155::burnCall::SIGNATURE, receipt!(contract_bob.burn(bob_addr, token_1, value_1))?),
+        (Erc1155::burnBatchCall::SIGNATURE, receipt!(contract_bob.burnBatch(bob_addr, ids, values))?),
     ];
 
     receipts
         .into_iter()
-        .map(FunctionReport::new)
+        .map(|(signature, receipt)| FunctionReport::new(signature, &receipt))
         .collect::<eyre::Result<Vec<_>>>()
 }
 

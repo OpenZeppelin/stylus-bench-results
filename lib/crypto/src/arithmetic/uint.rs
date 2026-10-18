@@ -1155,6 +1155,7 @@ impl<const N: usize> WideUint<N> {
 
 #[cfg(test)]
 mod test {
+    use alloy_primitives::{U256 as AlloyU256, U512 as AlloyU512};
     use proptest::prelude::*;
 
     use crate::{
@@ -1467,5 +1468,308 @@ mod test {
 
             assert_eq!(uint, expected_uint);
         });
+    }
+
+    #[test]
+    fn arithmetic_matches_alloy_for_full_width_values() {
+        proptest!(|(left_limbs: [u64; 4], right_limbs: [u64; 4])| {
+            let left = U256::new(left_limbs);
+            let right = U256::new(right_limbs);
+            let reference_left = AlloyU256::from_limbs(left_limbs);
+            let reference_right = AlloyU256::from_limbs(right_limbs);
+
+            let (expected_sum, expected_carry) =
+                reference_left.overflowing_add(reference_right);
+            prop_assert_eq!(left.checked_add(&right), (
+                U256::new(expected_sum.into_limbs()),
+                expected_carry,
+            ));
+            let mut sum_assign = left;
+            prop_assert_eq!(sum_assign.checked_add_assign(&right), expected_carry);
+            prop_assert_eq!(sum_assign, U256::new(expected_sum.into_limbs()));
+
+            let (expected_difference, expected_borrow) =
+                reference_left.overflowing_sub(reference_right);
+            prop_assert_eq!(left.checked_sub(&right), (
+                U256::new(expected_difference.into_limbs()),
+                expected_borrow,
+            ));
+            let mut difference_assign = left;
+            prop_assert_eq!(
+                difference_assign.checked_sub_assign(&right),
+                expected_borrow,
+            );
+            prop_assert_eq!(
+                difference_assign,
+                U256::new(expected_difference.into_limbs()),
+            );
+
+            let expected_product: AlloyU512 =
+                reference_left.widening_mul(reference_right);
+            let expected_product_limbs = expected_product.into_limbs();
+            let mut expected_low = [0; 4];
+            expected_low.copy_from_slice(&expected_product_limbs[..4]);
+            let mut expected_high = [0; 4];
+            expected_high.copy_from_slice(&expected_product_limbs[4..]);
+            let (low, high) = left.widening_mul(&right);
+            prop_assert_eq!(low.into_limbs(), expected_low);
+            prop_assert_eq!(high.into_limbs(), expected_high);
+        });
+    }
+
+    #[test]
+    fn checked_arithmetic_propagates_carries_and_borrows_across_limbs() {
+        let one = U256::ONE;
+        let top_limbs = U256::new([u64::MAX, u64::MAX, 0, 0]);
+        assert_eq!(
+            top_limbs.checked_add(&one),
+            (U256::new([0, 0, 1, 0]), false),
+        );
+        assert_eq!(U256::MAX.checked_add(&one), (U256::ZERO, true));
+        assert_eq!(U256::ZERO.checked_sub(&one), (U256::MAX, true));
+
+        let (with_initial_carry, carry) =
+            U256::new([u64::MAX, 0, 0, 0]).adc(&U256::ZERO, true);
+        assert_eq!(with_initial_carry, U256::new([0, 1, 0, 0]));
+        assert!(!carry);
+
+        let mut shifted = U256::new([0, u64::MAX, 0, 0]);
+        assert!(!shifted.checked_mul2_assign());
+        assert_eq!(shifted, U256::new([0, u64::MAX - 1, 1, 0]));
+        let mut maximum = U256::MAX;
+        assert!(maximum.checked_mul2_assign());
+        assert_eq!(
+            maximum,
+            U256::new([u64::MAX - 1, u64::MAX, u64::MAX, u64::MAX])
+        );
+
+        let mut divided = U256::new([0, 0, 1, 0]);
+        divided.div2_assign();
+        assert_eq!(divided, U256::new([0, 1 << 63, 0, 0]));
+    }
+
+    #[test]
+    fn byte_bitwise_and_reference_views_round_trip() {
+        let value = U256::new([
+            0x0123_4567_89ab_cdef,
+            0xfedc_ba98_7654_3210,
+            0,
+            0x8000_0000_0000_0001,
+        ]);
+        assert_eq!(U256::from_le_slice(&value.into_bytes_le()), value);
+        assert!(value.get_bit(0));
+        assert!(value.get_bit(68));
+        assert!(value.get_bit(255));
+        assert!(!value.get_bit(U256::BITS));
+
+        let other = U256::new([0xff00, 0x00ff, 0xffff, 0]);
+        assert_eq!(
+            value ^ other,
+            U256::new([
+                0x0123_4567_89ab_32ef,
+                0xfedc_ba98_7654_32ef,
+                0xffff,
+                0x8000_0000_0000_0001,
+            ])
+        );
+        assert_eq!(
+            value & other,
+            U256::new([0xcdef & 0xff00, 0x3210 & 0x00ff, 0, 0])
+        );
+
+        let mut assigned = value;
+        assigned |= &other;
+        assert_eq!(assigned, value | other);
+        assigned ^= other;
+        assert_eq!(assigned, value & !other);
+        assigned &= other;
+        assert_eq!(assigned, value & !other & other);
+
+        let as_ref: &[u64] = value.as_ref();
+        assert_eq!(as_ref, value.as_limbs());
+        let mut as_mut = value;
+        as_mut.as_mut()[2] = 7;
+        assert_eq!(as_mut.as_limbs()[2], 7);
+        let slice_bits: Vec<bool> =
+            value.as_limbs().as_slice().bit_be_iter().collect();
+        assert_eq!(slice_bits.len(), U256::BITS);
+    }
+
+    #[test]
+    fn narrowing_and_primitive_conversions_reject_nonzero_high_bits() {
+        assert_eq!(U64::from_uint(U256::new([u64::MAX, 0, 0, 0])), U64::MAX);
+        assert!(std::panic::catch_unwind(|| {
+            U64::from_uint(U256::new([0, 1, 0, 0]))
+        })
+        .is_err());
+        assert!(std::panic::catch_unwind(
+            || U256::new([0, 0, 1, 0]).into_u128()
+        )
+        .is_err());
+        assert_eq!(Uint::<1>::from_u128(u128::from(u64::MAX)), U64::MAX);
+        assert!(std::panic::catch_unwind(|| Uint::<1>::from_u128(u128::MAX))
+            .is_err());
+        assert!(std::panic::catch_unwind(
+            || U256::new([256, 0, 0, 0]).into_u8()
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn default_wide_integer_and_byte_trait_edges() {
+        assert_eq!(U256::default(), U256::ZERO);
+
+        let value = U256::new([1, 2, 3, 4]);
+        assert!(value.is_odd());
+        assert!(!value.is_even());
+        assert_eq!(
+            value.cmp(&U256::new([1, 2, 3, 5])),
+            core::cmp::Ordering::Less
+        );
+        let bytes = BigInteger::into_bytes_le(value);
+        assert_eq!(bytes.len(), U256::BYTES);
+        assert_eq!(<U256 as BigInteger>::from_bytes_le(&bytes), value);
+
+        let wide = WideUint::<4>::new(U256::ZERO, U256::ONE);
+        assert_eq!(wide.num_bits(), U256::BITS + 1);
+        assert!(wide.get_bit(U256::BITS));
+        assert!(!wide.get_bit(U256::BITS - 1));
+        assert!(!wide.get_bit(U256::BITS * 2));
+
+        assert!(
+            std::panic::catch_unwind(|| U256::from_le_slice(&[0; 31])).is_err()
+        );
+        assert!(
+            std::panic::catch_unwind(|| from_str_radix::<4>("", 10)).is_err()
+        );
+        assert!(
+            std::panic::catch_unwind(|| from_str_radix::<4>("2", 1)).is_err()
+        );
+        assert!(std::panic::catch_unwind(|| from_str_hex::<4>("")).is_err());
+        assert!(std::panic::catch_unwind(|| from_str_hex::<4>("g")).is_err());
+        assert!(std::panic::catch_unwind(|| from_str_hex::<4>("é")).is_err());
+    }
+
+    #[test]
+    fn ordering_and_checked_conversions_cover_limb_and_empty_bounds() {
+        // The low limb says `left > right`, but the high limb decides the
+        // numeric ordering. This checks that comparisons keep scanning limbs.
+        let left = Uint::<2>::new([u64::MAX, 0]);
+        let right = Uint::<2>::new([0, 1]);
+        assert!(left.lt(&right));
+        assert!(left.le(&right));
+        assert!(!left.gt(&right));
+        assert!(!left.ge(&right));
+        assert!(right.gt(&left));
+        assert!(right.ge(&left));
+        assert!(!right.lt(&left));
+        assert!(!right.le(&left));
+
+        assert_eq!(Uint::<2>::MAX.wrapping_add(&Uint::<2>::ONE), Uint::ZERO);
+        assert!(std::panic::catch_unwind(|| {
+            Uint::<2>::MAX.add(&Uint::<2>::ONE)
+        })
+        .is_err());
+        assert!(std::panic::catch_unwind(|| {
+            Uint::<2>::MAX.mul(&Uint::<2>::from_u64(2))
+        })
+        .is_err());
+
+        let value = Uint::<2>::from_u128((1u128 << 64) | 3);
+        assert_eq!(value.into_u128(), (1u128 << 64) | 3);
+
+        let no_limbs = Uint::<0>::new([]);
+        assert!(std::panic::catch_unwind(|| Uint::<0>::from_u8(1)).is_err());
+        assert!(std::panic::catch_unwind(|| Uint::<0>::from_u128(1)).is_err());
+        assert!(std::panic::catch_unwind(|| no_limbs.into_u8()).is_err());
+        assert!(std::panic::catch_unwind(|| no_limbs.into_u128()).is_err());
+    }
+
+    #[test]
+    fn bigint_trait_methods_and_hex_formatting_match_inherent_operations() {
+        let value = U256::new([1, 2, 3, 4]);
+        assert!(<U256 as BigInteger>::is_odd(&value));
+        assert!(!<U256 as BigInteger>::is_even(&value));
+        assert!(!<U256 as BigInteger>::is_zero(&value));
+        assert_eq!(<U256 as BigInteger>::num_bits(&value), value.num_bits());
+        assert_eq!(<U256 as BigInteger>::get_bit(&value, 0), value.get_bit(0));
+        assert_eq!(
+            <U256 as BigInteger>::get_bit(&value, U256::BITS),
+            value.get_bit(U256::BITS)
+        );
+        assert!(<U256 as BigInteger>::is_zero(&U256::ZERO));
+        assert!(<U256 as BigInteger>::is_even(&U256::ZERO));
+
+        let one_limb = Uint::<1>::new([0xabc]);
+        assert_eq!(format!("{one_limb:X}"), "0000000000000ABC");
+        assert_eq!(format!("{one_limb}"), "0000000000000ABC");
+        assert_eq!(format!("{one_limb:?}"), "0000000000000ABC");
+    }
+
+    #[test]
+    fn runtime_comparisons_and_assignments_cover_carry_paths() {
+        use std::hint::black_box;
+
+        let greater = black_box(Uint::<2>::new([0, 1]));
+        let lesser = black_box(Uint::<2>::new([u64::MAX, 0]));
+        let ge: fn(&Uint<2>, &Uint<2>) -> bool = black_box(Uint::<2>::ge);
+        let gt: fn(&Uint<2>, &Uint<2>) -> bool = black_box(Uint::<2>::gt);
+        let le: fn(&Uint<2>, &Uint<2>) -> bool = black_box(Uint::<2>::le);
+        let lt: fn(&Uint<2>, &Uint<2>) -> bool = black_box(Uint::<2>::lt);
+        assert!(ge(&greater, &lesser));
+        assert!(gt(&greater, &lesser));
+        assert!(!le(&greater, &lesser));
+        assert!(!lt(&greater, &lesser));
+
+        let lesser = black_box(Uint::<2>::new([u64::MAX, 0]));
+        let greater = black_box(Uint::<2>::new([0, 1]));
+        assert!(!ge(&lesser, &greater));
+        assert!(!gt(&lesser, &greater));
+        assert!(le(&lesser, &greater));
+        assert!(lt(&lesser, &greater));
+        let cmp: fn(&Uint<2>, &Uint<2>) -> core::cmp::Ordering =
+            black_box(<Uint<2> as Ord>::cmp);
+        assert_eq!(cmp(&greater, &greater), core::cmp::Ordering::Equal);
+
+        let mut add = black_box(U256::new([u64::MAX, u64::MAX, 0, 0]));
+        let checked_add_assign: fn(&mut U256, &U256) -> bool =
+            black_box(U256::checked_add_assign);
+        assert!(!checked_add_assign(&mut add, &U256::ONE));
+        assert_eq!(add, U256::new([0, 0, 1, 0]));
+        let mut add_overflow = black_box(U256::MAX);
+        assert!(checked_add_assign(&mut add_overflow, &U256::ONE));
+        assert_eq!(add_overflow, U256::ZERO);
+
+        let mut subtract = black_box(U256::new([0, 1, 0, 0]));
+        let checked_sub_assign: fn(&mut U256, &U256) -> bool =
+            black_box(U256::checked_sub_assign);
+        assert!(!checked_sub_assign(&mut subtract, &U256::ONE));
+        assert_eq!(subtract, U256::new([u64::MAX, 0, 0, 0]));
+        let mut subtract_underflow = black_box(U256::ZERO);
+        assert!(checked_sub_assign(&mut subtract_underflow, &U256::ONE));
+        assert_eq!(subtract_underflow, U256::MAX);
+
+        let mut shifted = black_box(U256::new([0, 1, 0, 0]));
+        let checked_mul2_assign: fn(&mut U256) -> bool =
+            black_box(U256::checked_mul2_assign);
+        assert!(!checked_mul2_assign(&mut shifted));
+        assert_eq!(shifted, U256::new([0, 2, 0, 0]));
+        let mut shift_overflow = black_box(U256::MAX);
+        assert!(checked_mul2_assign(&mut shift_overflow));
+        assert_eq!(
+            shift_overflow,
+            U256::new([u64::MAX - 1, u64::MAX, u64::MAX, u64::MAX])
+        );
+
+        let lhs = black_box(U256::new([u64::MAX, u64::MAX, 1, 0]));
+        let rhs = black_box(U256::new([3, 2, 0, 0]));
+        let widening_mul: fn(&U256, &U256) -> (U256, U256) =
+            black_box(U256::widening_mul);
+        let (low, high) = widening_mul(&lhs, &rhs);
+        let expected: AlloyU512 = AlloyU256::from_limbs(lhs.into_limbs())
+            .widening_mul(AlloyU256::from_limbs(rhs.into_limbs()));
+        let limbs: [u64; 8] = expected.into_limbs();
+        assert_eq!(low.into_limbs(), limbs[..4]);
+        assert_eq!(high.into_limbs(), limbs[4..]);
     }
 }

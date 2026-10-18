@@ -1,8 +1,10 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::Revert;
 use abi::PrecompilesExample;
 use alloy::primitives::{address, b256, uint, Address, B256};
-use e2e::{Account, Revert};
 use eyre::Result;
 use openzeppelin_stylus::utils::cryptography::ecdsa::SIGNATURE_S_UPPER_BOUND;
 
@@ -23,26 +25,29 @@ const ADDRESS: Address = address!("f39Fd6e51aad88F6F4ce6aB8827279cffFb92266");
 // Integration Tests: ECDSA
 // ============================================================================
 
-#[e2e::test]
-async fn ecrecover_works(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn ecrecover_works() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = PrecompilesExample::new(contract_addr, &alice.wallet);
 
     let recovered = contract
         .ecRecoverExample(ECDSA_HASH, ECDSA_V, ECDSA_R, ECDSA_S)
         .call()
-        .await?
-        .recovered;
+        .await?;
 
     assert_eq!(ADDRESS, recovered);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn different_hash_recovers_different_address(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn different_hash_recovers_different_address() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = PrecompilesExample::new(contract_addr, &alice.wallet);
 
@@ -52,16 +57,18 @@ async fn different_hash_recovers_different_address(
     let recovered = contract
         .ecRecoverExample(hash, ECDSA_V, ECDSA_R, ECDSA_S)
         .call()
-        .await?
-        .recovered;
+        .await?;
 
     assert_ne!(ADDRESS, recovered);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn different_v_recovers_different_address(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn different_v_recovers_different_address() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = PrecompilesExample::new(contract_addr, &alice.wallet);
 
@@ -70,16 +77,18 @@ async fn different_v_recovers_different_address(alice: Account) -> Result<()> {
     let recovered = contract
         .ecRecoverExample(ECDSA_HASH, v, ECDSA_R, ECDSA_S)
         .call()
-        .await?
-        .recovered;
+        .await?;
 
     assert_ne!(ADDRESS, recovered);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn different_r_recovers_different_address(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn different_r_recovers_different_address() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = PrecompilesExample::new(contract_addr, &alice.wallet);
 
@@ -90,16 +99,18 @@ async fn different_r_recovers_different_address(alice: Account) -> Result<()> {
     let recovered = contract
         .ecRecoverExample(ECDSA_HASH, ECDSA_V, r, ECDSA_S)
         .call()
-        .await?
-        .recovered;
+        .await?;
 
     assert_ne!(ADDRESS, recovered);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn different_s_recovers_different_address(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn different_s_recovers_different_address() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = PrecompilesExample::new(contract_addr, &alice.wallet);
 
@@ -109,16 +120,18 @@ async fn different_s_recovers_different_address(alice: Account) -> Result<()> {
     let recovered = contract
         .ecRecoverExample(ECDSA_HASH, ECDSA_V, ECDSA_R, s)
         .call()
-        .await?
-        .recovered;
+        .await?;
 
     assert_ne!(ADDRESS, recovered);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn recovers_from_v_r_s(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn recovers_from_v_r_s() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = PrecompilesExample::new(contract_addr, &alice.wallet);
 
@@ -136,16 +149,18 @@ async fn recovers_from_v_r_s(alice: Account) -> Result<()> {
             signature.s().into(),
         )
         .call()
-        .await?
-        .recovered;
+        .await?;
 
     assert_eq!(alice.address(), recovered);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn rejects_v0_with_invalid_signature_error(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn rejects_v0_with_invalid_signature_error() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = PrecompilesExample::new(contract_addr, &alice.wallet);
 
@@ -161,8 +176,11 @@ async fn rejects_v0_with_invalid_signature_error(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn rejects_v1_with_invalid_signature_error(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn rejects_v1_with_invalid_signature_error() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = PrecompilesExample::new(contract_addr, &alice.wallet);
 
@@ -178,8 +196,11 @@ async fn rejects_v1_with_invalid_signature_error(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn error_when_higher_s(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn error_when_higher_s() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = PrecompilesExample::new(contract_addr, &alice.wallet);
 
@@ -200,10 +221,11 @@ async fn error_when_higher_s(alice: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn p256_verify_returns_true_on_successful_verification(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn p256_verify_returns_true_on_successful_verification() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = PrecompilesExample::new(contract_addr, &alice.wallet);
 
@@ -224,18 +246,18 @@ async fn p256_verify_returns_true_on_successful_verification(
         "c7787964eaac00e5921fb1498a60f4606766b3d9685001558d1a974e7341513e"
     );
 
-    let result =
-        contract.p256VerifyExample(hash, r, s, x, y).call().await?.result;
+    let result = contract.p256VerifyExample(hash, r, s, x, y).call().await?;
 
     assert!(result);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn p256_verify_returns_false_on_failed_verification(
-    alice: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn p256_verify_returns_false_on_failed_verification() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = PrecompilesExample::new(contract_addr, &alice.wallet);
 
@@ -259,8 +281,7 @@ async fn p256_verify_returns_false_on_failed_verification(
     let result = contract
         .p256VerifyExample(hash, invalid_r, invalid_s, x, y)
         .call()
-        .await?
-        .result;
+        .await?;
 
     assert!(!result);
 

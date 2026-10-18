@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 use alloy_primitives::{Address, U256};
 use openzeppelin_stylus_proc::interface_id;
-use stylus_sdk::msg;
+use stylus_sdk::prelude::{public, HostAccess, MessageAccess};
 
 use crate::token::erc1155::{
     self, ERC1155MissingApprovalForAll, Erc1155, IErc1155,
@@ -13,6 +13,8 @@ use crate::token::erc1155::{
 /// Extension of [`Erc1155`] that allows token holders to destroy both their
 /// own tokens and those that they have been approved to use.
 #[interface_id]
+#[allow(missing_docs)]
+#[public]
 pub trait IErc1155Burnable {
     /// The error type associated to this trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -69,6 +71,7 @@ pub trait IErc1155Burnable {
     ) -> Result<(), Self::Error>;
 }
 
+#[public]
 impl IErc1155Burnable for Erc1155 {
     type Error = erc1155::Error;
 
@@ -77,7 +80,7 @@ impl IErc1155Burnable for Erc1155 {
         account: Address,
         token_id: U256,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc1155::Error> {
         self.ensure_approved_or_owner(account)?;
         self._burn(account, token_id, value)
     }
@@ -87,7 +90,7 @@ impl IErc1155Burnable for Erc1155 {
         account: Address,
         token_ids: Vec<U256>,
         values: Vec<U256>,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc1155::Error> {
         self.ensure_approved_or_owner(account)?;
         self._burn_batch(account, token_ids, values)
     }
@@ -98,7 +101,7 @@ impl Erc1155 {
         &self,
         account: Address,
     ) -> Result<(), erc1155::Error> {
-        let sender = msg::sender();
+        let sender = self.vm().msg_sender();
         if account != sender && !self.is_approved_for_all(account, sender) {
             return Err(erc1155::Error::MissingApprovalForAll(
                 ERC1155MissingApprovalForAll {
@@ -110,11 +113,10 @@ impl Erc1155 {
         Ok(())
     }
 }
-
 #[cfg(test)]
 mod tests {
+    use crate::test_support::Contract;
     use alloy_primitives::{Address, U256};
-    use motsu::prelude::Contract;
 
     use super::IErc1155Burnable;
     use crate::token::erc1155::{
@@ -151,7 +153,7 @@ mod tests {
         }
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn burns(contract: Contract<Erc1155>, alice: Address) {
         let (token_ids, values) = contract.sender(alice).init(alice, 1);
 
@@ -168,7 +170,7 @@ mod tests {
         assert_eq!(U256::ZERO, balance);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn burns_with_approval(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -194,7 +196,7 @@ mod tests {
         assert_eq!(U256::ZERO, balance);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_missing_approval_burns(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -216,7 +218,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_invalid_sender_burns(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -242,7 +244,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_insufficient_balance_burn(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -269,7 +271,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn burns_batch(contract: Contract<Erc1155>, alice: Address) {
         let (token_ids, values) = contract.sender(alice).init(alice, 4);
 
@@ -289,7 +291,7 @@ mod tests {
         }
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn burns_batch_with_approval(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -318,7 +320,7 @@ mod tests {
         }
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_missing_approval_burn_batch(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -340,7 +342,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_invalid_sender_burn_batch(
         contract: Contract<Erc1155>,
         alice: Address,
@@ -368,7 +370,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_insufficient_balance_burn_batch(
         contract: Contract<Erc1155>,
         alice: Address,

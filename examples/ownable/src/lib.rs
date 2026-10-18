@@ -86,11 +86,7 @@ impl IErc20 for OwnableExample {
         self.erc20.balance_of(account)
     }
 
-    fn transfer(
-        &mut self,
-        to: Address,
-        value: U256,
-    ) -> Result<bool, Self::Error> {
+    fn transfer(&mut self, to: Address, value: U256) -> Result<bool, Error> {
         self.ownable.only_owner()?;
         Ok(self.erc20.transfer(to, value)?)
     }
@@ -103,7 +99,7 @@ impl IErc20 for OwnableExample {
         &mut self,
         spender: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, Error> {
         Ok(self.erc20.approve(spender, value)?)
     }
 
@@ -112,7 +108,7 @@ impl IErc20 for OwnableExample {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, Error> {
         Ok(self.erc20.transfer_from(from, to, value)?)
     }
 }

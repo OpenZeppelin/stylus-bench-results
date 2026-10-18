@@ -38,11 +38,11 @@ impl Erc721WrapperExample {
 impl IErc721 for Erc721WrapperExample {
     type Error = erc721::Error;
 
-    fn balance_of(&self, owner: Address) -> Result<U256, Self::Error> {
+    fn balance_of(&self, owner: Address) -> Result<U256, erc721::Error> {
         self.erc721.balance_of(owner)
     }
 
-    fn owner_of(&self, token_id: U256) -> Result<Address, Self::Error> {
+    fn owner_of(&self, token_id: U256) -> Result<Address, erc721::Error> {
         self.erc721.owner_of(token_id)
     }
 
@@ -51,7 +51,7 @@ impl IErc721 for Erc721WrapperExample {
         from: Address,
         to: Address,
         token_id: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc721::Error> {
         self.erc721.safe_transfer_from(from, to, token_id)
     }
 
@@ -61,7 +61,7 @@ impl IErc721 for Erc721WrapperExample {
         to: Address,
         token_id: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc721::Error> {
         self.erc721.safe_transfer_from_with_data(from, to, token_id, data)
     }
 
@@ -70,7 +70,7 @@ impl IErc721 for Erc721WrapperExample {
         from: Address,
         to: Address,
         token_id: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc721::Error> {
         self.erc721.transfer_from(from, to, token_id)
     }
 
@@ -78,7 +78,7 @@ impl IErc721 for Erc721WrapperExample {
         &mut self,
         to: Address,
         token_id: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc721::Error> {
         self.erc721.approve(to, token_id)
     }
 
@@ -86,11 +86,11 @@ impl IErc721 for Erc721WrapperExample {
         &mut self,
         to: Address,
         approved: bool,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc721::Error> {
         self.erc721.set_approval_for_all(to, approved)
     }
 
-    fn get_approved(&self, token_id: U256) -> Result<Address, Self::Error> {
+    fn get_approved(&self, token_id: U256) -> Result<Address, erc721::Error> {
         self.erc721.get_approved(token_id)
     }
 
@@ -103,7 +103,7 @@ impl IErc721 for Erc721WrapperExample {
 impl IErc721Burnable for Erc721WrapperExample {
     type Error = erc721::Error;
 
-    fn burn(&mut self, token_id: U256) -> Result<(), Self::Error> {
+    fn burn(&mut self, token_id: U256) -> Result<(), erc721::Error> {
         self.erc721._burn(token_id)
     }
 }
@@ -120,7 +120,7 @@ impl IErc721Wrapper for Erc721WrapperExample {
         &mut self,
         account: Address,
         token_ids: Vec<U256>,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, wrapper::Error> {
         self.erc721_wrapper.deposit_for(account, token_ids, &mut self.erc721)
     }
 
@@ -128,7 +128,7 @@ impl IErc721Wrapper for Erc721WrapperExample {
         &mut self,
         account: Address,
         token_ids: Vec<U256>,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, wrapper::Error> {
         self.erc721_wrapper.withdraw_to(account, token_ids, &mut self.erc721)
     }
 }

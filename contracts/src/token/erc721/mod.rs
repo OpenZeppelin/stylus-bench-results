@@ -9,10 +9,10 @@ use alloy_primitives::{aliases::B32, uint, Address, U128, U256};
 use openzeppelin_stylus_proc::interface_id;
 use stylus_sdk::{
     abi::Bytes,
-    call::{self, Call, MethodError},
-    evm, function_selector, msg,
+    function_selector,
     prelude::*,
     storage::{StorageAddress, StorageBool, StorageMap, StorageU256},
+    stylus_core::calls::errors::MethodError,
 };
 
 use crate::utils::{
@@ -207,6 +207,8 @@ unsafe impl TopLevelStorage for Erc721 {}
 
 /// Required interface of an [`Erc721`] compliant contract.
 #[interface_id]
+#[allow(missing_docs)]
+#[public]
 pub trait IErc721: IErc165 {
     /// The error type associated to this ERC-721 trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -370,7 +372,7 @@ pub trait IErc721: IErc165 {
     /// * `operator` - Account to add to the set of authorized operators.
     /// * `approved` - Flag that determines whether or not permission will be
     ///   granted to `operator`. If true, this means `operator` will be allowed
-    ///   to manage `msg::sender`'s assets.
+    ///   to manage the message sender's assets.
     ///
     /// # Errors
     ///
@@ -416,14 +418,14 @@ impl Erc721 {}
 impl IErc721 for Erc721 {
     type Error = Error;
 
-    fn balance_of(&self, owner: Address) -> Result<U256, Self::Error> {
+    fn balance_of(&self, owner: Address) -> Result<U256, Error> {
         if owner.is_zero() {
             return Err(ERC721InvalidOwner { owner: Address::ZERO }.into());
         }
         Ok(self.balances.get(owner))
     }
 
-    fn owner_of(&self, token_id: U256) -> Result<Address, Self::Error> {
+    fn owner_of(&self, token_id: U256) -> Result<Address, Error> {
         self._require_owned(token_id)
     }
 
@@ -432,7 +434,7 @@ impl IErc721 for Erc721 {
         from: Address,
         to: Address,
         token_id: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         self.safe_transfer_from_with_data(from, to, token_id, vec![].into())
     }
 
@@ -443,9 +445,15 @@ impl IErc721 for Erc721 {
         to: Address,
         token_id: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         self.transfer_from(from, to, token_id)?;
-        self._check_on_erc721_received(msg::sender(), from, to, token_id, &data)
+        self._check_on_erc721_received(
+            self.vm().msg_sender(),
+            from,
+            to,
+            token_id,
+            &data,
+        )
     }
 
     fn transfer_from(
@@ -453,7 +461,7 @@ impl IErc721 for Erc721 {
         from: Address,
         to: Address,
         token_id: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         if to.is_zero() {
             return Err(
                 ERC721InvalidReceiver { receiver: Address::ZERO }.into()
@@ -463,7 +471,8 @@ impl IErc721 for Erc721 {
         // Setting an "auth" argument enables the `_is_authorized` check which
         // verifies that the token exists (`from != 0`). Therefore, it is
         // not needed to verify that the return value is not 0 here.
-        let previous_owner = self._update(to, token_id, msg::sender())?;
+        let previous_owner =
+            self._update(to, token_id, self.vm().msg_sender())?;
         if previous_owner != from {
             return Err(ERC721IncorrectOwner {
                 sender: from,
@@ -475,23 +484,19 @@ impl IErc721 for Erc721 {
         Ok(())
     }
 
-    fn approve(
-        &mut self,
-        to: Address,
-        token_id: U256,
-    ) -> Result<(), Self::Error> {
-        self._approve(to, token_id, msg::sender(), true)
+    fn approve(&mut self, to: Address, token_id: U256) -> Result<(), Error> {
+        self._approve(to, token_id, self.vm().msg_sender(), true)
     }
 
     fn set_approval_for_all(
         &mut self,
         operator: Address,
         approved: bool,
-    ) -> Result<(), Self::Error> {
-        self._set_approval_for_all(msg::sender(), operator, approved)
+    ) -> Result<(), Error> {
+        self._set_approval_for_all(self.vm().msg_sender(), operator, approved)
     }
 
-    fn get_approved(&self, token_id: U256) -> Result<Address, Self::Error> {
+    fn get_approved(&self, token_id: U256) -> Result<Address, Error> {
         self._require_owned(token_id)?;
         Ok(self._get_approved(token_id))
     }
@@ -681,7 +686,7 @@ impl Erc721 {
         }
 
         self.owners.setter(token_id).set(to);
-        evm::log(Transfer { from, to, token_id });
+        self.vm().log(Transfer { from, to, token_id });
         Ok(from)
     }
 
@@ -751,7 +756,7 @@ impl Erc721 {
     ) -> Result<(), Error> {
         self._mint(to, token_id)?;
         self._check_on_erc721_received(
-            msg::sender(),
+            self.vm().msg_sender(),
             Address::ZERO,
             to,
             token_id,
@@ -789,7 +794,7 @@ impl Erc721 {
     /// Transfers `token_id` from `from` to `to`.
     ///
     /// As opposed to [`Self::transfer_from`], this imposes no restrictions on
-    /// `msg::sender`.
+    /// the message sender.
     ///
     /// # Arguments
     ///
@@ -871,7 +876,13 @@ impl Erc721 {
         data: &Bytes,
     ) -> Result<(), Error> {
         self._transfer(from, to, token_id)?;
-        self._check_on_erc721_received(msg::sender(), from, to, token_id, data)
+        self._check_on_erc721_received(
+            self.vm().msg_sender(),
+            from,
+            to,
+            token_id,
+            data,
+        )
     }
 
     /// Approve `to` to operate on `token_id`.
@@ -918,7 +929,7 @@ impl Erc721 {
             }
 
             if emit_event {
-                evm::log(Approval { owner, approved: to, token_id });
+                self.vm().log(Approval { owner, approved: to, token_id });
             }
         }
 
@@ -953,7 +964,7 @@ impl Erc721 {
         }
 
         self.operator_approvals.setter(owner).setter(operator).set(approved);
-        evm::log(ApprovalForAll { owner, operator, approved });
+        self.vm().log(ApprovalForAll { owner, operator, approved });
         Ok(())
     }
 
@@ -982,7 +993,7 @@ impl Erc721 {
     /// Performs an acceptance check for the provided `operator` by calling
     /// [`IErc721Receiver::on_erc721_received`] on the `to` address. The
     /// `operator` is generally the address that initiated the token transfer
-    /// (i.e. `msg::sender()`).
+    /// (for example, `self.vm().msg_sender()`).
     ///
     /// The acceptance call is not executed and treated as a no-op if the
     /// target address doesn't contain code (i.e. an EOA). Otherwise, the
@@ -1014,13 +1025,14 @@ impl Erc721 {
         token_id: U256,
         data: &Bytes,
     ) -> Result<(), Error> {
-        if !to.has_code() {
+        if self.vm().code_size(to) == 0 {
             return Ok(());
         }
 
         let receiver = IErc721ReceiverInterface::new(to);
-        let call = Call::new_in(self);
+        let call = Call::new_mutating(self);
         let result = receiver.on_erc_721_received(
+            self.vm(),
             call,
             operator,
             from,
@@ -1031,7 +1043,10 @@ impl Erc721 {
         let id = match result {
             Ok(id) => id,
             Err(e) => {
-                if let call::Error::Revert(ref reason) = e {
+                if let stylus_sdk::stylus_core::calls::errors::Error::Revert(
+                    ref reason,
+                ) = e
+                {
                     if !reason.is_empty() {
                         return Err(Error::InvalidReceiverWithReason(
                             InvalidReceiverWithReason {
@@ -1055,24 +1070,32 @@ impl Erc721 {
         Ok(())
     }
 }
-
 #[cfg(test)]
 mod tests {
+    use crate::test_support::*;
     use alloy_primitives::{aliases::B32, fixed_bytes, uint, Address, U256};
-    use motsu::prelude::*;
+    use alloy_sol_types::{sol, SolCall, SolError, SolValue};
+    use stylus_sdk::stylus_core::calls::errors::MethodError;
     use stylus_sdk::{abi::Bytes, prelude::*};
 
     use super::{
         ERC721IncorrectOwner, ERC721InsufficientApproval,
         ERC721InvalidApprover, ERC721InvalidOperator, ERC721InvalidOwner,
         ERC721InvalidReceiver, ERC721InvalidSender, ERC721NonexistentToken,
-        Erc721, Error, IErc721,
+        Erc721, Error, IErc721, InvalidReceiverWithReason,
+        RECEIVER_FN_SELECTOR,
     };
     use crate::utils::introspection::erc165::IErc165;
 
     const TOKEN_ID: U256 = uint!(1_U256);
 
-    #[motsu::test]
+    sol! {
+        interface Erc721ReceiverTest {
+            function onERC721Received(address operator, address from, uint256 token_id, bytes data) external returns (bytes4);
+        }
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_checking_balance_of_invalid_owner(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1088,7 +1111,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn balance_of_zero_balance(contract: Contract<Erc721>, owner: Address) {
         let balance = contract
             .sender(owner)
@@ -1097,7 +1120,7 @@ mod tests {
         assert_eq!(U256::ZERO, balance);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_checking_owner_of_nonexistent_token(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1115,7 +1138,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn mints(contract: Contract<Erc721>, alice: Address) {
         let initial_balance = contract
             .sender(alice)
@@ -1140,7 +1163,7 @@ mod tests {
         assert_eq!(initial_balance + uint!(1_U256), balance);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_minting_token_id_twice(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1160,7 +1183,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_minting_token_invalid_receiver(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1180,7 +1203,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_mints(contract: Contract<Erc721>, alice: Address) {
         let initial_balance = contract
             .sender(alice)
@@ -1206,7 +1229,7 @@ mod tests {
         assert_eq!(initial_balance + uint!(1_U256), balance);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_safe_mint_token_id_twice(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1227,7 +1250,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_safe_mint_invalid_receiver(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1247,7 +1270,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn transfers_from(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1268,7 +1291,7 @@ mod tests {
         assert_eq!(owner, bob);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn transfers_from_approved_token(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1293,7 +1316,7 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn transfers_from_approved_for_all(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1325,7 +1348,7 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_transfer_from_transfers_to_invalid_receiver(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1356,7 +1379,7 @@ mod tests {
         assert_eq!(alice, owner);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_transfer_from_transfers_from_incorrect_owner(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1388,7 +1411,7 @@ mod tests {
         // assert_eq!(alice, owner);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_transfer_from_transfers_with_insufficient_approval(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1411,7 +1434,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_transfer_from_transfers_nonexistent_token(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1429,7 +1452,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_transfers_from(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1453,7 +1476,7 @@ mod tests {
         assert_eq!(owner, bob);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_transfers_from_approved_token(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1475,7 +1498,7 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_transfers_from_approved_for_all(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1507,7 +1530,7 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_safe_transfer_to_invalid_receiver(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1538,7 +1561,7 @@ mod tests {
         assert_eq!(alice, owner);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_safe_transfer_from_transfers_from_incorrect_owner(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1570,7 +1593,7 @@ mod tests {
         // assert_eq!(alice, owner);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_safe_transfer_from_transfers_with_insufficient_approval(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1593,7 +1616,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_safe_transfer_from_transfers_nonexistent_token(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1611,7 +1634,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_transfers_from_with_data(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1640,7 +1663,7 @@ mod tests {
         assert_eq!(owner, bob);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_transfers_from_with_data_approved_token(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1670,7 +1693,7 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_transfers_from_with_data_approved_for_all(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1707,7 +1730,7 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_safe_transfer_from_with_data_transfers_to_invalid_receiver(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1743,7 +1766,7 @@ mod tests {
         assert_eq!(alice, owner);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_safe_transfer_from_with_data_transfers_from_incorrect_owner(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1782,7 +1805,7 @@ mod tests {
         // assert_eq!(alice, owner);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_safe_transfer_from_with_data_transfers_with_insufficient_approval(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1810,7 +1833,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_safe_transfer_from_with_data_transfers_nonexistent_token(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1833,7 +1856,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_approve_for_nonexistent_token(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1852,7 +1875,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_approve_by_invalid_approver(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1877,7 +1900,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_approval_for_all_for_invalid_operator(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1897,7 +1920,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_get_approved_of_nonexistent_token(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1915,7 +1938,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn owner_of_works(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1930,13 +1953,13 @@ mod tests {
         assert_eq!(bob, owner);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn owner_of_nonexistent_token(contract: Contract<Erc721>, alice: Address) {
         let owner = contract.sender(alice)._owner_of(TOKEN_ID);
         assert_eq!(Address::ZERO, owner);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn get_approved_nonexistent_token(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1945,7 +1968,7 @@ mod tests {
         assert_eq!(Address::ZERO, approved);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn get_approved_token_without_approval(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1958,7 +1981,7 @@ mod tests {
         assert_eq!(Address::ZERO, approved);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn get_approved_token_with_approval(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1975,9 +1998,15 @@ mod tests {
 
         let approved = contract.sender(alice)._get_approved(TOKEN_ID);
         assert_eq!(bob, approved);
+
+        let approved = contract
+            .sender(alice)
+            .get_approved(TOKEN_ID)
+            .expect("should return the approved address for an owned token");
+        assert_eq!(bob, approved);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn get_approved_token_with_approval_for_all(
         contract: Contract<Erc721>,
         alice: Address,
@@ -1996,7 +2025,7 @@ mod tests {
         assert_eq!(Address::ZERO, approved);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn is_authorized_nonexistent_token(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2007,7 +2036,7 @@ mod tests {
         assert!(!authorized);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn is_authorized_token_owner(contract: Contract<Erc721>, alice: Address) {
         contract
             .sender(alice)
@@ -2019,7 +2048,7 @@ mod tests {
         assert!(authorized);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn is_authorized_without_approval(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2035,7 +2064,7 @@ mod tests {
         assert!(!authorized);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn is_authorized_with_approval(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2055,7 +2084,7 @@ mod tests {
         assert!(authorized);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn is_authorized_with_approval_for_all(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2075,7 +2104,7 @@ mod tests {
         assert!(authorized);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn check_authorized_nonexistent_token(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2093,7 +2122,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn check_authorized_token_owner(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2109,7 +2138,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn check_authorized_without_approval(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2134,7 +2163,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn check_authorized_with_approval(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2154,7 +2183,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn check_authorized_with_approval_for_all(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2174,7 +2203,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn burns(contract: Contract<Erc721>, alice: Address) {
         let one = uint!(1_U256);
 
@@ -2211,7 +2240,7 @@ mod tests {
         assert_eq!(initial_balance - one, balance);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_get_approved_of_previous_approval_burned(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2244,7 +2273,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_burn_nonexistent_token(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2262,7 +2291,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn transfers(contract: Contract<Erc721>, alice: Address, bob: Address) {
         contract
             .sender(alice)
@@ -2279,7 +2308,7 @@ mod tests {
         assert_eq!(owner, bob);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn transfers_approved_token(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2304,7 +2333,7 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn transfers_approved_for_all(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2336,7 +2365,7 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_transfer_transfers_to_invalid_receiver(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2367,7 +2396,7 @@ mod tests {
         assert_eq!(alice, owner);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_transfer_transfers_from_incorrect_owner(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2400,7 +2429,7 @@ mod tests {
         // assert_eq!(alice, owner);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_transfer_transfers_nonexistent_token(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2418,7 +2447,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_transfers_internal(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2442,7 +2471,7 @@ mod tests {
         assert_eq!(owner, bob);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_transfers_internal_approved_token(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2467,7 +2496,7 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn safe_transfers_internal_approved_for_all(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2499,7 +2528,7 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_internal_safe_transfer_to_invalid_receiver(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2535,7 +2564,7 @@ mod tests {
         assert_eq!(alice, owner);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_internal_safe_transfer_from_incorrect_owner(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2567,7 +2596,7 @@ mod tests {
         // assert_eq!(alice, owner);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_internal_safe_transfer_nonexistent_token(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2586,7 +2615,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_approve_internal_for_nonexistent_token(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2605,7 +2634,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_approve_internal_by_invalid_approver(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2630,7 +2659,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_approval_for_all_internal_for_invalid_operator(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2650,7 +2679,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn require_owned_works(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2669,7 +2698,7 @@ mod tests {
         assert_eq!(bob, owner);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_require_owned_for_nonexistent_token(
         contract: Contract<Erc721>,
         alice: Address,
@@ -2687,14 +2716,14 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn interface_id() {
         let actual = <Erc721 as IErc721>::interface_id();
         let expected: B32 = fixed_bytes!("80ac58cd");
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn supports_interface(contract: Contract<Erc721>, alice: Address) {
         assert!(contract
             .sender(alice)
@@ -2734,19 +2763,141 @@ mod tests {
 
     unsafe impl TopLevelStorage for Erc721ReceiverMock {}
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn on_erc721_received(
         erc721: Contract<Erc721>,
         receiver: Contract<Erc721ReceiverMock>,
         alice: Address,
     ) {
+        erc721.vm().mock_call(
+            receiver.address(),
+            Erc721ReceiverTest::onERC721ReceivedCall {
+                operator: alice,
+                from: Address::ZERO,
+                token_id: TOKEN_ID,
+                data: vec![0, 1, 2, 3].into(),
+            }
+            .abi_encode(),
+            U256::ZERO,
+            Ok(RECEIVER_FN_SELECTOR.abi_encode()),
+        );
+
         erc721
             .sender(alice)
             ._safe_mint(receiver.address(), TOKEN_ID, &vec![0, 1, 2, 3].into())
             .unwrap();
 
-        let received_token_id = receiver.sender(alice).received_token_id();
+        assert_eq!(
+            erc721.sender(alice).owner_of(TOKEN_ID).unwrap(),
+            receiver.address()
+        );
+    }
 
-        assert_eq!(received_token_id, TOKEN_ID);
+    #[openzeppelin_stylus_proc::vm_test]
+    fn safe_mint_bubbles_receiver_revert_reason(
+        erc721: Contract<Erc721>,
+        receiver: Contract<Erc721ReceiverMock>,
+        alice: Address,
+    ) {
+        let reason = b"receiver rejected".to_vec();
+        erc721.vm().mock_call(
+            receiver.address(),
+            Erc721ReceiverTest::onERC721ReceivedCall {
+                operator: alice,
+                from: Address::ZERO,
+                token_id: TOKEN_ID,
+                data: vec![].into(),
+            }
+            .abi_encode(),
+            U256::ZERO,
+            Err(reason),
+        );
+
+        let error = erc721
+            .sender(alice)
+            ._safe_mint(receiver.address(), TOKEN_ID, &vec![].into())
+            .expect_err("safe mint should bubble a receiver revert reason");
+
+        assert!(matches!(
+            error,
+            Error::InvalidReceiverWithReason(InvalidReceiverWithReason {
+                reason
+            }) if reason == "receiver rejected"
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn safe_mint_rejects_receiver_revert_without_reason(
+        erc721: Contract<Erc721>,
+        receiver: Contract<Erc721ReceiverMock>,
+        alice: Address,
+    ) {
+        erc721.vm().mock_call(
+            receiver.address(),
+            Erc721ReceiverTest::onERC721ReceivedCall {
+                operator: alice,
+                from: Address::ZERO,
+                token_id: TOKEN_ID,
+                data: vec![].into(),
+            }
+            .abi_encode(),
+            U256::ZERO,
+            Err(vec![]),
+        );
+
+        let error = erc721
+            .sender(alice)
+            ._safe_mint(receiver.address(), TOKEN_ID, &vec![].into())
+            .expect_err("safe mint should reject a reverting receiver");
+
+        assert!(matches!(
+            error,
+            Error::InvalidReceiver(ERC721InvalidReceiver { receiver: target })
+                if target == receiver.address()
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn safe_mint_rejects_receiver_with_wrong_selector(
+        erc721: Contract<Erc721>,
+        receiver: Contract<Erc721ReceiverMock>,
+        alice: Address,
+    ) {
+        erc721.vm().mock_call(
+            receiver.address(),
+            Erc721ReceiverTest::onERC721ReceivedCall {
+                operator: alice,
+                from: Address::ZERO,
+                token_id: TOKEN_ID,
+                data: vec![].into(),
+            }
+            .abi_encode(),
+            U256::ZERO,
+            Ok(fixed_bytes!("deadbeef").abi_encode()),
+        );
+
+        let error = erc721
+            .sender(alice)
+            ._safe_mint(receiver.address(), TOKEN_ID, &vec![].into())
+            .expect_err(
+                "safe mint should reject an incorrect receiver selector",
+            );
+
+        assert!(matches!(
+            error,
+            Error::InvalidReceiver(ERC721InvalidReceiver { receiver: target })
+                if target == receiver.address()
+        ));
+    }
+
+    #[test]
+    fn encodes_erc721_errors_with_their_solidity_selectors() {
+        let receiver = Address::from([0x56; 20]);
+        let error = Error::InvalidReceiver(ERC721InvalidReceiver { receiver });
+
+        assert_eq!(
+            error.encode(),
+            ERC721InvalidReceiver { receiver }.abi_encode()
+        );
     }
 }

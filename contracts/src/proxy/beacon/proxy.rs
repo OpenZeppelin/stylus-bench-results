@@ -1,10 +1,9 @@
 //! This contract implements a proxy that gets the implementation address for
 //! each call from an [`UpgradeableBeacon`][UpgradeableBeacon].
 //!
-//! The beacon address can only be set once during construction, and cannot be
-//! changed afterwards. It is stored in an immutable variable to avoid
-//! unnecessary storage reads, and also in the beacon storage slot specified by
-//! [ERC-1967] so that it can be accessed externally.
+//! The beacon address is stored in the beacon storage slot specified by
+//! [ERC-1967], so it can be accessed externally and is not vulnerable to
+//! collisions with implementation storage.
 //!
 //! CAUTION: Since the beacon address can never be changed, you must ensure that
 //! you either control the beacon, or trust the beacon to not upgrade the
@@ -31,6 +30,8 @@ use crate::proxy::{
 /// State of an [`BeaconProxy`] contract.
 #[storage]
 pub struct BeaconProxy {
+    /// Reserved to preserve the storage layout of v0.3.0.
+    #[allow(dead_code)]
     beacon: StorageAddress,
 }
 
@@ -57,10 +58,9 @@ impl BeaconProxy {
     ///
     /// * [`Error::InvalidBeacon`] - If the beacon is not a contract with the
     ///   interface [`IBeacon`][IBeacon].
-    /// * [`Error::NonPayable`] - If the data is empty and
-    ///   [`msg::value`][msg_value] is not [`U256::ZERO`][U256].
+    /// * [`Error::NonPayable`] - If the data is empty and transaction value is
+    ///   nonzero.
     ///
-    /// [msg_value]: stylus_sdk::msg::value
     /// [IBeacon]: super::IBeacon
     /// [U256]: alloy_primitives::U256
     pub fn constructor(
@@ -69,7 +69,6 @@ impl BeaconProxy {
         data: &Bytes,
     ) -> Result<(), Error> {
         Erc1967Utils::upgrade_beacon_to_and_call(self, beacon, data)?;
-        self.beacon.set(beacon);
         Ok(())
     }
 
@@ -80,34 +79,32 @@ impl BeaconProxy {
     /// * `&self` - Read access to the contract's state.
     #[must_use]
     pub fn get_beacon(&self) -> Address {
-        self.beacon.get()
+        Erc1967Utils::get_beacon(self)
     }
 }
-
 unsafe impl IProxy for BeaconProxy {
     fn implementation(&self) -> Result<Address, Vec<u8>> {
-        Ok(IBeaconInterface::new(self.get_beacon()).implementation(self)?)
+        Ok(IBeaconInterface::new(self.get_beacon())
+            .implementation(self.vm(), Call::new())?)
     }
 }
-
 #[cfg(test)]
 mod tests {
     #![allow(clippy::needless_pass_by_value)]
 
+    use crate::test_support::*;
     use alloy_sol_macro::sol;
     use alloy_sol_types::{SolCall, SolError, SolValue};
-    use motsu::prelude::*;
     use stylus_sdk::{
         alloy_primitives::{Address, U256},
+        function_selector,
         prelude::*,
+        testing::TestVM,
         ArbResult,
     };
 
     use super::*;
-    use crate::{
-        proxy::beacon::IBeacon,
-        token::erc20::{self, Erc20, IErc20},
-    };
+    use crate::token::erc20;
 
     #[entrypoint]
     #[storage]
@@ -140,89 +137,23 @@ mod tests {
         }
     }
 
-    #[storage]
-    struct Beacon {
-        implementation: StorageAddress,
+    impl BeaconProxyExample {
+        fn overwrite_beacon_slot(&mut self, beacon: Address) {
+            self.beacon_proxy.beacon.set(beacon);
+        }
     }
+
+    // The SDK TestVM provides external-call responses explicitly, so these
+    // storage fixtures only identify addresses with code.
+    #[storage]
+    struct Beacon;
 
     unsafe impl TopLevelStorage for Beacon {}
 
-    #[public]
-    #[implements(IBeacon)]
-    impl Beacon {
-        #[constructor]
-        fn constructor(&mut self, implementation: Address) {
-            self.implementation.set(implementation);
-        }
-    }
-
-    #[public]
-    impl IBeacon for Beacon {
-        fn implementation(&self) -> Result<Address, Vec<u8>> {
-            Ok(self.implementation.get())
-        }
-    }
-
     #[storage]
-    struct Erc20Example {
-        erc20: Erc20,
-    }
-
-    #[public]
-    #[implements(IErc20<Error = erc20::Error>)]
-    impl Erc20Example {
-        fn mint(
-            &mut self,
-            to: Address,
-            value: U256,
-        ) -> Result<(), erc20::Error> {
-            self.erc20._mint(to, value)
-        }
-    }
+    struct Erc20Example;
 
     unsafe impl TopLevelStorage for Erc20Example {}
-
-    #[public]
-    impl IErc20 for Erc20Example {
-        type Error = erc20::Error;
-
-        fn balance_of(&self, account: Address) -> U256 {
-            self.erc20.balance_of(account)
-        }
-
-        fn total_supply(&self) -> U256 {
-            self.erc20.total_supply()
-        }
-
-        fn transfer(
-            &mut self,
-            to: Address,
-            value: U256,
-        ) -> Result<bool, Self::Error> {
-            self.erc20.transfer(to, value)
-        }
-
-        fn transfer_from(
-            &mut self,
-            from: Address,
-            to: Address,
-            value: U256,
-        ) -> Result<bool, Self::Error> {
-            self.erc20.transfer_from(from, to, value)
-        }
-
-        fn allowance(&self, owner: Address, spender: Address) -> U256 {
-            self.erc20.allowance(owner, spender)
-        }
-
-        fn approve(
-            &mut self,
-            spender: Address,
-            value: U256,
-        ) -> Result<bool, Self::Error> {
-            self.erc20.approve(spender, value)
-        }
-    }
 
     sol! {
         interface IERC20 {
@@ -233,14 +164,30 @@ mod tests {
         }
     }
 
-    #[motsu::test]
+    fn mock_beacon_implementation(
+        vm: &TestVM,
+        beacon: Address,
+        implementation: Address,
+    ) {
+        vm.mock_static_call(
+            beacon,
+            function_selector!("implementation").to_vec(),
+            Ok(implementation.abi_encode()),
+        );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn constructs(
         proxy: Contract<BeaconProxyExample>,
         beacon: Contract<Beacon>,
         erc20: Contract<Erc20Example>,
         alice: Address,
     ) {
-        beacon.sender(alice).constructor(erc20.address());
+        mock_beacon_implementation(
+            &proxy.vm(),
+            beacon.address(),
+            erc20.address(),
+        );
 
         proxy
             .sender(alice)
@@ -257,18 +204,57 @@ mod tests {
         assert_eq!(beacon_address, beacon.address());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
+    fn implementation_lookup_ignores_colliding_proxy_slot(
+        proxy: Contract<BeaconProxyExample>,
+        beacon: Contract<Beacon>,
+        another_beacon: Contract<Beacon>,
+        erc20: Contract<Erc20Example>,
+        another_erc20: Contract<Erc20Example>,
+        alice: Address,
+    ) {
+        mock_beacon_implementation(
+            &proxy.vm(),
+            beacon.address(),
+            erc20.address(),
+        );
+        mock_beacon_implementation(
+            &proxy.vm(),
+            another_beacon.address(),
+            another_erc20.address(),
+        );
+        proxy
+            .sender(alice)
+            .constructor(beacon.address(), vec![].into())
+            .expect("should be able to construct");
+
+        // Delegate-called implementation logic can write this ordinary slot.
+        proxy.sender(alice).overwrite_beacon_slot(another_beacon.address());
+
+        assert_eq!(proxy.sender(alice).implementation(), Ok(erc20.address()),);
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn constructs_with_data(
         proxy: Contract<BeaconProxyExample>,
         beacon: Contract<Beacon>,
         erc20: Contract<Erc20Example>,
         alice: Address,
     ) {
-        beacon.sender(alice).constructor(erc20.address());
+        mock_beacon_implementation(
+            &proxy.vm(),
+            beacon.address(),
+            erc20.address(),
+        );
 
         let amount = U256::from(1000);
 
         let data = IERC20::mintCall { to: alice, value: amount }.abi_encode();
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            data.clone(),
+            Ok(vec![]),
+        );
 
         proxy
             .sender(alice)
@@ -286,6 +272,11 @@ mod tests {
 
         let balance_of_alice_call =
             IERC20::balanceOfCall { account: alice }.abi_encode();
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            balance_of_alice_call.clone(),
+            Ok(amount.abi_encode()),
+        );
         let balance = proxy
             .sender(alice)
             .fallback(&balance_of_alice_call)
@@ -293,6 +284,11 @@ mod tests {
         assert_eq!(balance, amount.abi_encode());
 
         let total_supply_call = IERC20::totalSupplyCall {}.abi_encode();
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            total_supply_call.clone(),
+            Ok(amount.abi_encode()),
+        );
         let total_supply = proxy
             .sender(alice)
             .fallback(&total_supply_call)
@@ -300,7 +296,7 @@ mod tests {
         assert_eq!(total_supply, amount.abi_encode());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn fallback(
         proxy: Contract<BeaconProxyExample>,
         beacon: Contract<Beacon>,
@@ -308,7 +304,11 @@ mod tests {
         alice: Address,
         bob: Address,
     ) {
-        beacon.sender(alice).constructor(erc20.address());
+        mock_beacon_implementation(
+            &proxy.vm(),
+            beacon.address(),
+            erc20.address(),
+        );
 
         proxy
             .sender(alice)
@@ -318,6 +318,11 @@ mod tests {
         // verify initial balance is [`U256::ZERO`].
         let balance_of_alice_call =
             IERC20::balanceOfCall { account: alice }.abi_encode();
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            balance_of_alice_call.clone(),
+            Ok(U256::ZERO.abi_encode()),
+        );
         let balance = proxy
             .sender(alice)
             .fallback(&balance_of_alice_call)
@@ -325,6 +330,11 @@ mod tests {
         assert_eq!(balance, U256::ZERO.abi_encode());
 
         let total_supply_call = IERC20::totalSupplyCall {}.abi_encode();
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            total_supply_call.clone(),
+            Ok(U256::ZERO.abi_encode()),
+        );
         let total_supply = proxy
             .sender(alice)
             .fallback(&total_supply_call)
@@ -336,20 +346,26 @@ mod tests {
 
         let mint_call =
             IERC20::mintCall { to: alice, value: amount }.abi_encode();
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            mint_call.clone(),
+            Ok(vec![]),
+        );
         proxy
             .sender(alice)
             .fallback(&mint_call)
             .expect("should be able to mint");
-        // TODO: this should assert that the transfer event was emitted on the
-        // proxy
-        // https://github.com/OpenZeppelin/stylus-test-helpers/issues/111
-        erc20.assert_emitted(&erc20::Transfer {
-            from: Address::ZERO,
-            to: alice,
-            value: amount,
-        });
-
         // check that the balance can be accurately fetched through the proxy.
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            balance_of_alice_call.clone(),
+            Ok(amount.abi_encode()),
+        );
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            total_supply_call.clone(),
+            Ok(amount.abi_encode()),
+        );
         let balance = proxy
             .sender(alice)
             .fallback(&balance_of_alice_call)
@@ -365,20 +381,22 @@ mod tests {
         // check that the balance can be transferred through the proxy.
         let transfer_call =
             IERC20::transferCall { to: bob, value: amount }.abi_encode();
-        proxy
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            transfer_call.clone(),
+            Ok(true.abi_encode()),
+        );
+        let transfer_result = proxy
             .sender(alice)
             .fallback(&transfer_call)
             .expect("should be able to transfer");
+        assert_eq!(transfer_result, true.abi_encode());
 
-        // TODO: this should assert that the transfer event was emitted on the
-        // proxy
-        // https://github.com/OpenZeppelin/stylus-test-helpers/issues/111
-        erc20.assert_emitted(&erc20::Transfer {
-            from: alice,
-            to: bob,
-            value: amount,
-        });
-
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            balance_of_alice_call.clone(),
+            Ok(U256::ZERO.abi_encode()),
+        );
         let balance = proxy
             .sender(alice)
             .fallback(&balance_of_alice_call)
@@ -387,6 +405,11 @@ mod tests {
 
         let balance_of_bob_call =
             IERC20::balanceOfCall { account: bob }.abi_encode();
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            balance_of_bob_call.clone(),
+            Ok(amount.abi_encode()),
+        );
         let balance = proxy
             .sender(alice)
             .fallback(&balance_of_bob_call)
@@ -400,7 +423,7 @@ mod tests {
         assert_eq!(total_supply, amount.abi_encode());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn fallback_returns_error(
         proxy: Contract<BeaconProxyExample>,
         beacon: Contract<Beacon>,
@@ -408,7 +431,11 @@ mod tests {
         alice: Address,
         bob: Address,
     ) {
-        beacon.sender(alice).constructor(erc20.address());
+        mock_beacon_implementation(
+            &proxy.vm(),
+            beacon.address(),
+            erc20.address(),
+        );
 
         proxy
             .sender(alice)
@@ -418,10 +445,20 @@ mod tests {
         let amount = U256::from(1000);
         let transfer_call =
             IERC20::transferCall { to: bob, value: amount }.abi_encode();
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            transfer_call.clone(),
+            Err(erc20::ERC20InsufficientBalance {
+                sender: alice,
+                balance: U256::ZERO,
+                needed: amount,
+            }
+            .abi_encode()),
+        );
         let err = proxy
             .sender(alice)
             .fallback(&transfer_call)
-            .expect_err("should revert on transfer");
+            .expect_error("should revert on transfer");
 
         assert_eq!(
             err,

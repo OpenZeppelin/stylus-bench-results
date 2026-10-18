@@ -5,8 +5,10 @@ use alloc::vec::Vec;
 use alloy_primitives::Address;
 pub use sol::*;
 use stylus_sdk::{
-    call::{self, Call, MethodError},
+    call,
+    host::VM,
     prelude::*,
+    stylus_core::calls::errors::{Error as CallError, MethodError},
 };
 
 #[cfg_attr(coverage_nightly, coverage(off))]
@@ -76,13 +78,20 @@ impl AddressUtils {
     ///   fails with a revert reason or if the call fails for any other reason.
     /// * [`Error::EmptyCode`] - If the target contract has no code.
     pub fn function_delegate_call(
-        context: &mut impl TopLevelStorage,
+        context: &mut (impl TopLevelStorage + HostAccess<Host = VM>),
         target: Address,
         data: &[u8],
     ) -> Result<Vec<u8>, Error> {
-        let result =
-            unsafe { call::delegate_call(Call::new_in(context), target, data) };
-        Self::verify_call_result_from_target(target, result)
+        let host = (*context.vm()).clone();
+        let result = unsafe {
+            call::delegate_call(
+                &host,
+                Call::new_mutating(context),
+                target,
+                data,
+            )
+        };
+        Self::verify_call_result_from_target(context, target, result)
     }
 
     // TODO: Support more result types out of the box (e.g. `U256`, `U160`,
@@ -106,13 +115,19 @@ impl AddressUtils {
     ///   fails with a revert reason or if the call fails for any other reason.
     /// * [`Error::FailedCall`] - If the call to the target contract fails
     ///   without a revert reason.
-    pub fn verify_call_result_from_target<T: AsRef<[u8]>>(
+    pub fn verify_call_result_from_target<
+        T: AsRef<[u8]>,
+        C: HostAccess + ?Sized,
+    >(
+        context: &C,
         target: Address,
-        result: Result<T, stylus_sdk::call::Error>,
+        result: Result<T, CallError>,
     ) -> Result<T, Error> {
         match result {
             Ok(returndata) => {
-                if returndata.as_ref().is_empty() && !target.has_code() {
+                if returndata.as_ref().is_empty()
+                    && context.vm().code_size(target) == 0
+                {
                     return Err(AddressEmptyCode { target }.into());
                 }
                 Ok(returndata)
@@ -130,12 +145,48 @@ impl AddressUtils {
     /// [Address.sol].
     ///
     /// [Address.sol]: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/Address.sol
-    fn revert(error: stylus_sdk::call::Error) -> Error {
+    fn revert(error: CallError) -> Error {
         match &error {
-            stylus_sdk::call::Error::Revert(data) if data.is_empty() => {
-                FailedCall {}.into()
-            }
+            CallError::Revert(data) if data.is_empty() => FailedCall {}.into(),
             _ => FailedCallWithReason { reason: error.encode().into() }.into(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{Contract, TransactionResultExt};
+
+    #[storage]
+    struct AddressUtilsExample;
+
+    unsafe impl TopLevelStorage for AddressUtilsExample {}
+
+    #[public]
+    impl AddressUtilsExample {
+        fn verify_empty_code(&self, target: Address) -> Result<Vec<u8>, Error> {
+            AddressUtils::verify_call_result_from_target(
+                self,
+                target,
+                Ok::<Vec<u8>, CallError>(Vec::new()),
+            )
+        }
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn rejects_empty_success_from_an_address_without_code(
+        contract: Contract<AddressUtilsExample>,
+        alice: Address,
+    ) {
+        let error = contract
+            .sender(alice)
+            .verify_empty_code(alice)
+            .expect_error("an empty call from an EOA should fail");
+
+        assert!(matches!(
+            error,
+            Error::EmptyCode(AddressEmptyCode { target }) if target == alice
+        ));
     }
 }

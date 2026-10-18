@@ -14,7 +14,7 @@ use alloc::{borrow::ToOwned, string::String, vec::Vec};
 
 use alloy_primitives::{keccak256, Address, B256, U256};
 use alloy_sol_types::{sol, SolType};
-use stylus_sdk::{block, contract};
+use stylus_sdk::prelude::*;
 
 /// Keccak-256 hash of the EIP-712 domain separator type string.
 const TYPE_HASH: [u8; 32] =
@@ -58,7 +58,7 @@ pub fn to_typed_data_hash(
 }
 
 /// EIP-712 Contract interface.
-pub trait IEip712 {
+pub trait IEip712: HostAccess {
     /// Immutable name of EIP-712 instance.
     const NAME: &'static str;
     /// Hashed name of EIP-712 instance.
@@ -74,14 +74,14 @@ pub trait IEip712 {
 
     /// Returns chain id.
     #[must_use]
-    fn chain_id() -> U256 {
-        U256::from(block::chainid())
+    fn chain_id(&self) -> U256 {
+        U256::from(self.vm().chain_id())
     }
 
     /// Returns the contract's address.
     #[must_use]
-    fn contract_address() -> Address {
-        contract::address()
+    fn contract_address(&self) -> Address {
+        self.vm().contract_address()
     }
 
     /// Returns the fields and values that describe the domain separator used by
@@ -97,8 +97,8 @@ pub trait IEip712 {
             FIELDS,
             Self::NAME.to_owned(),
             Self::VERSION.to_owned(),
-            Self::chain_id(),
-            Self::contract_address(),
+            self.chain_id(),
+            self.contract_address(),
             SALT,
             Vec::new(),
         )
@@ -114,8 +114,8 @@ pub trait IEip712 {
             TYPE_HASH,
             Self::HASHED_NAME,
             Self::HASHED_VERSION,
-            Self::chain_id(),
-            Self::contract_address(),
+            self.chain_id(),
+            self.contract_address(),
         ));
 
         keccak256(encoded)
@@ -134,37 +134,50 @@ pub trait IEip712 {
         to_typed_data_hash(&domain_separator, &struct_hash)
     }
 }
-
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{address, b256, uint, Address, U256};
+    use alloy_sol_types::SolType;
+    use stylus_sdk::{prelude::*, testing::TestVM};
 
-    use super::{to_typed_data_hash, IEip712, FIELDS, SALT};
+    use super::{
+        to_typed_data_hash, DomainSeparatorTuple, IEip712, FIELDS, SALT,
+        TYPE_HASH,
+    };
 
     const CHAIN_ID: U256 = uint!(42161_U256);
 
     const CONTRACT_ADDRESS: Address =
         address!("000000000000000000000000000000000000dEaD");
 
-    #[derive(Default)]
+    #[storage]
     struct TestEIP712;
 
     impl IEip712 for TestEIP712 {
         const NAME: &'static str = "A Name";
         const VERSION: &'static str = "1";
 
-        fn chain_id() -> U256 {
+        fn chain_id(&self) -> U256 {
             CHAIN_ID
         }
 
-        fn contract_address() -> Address {
+        fn contract_address(&self) -> Address {
             CONTRACT_ADDRESS
         }
     }
 
+    #[storage]
+    struct RuntimeEIP712;
+
+    impl IEip712 for RuntimeEIP712 {
+        const NAME: &'static str = "Runtime Domain";
+        const VERSION: &'static str = "3";
+    }
+
     #[test]
     fn domain_test() {
-        let contract = TestEIP712;
+        let vm = TestVM::new();
+        let contract = TestEIP712::from(&vm);
         let domain = contract.eip712_domain();
         assert_eq!(FIELDS, domain.0);
         assert_eq!(TestEIP712::NAME, domain.1);
@@ -193,5 +206,52 @@ mod tests {
             expected,
             to_typed_data_hash(&domain_separator, &struct_hash),
         );
+    }
+
+    #[test]
+    fn default_domain_uses_runtime_chain_and_contract_address() {
+        let vm = TestVM::new();
+        let contract_address =
+            address!("0000000000000000000000000000000000001234");
+        vm.set_chain_id(CHAIN_ID.to::<u64>());
+        vm.set_contract_address(contract_address);
+        let contract = RuntimeEIP712::from(&vm);
+
+        assert_eq!(contract.chain_id(), CHAIN_ID);
+        assert_eq!(contract.contract_address(), contract_address);
+
+        let domain = contract.eip712_domain();
+        assert_eq!(domain.0, FIELDS);
+        assert_eq!(domain.1, RuntimeEIP712::NAME);
+        assert_eq!(domain.2, RuntimeEIP712::VERSION);
+        assert_eq!(domain.3, CHAIN_ID);
+        assert_eq!(domain.4, contract_address);
+        assert_eq!(domain.5, SALT);
+        assert!(domain.6.is_empty());
+
+        let expected_separator =
+            alloy_primitives::keccak256(DomainSeparatorTuple::abi_encode(&(
+                TYPE_HASH,
+                RuntimeEIP712::HASHED_NAME,
+                RuntimeEIP712::HASHED_VERSION,
+                CHAIN_ID,
+                contract_address,
+            )));
+        let separator = contract.domain_separator_v4();
+        assert_eq!(separator, expected_separator);
+
+        let struct_hash = b256!(
+            "7379746c75730000000000000000000000000000000000000000000000000000"
+        );
+        assert_eq!(
+            contract.hash_typed_data_v4(struct_hash),
+            to_typed_data_hash(&separator, &struct_hash)
+        );
+
+        let different_chain_vm = TestVM::new();
+        different_chain_vm.set_chain_id(CHAIN_ID.to::<u64>() + 1);
+        different_chain_vm.set_contract_address(contract_address);
+        let different_chain = RuntimeEIP712::from(&different_chain_vm);
+        assert_ne!(separator, different_chain.domain_separator_v4());
     }
 }

@@ -6,9 +6,9 @@ use alloc::{vec, vec::Vec};
 
 use alloy_primitives::{uint, Address, U256};
 use stylus_sdk::{
-    call::MethodError,
     prelude::*,
     storage::{StorageMap, StorageU256},
+    stylus_core::calls::errors::MethodError,
 };
 
 use crate::utils::math::storage::AddAssignChecked;
@@ -49,6 +49,8 @@ pub struct Nonces {
 }
 
 /// Interface for [`Nonces`]
+#[allow(missing_docs)]
+#[public]
 pub trait INonces {
     /// Returns the unused nonce for the given account.
     ///
@@ -126,24 +128,25 @@ impl Nonces {
         Ok(())
     }
 }
-
 #[cfg(test)]
 mod tests {
+    use crate::test_support::Contract;
     use alloy_primitives::{Address, U256};
-    use motsu::prelude::Contract;
+    use alloy_sol_types::SolError;
     use stylus_sdk::prelude::*;
+    use stylus_sdk::stylus_core::calls::errors::MethodError;
 
     use super::ONE;
-    use crate::utils::nonces::{Error, INonces, Nonces};
+    use crate::utils::nonces::{Error, INonces, InvalidAccountNonce, Nonces};
 
     unsafe impl TopLevelStorage for Nonces {}
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn initiate_nonce(contract: Contract<Nonces>, alice: Address) {
         assert_eq!(contract.sender(alice).nonces(alice), U256::ZERO);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn use_nonce(contract: Contract<Nonces>, alice: Address) {
         let use_nonce = contract.sender(alice).use_nonce(alice);
         assert_eq!(use_nonce, U256::ZERO);
@@ -152,7 +155,7 @@ mod tests {
         assert_eq!(nonce, ONE);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn use_checked_nonce(contract: Contract<Nonces>, alice: Address) {
         let use_checked_nonce =
             contract.sender(alice).use_checked_nonce(alice, U256::ZERO);
@@ -162,7 +165,7 @@ mod tests {
         assert_eq!(nonce, ONE);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn use_checked_nonce_invalid_nonce(
         contract: Contract<Nonces>,
         alice: Address,
@@ -173,5 +176,19 @@ mod tests {
             use_checked_nonce,
             Err(Error::InvalidAccountNonce(_))
         ));
+    }
+
+    #[test]
+    fn encodes_invalid_nonce_with_its_solidity_selector() {
+        let account = Address::from([0x55; 20]);
+        let current_nonce = U256::from(7);
+        assert_eq!(
+            Error::InvalidAccountNonce(InvalidAccountNonce {
+                account,
+                current_nonce,
+            })
+            .encode(),
+            InvalidAccountNonce { account, current_nonce }.abi_encode()
+        );
     }
 }

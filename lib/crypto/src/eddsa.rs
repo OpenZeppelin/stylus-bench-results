@@ -345,6 +345,16 @@ impl VerifyingKey {
     /// Verify a signature on a message with this keypair's public key.
     #[must_use]
     pub fn is_valid(&self, message: &[u8], signature: &Signature) -> bool {
+        let public_key = self.point.into_affine();
+        let r = signature.R.into_affine();
+        if public_key.is_zero()
+            || !public_key.is_in_prime_order_subgroup()
+            || r.is_zero()
+            || !r.is_in_prime_order_subgroup()
+        {
+            return false;
+        }
+
         let expected_r = self.compute_R(signature, message);
         expected_r == signature.R
     }
@@ -563,6 +573,17 @@ mod test {
             let wrong_msg = [message, b"invalid"].concat();
             assert!(!signing_key.is_valid_signature(&wrong_msg, &signature));
         }
+    }
+
+    #[test]
+    fn rejects_identity_public_key_forgery() {
+        let verifying_key = VerifyingKey::from_affine(AffinePoint::zero());
+        let signature = Signature::from_affine_R_s(
+            ProjectivePoint::generator().into_affine(),
+            Scalar::from_bigint(U256::from(1u8)),
+        );
+
+        assert!(!verifying_key.is_valid(b"any message", &signature));
     }
 
     #[test]

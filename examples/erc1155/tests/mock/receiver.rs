@@ -1,10 +1,10 @@
 #![allow(dead_code)]
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
+use crate::test_support::Wallet;
 use alloy::{
     primitives::{aliases::B32, Address, U256},
     sol,
 };
-use e2e::Wallet;
 use stylus_sdk::{abi::Bytes, function_selector};
 
 const REC_RETVAL: B32 = B32::new(function_selector!(

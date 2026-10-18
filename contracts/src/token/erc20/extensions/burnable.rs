@@ -1,13 +1,15 @@
 //! Optional Burnable extension of the ERC-20 standard.
 
-use alloy_primitives::{Address, U256};
-use stylus_sdk::msg;
-
 use crate::token::erc20::{self, Erc20};
+use alloc::vec::Vec;
+use alloy_primitives::{Address, U256};
+use stylus_sdk::prelude::{public, HostAccess, MessageAccess};
 
 /// Extension of [`Erc20`] that allows token holders to destroy both
 /// their own tokens and those that they have an allowance for,
 /// in a way that can be recognized off-chain (via event analysis).
+#[allow(missing_docs)]
+#[public]
 pub trait IErc20Burnable {
     /// The error type associated to this ERC-20 Burnable trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -58,32 +60,32 @@ pub trait IErc20Burnable {
     ) -> Result<(), Self::Error>;
 }
 
+#[public]
 impl IErc20Burnable for Erc20 {
     type Error = erc20::Error;
 
-    fn burn(&mut self, value: U256) -> Result<(), Self::Error> {
-        self._burn(msg::sender(), value)
+    fn burn(&mut self, value: U256) -> Result<(), erc20::Error> {
+        self._burn(self.vm().msg_sender(), value)
     }
 
     fn burn_from(
         &mut self,
         account: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
-        self._spend_allowance(account, msg::sender(), value)?;
+    ) -> Result<(), erc20::Error> {
+        self._spend_allowance(account, self.vm().msg_sender(), value)?;
         self._burn(account, value)
     }
 }
-
 #[cfg(test)]
 mod tests {
+    use crate::test_support::*;
     use alloy_primitives::{uint, Address, U256};
-    use motsu::prelude::*;
 
     use super::IErc20Burnable;
     use crate::token::erc20::{Erc20, Error, IErc20};
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn burns(contract: Contract<Erc20>, alice: Address) {
         let zero = U256::ZERO;
         let one = uint!(1_U256);
@@ -93,20 +95,17 @@ mod tests {
         // Mint some tokens for Alice.
 
         let two = uint!(2_U256);
-        contract
-            .sender(alice)
-            ._update(Address::ZERO, alice, two)
-            .motsu_unwrap();
+        contract.sender(alice)._update(Address::ZERO, alice, two).unwrap();
         assert_eq!(two, contract.sender(alice).balance_of(alice));
         assert_eq!(two, contract.sender(alice).total_supply());
 
-        contract.sender(alice).burn(one).motsu_unwrap();
+        contract.sender(alice).burn(one).unwrap();
 
         assert_eq!(one, contract.sender(alice).balance_of(alice));
         assert_eq!(one, contract.sender(alice).total_supply());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn burns_errors_when_insufficient_balance(
         contract: Contract<Erc20>,
         alice: Address,
@@ -120,39 +119,36 @@ mod tests {
         assert!(matches!(result, Err(Error::InsufficientBalance(_))));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn burn_from(contract: Contract<Erc20>, alice: Address, bob: Address) {
-        // Alice approves `msg::sender`.
+        // Alice approves the message sender.
         let one = uint!(1_U256);
-        contract.sender(alice).approve(bob, one).motsu_unwrap();
+        contract.sender(alice).approve(bob, one).unwrap();
 
         // Mint some tokens for Alice.
         let two = uint!(2_U256);
-        contract
-            .sender(alice)
-            ._update(Address::ZERO, alice, two)
-            .motsu_unwrap();
+        contract.sender(alice)._update(Address::ZERO, alice, two).unwrap();
         assert_eq!(two, contract.sender(alice).balance_of(alice));
         assert_eq!(two, contract.sender(alice).total_supply());
 
-        contract.sender(bob).burn_from(alice, one).motsu_unwrap();
+        contract.sender(bob).burn_from(alice, one).unwrap();
 
         assert_eq!(one, contract.sender(alice).balance_of(alice));
         assert_eq!(one, contract.sender(alice).total_supply());
         assert_eq!(U256::ZERO, contract.sender(alice).allowance(bob, alice));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn burns_from_errors_when_insufficient_balance(
         contract: Contract<Erc20>,
         alice: Address,
         bob: Address,
     ) {
-        // Alice approves `msg::sender`.
+        // Alice approves the message sender.
         let zero = U256::ZERO;
         let one = uint!(1_U256);
 
-        contract.sender(alice).approve(bob, one).motsu_unwrap();
+        contract.sender(alice).approve(bob, one).unwrap();
         assert_eq!(zero, contract.sender(alice).balance_of(bob));
 
         let one = uint!(1_U256);
@@ -161,17 +157,14 @@ mod tests {
         assert!(matches!(result, Err(Error::InsufficientBalance(_))));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn burns_from_errors_when_insufficient_allowance(
         contract: Contract<Erc20>,
         alice: Address,
     ) {
         // Mint some tokens for Alice.
         let one = uint!(1_U256);
-        contract
-            .sender(alice)
-            ._update(Address::ZERO, alice, one)
-            .motsu_unwrap();
+        contract.sender(alice)._update(Address::ZERO, alice, one).unwrap();
         assert_eq!(one, contract.sender(alice).balance_of(alice));
 
         let result = contract.sender(alice).burn_from(alice, one);

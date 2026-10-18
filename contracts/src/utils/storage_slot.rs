@@ -32,12 +32,18 @@ const SLOT_BYTE_SPACE: u8 = 32;
 /// #[public]
 /// impl Erc1967 {
 ///     fn get_implementation(&self) -> Address {
-///         return StorageSlot::get_slot::<StorageAddress>(IMPLEMENTATION_SLOT).get();
+///         return StorageSlot::get_slot::<StorageAddress>(
+///             IMPLEMENTATION_SLOT,
+///             (*self.vm()).clone(),
+///         ).get();
 ///     }
 ///
 ///     fn set_implementation(&mut self, new_implementation: Address) {
-///         assert!(new_implementation.has_code());
-///         StorageSlot::get_slot::<StorageAddress>(IMPLEMENTATION_SLOT).set(new_implementation);
+///         assert!(self.vm().code_size(new_implementation) > 0);
+///         StorageSlot::get_slot::<StorageAddress>(
+///             IMPLEMENTATION_SLOT,
+///             (*self.vm()).clone(),
+///         ).set(new_implementation);
 ///     }
 /// }
 /// ```
@@ -50,30 +56,7 @@ impl StorageSlot {
     ///
     /// * `slot` - The slot to get the address from.
     #[must_use]
-    pub fn get_slot<ST: StorageType>(slot: impl Into<U256>) -> ST {
-        // TODO: Remove this once we have a proper way to inject the host for
-        // custom storage slot access.
-        // This has been implemented on Stylus SDK 0.10.0.
-
-        // Priority order:
-        // 1. If wasm32 target -> always use tuple syntax (highest priority).
-        // 2. If reentrant feature enabled (on non-wasm32) -> use struct syntax.
-        // 3. If non-wasm32 without export-abi -> use struct syntax.
-        // 4. Everything else -> use tuple syntax.
-
-        #[cfg(all(
-            not(target_arch = "wasm32"),
-            any(feature = "reentrant", not(feature = "export-abi"))
-        ))]
-        let host =
-            VM { host: alloc::boxed::Box::new(stylus_sdk::host::WasmVM {}) };
-
-        #[cfg(not(all(
-            not(target_arch = "wasm32"),
-            any(feature = "reentrant", not(feature = "export-abi"))
-        )))]
-        let host = VM(stylus_sdk::host::WasmVM {});
-
+    pub fn get_slot<ST: StorageType>(slot: impl Into<U256>, host: VM) -> ST {
         // SAFETY: Truncation is safe here because ST::SLOT_BYTES is never
         // larger than 32, so the subtraction cannot underflow and the
         // cast is always valid.
@@ -83,13 +66,12 @@ impl StorageSlot {
         }
     }
 }
-
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unused_self)]
 
+    use crate::test_support::*;
     use alloy_primitives::{uint, Address, U256};
-    use motsu::prelude::*;
     use stylus_sdk::storage::StorageAddress;
 
     use super::*;
@@ -105,12 +87,19 @@ mod tests {
     #[public]
     impl Erc1967 {
         fn get_implementation(&self) -> Address {
-            StorageSlot::get_slot::<StorageAddress>(IMPLEMENTATION_SLOT).get()
+            StorageSlot::get_slot::<StorageAddress>(
+                IMPLEMENTATION_SLOT,
+                (*self.vm()).clone(),
+            )
+            .get()
         }
 
         fn set_implementation(&self, new_implementation: Address) {
-            StorageSlot::get_slot::<StorageAddress>(IMPLEMENTATION_SLOT)
-                .set(new_implementation);
+            StorageSlot::get_slot::<StorageAddress>(
+                IMPLEMENTATION_SLOT,
+                (*self.vm()).clone(),
+            )
+            .set(new_implementation);
         }
 
         fn get_address(&self) -> Address {
@@ -122,16 +111,23 @@ mod tests {
         }
 
         fn get_address_at_zero_slot(&self) -> Address {
-            StorageSlot::get_slot::<StorageAddress>(U256::ZERO).get()
+            StorageSlot::get_slot::<StorageAddress>(
+                U256::ZERO,
+                (*self.vm()).clone(),
+            )
+            .get()
         }
 
         fn set_address_at_zero_slot(&mut self, new_address: Address) {
-            StorageSlot::get_slot::<StorageAddress>(U256::ZERO)
-                .set(new_address);
+            StorageSlot::get_slot::<StorageAddress>(
+                U256::ZERO,
+                (*self.vm()).clone(),
+            )
+            .set(new_address);
         }
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn test_storage_slot(
         contract: Contract<Erc1967>,
         alice: Address,

@@ -1049,7 +1049,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        arithmetic::uint::{U256, U512, U64},
+        arithmetic::uint::{U128, U256, U512, U64},
         field::{
             fp::{Fp64, FpParams, LIMBS_64},
             group::AdditiveGroup,
@@ -1065,6 +1065,14 @@ mod tests {
     }
 
     const MODULUS: i128 = 1000003; // Prime number
+
+    type Field128 = Fp128<Fp128Param>;
+    struct Fp128Param;
+    impl FpParams<2> for Fp128Param {
+        const GENERATOR: Field128 = fp_from_num!("2");
+        const MODULUS: U128 =
+            from_num!("170141183460469231731687303715884105727"); // 2^127 - 1, a Mersenne prime
+    }
 
     #[test]
     fn add() {
@@ -1227,5 +1235,186 @@ mod tests {
 
             assert_eq!(scalar, expected_scalar);
         });
+    }
+
+    #[test]
+    #[allow(clippy::op_ref)]
+    fn arithmetic_traits_cover_owned_borrowed_and_in_place_forms() {
+        let a = Field64::from(21i64);
+        let b = Field64::from(3i64);
+        let expected_sum = Field64::from(24i64);
+        let expected_difference = Field64::from(18i64);
+        let expected_product = Field64::from(63i64);
+        let expected_quotient = a * b.inverse().unwrap();
+
+        assert_eq!(a + &b, expected_sum);
+        assert_eq!(&a + &b, expected_sum);
+        let mut b_mut = b;
+        assert_eq!(a + &mut b_mut, expected_sum);
+
+        assert_eq!(a - &b, expected_difference);
+        assert_eq!(&a - &b, expected_difference);
+        assert_eq!(a - &mut b_mut, expected_difference);
+
+        assert_eq!(a * &b, expected_product);
+        assert_eq!(&a * &b, expected_product);
+        assert_eq!(a * &mut b_mut, expected_product);
+
+        assert_eq!(a / &b, expected_quotient);
+        assert_eq!(&a / &b, expected_quotient);
+        assert_eq!(a / &mut b_mut, expected_quotient);
+
+        let mut sum = a;
+        sum += b;
+        assert_eq!(sum, expected_sum);
+        sum -= b;
+        assert_eq!(sum, a);
+        sum += &b_mut;
+        assert_eq!(sum, expected_sum);
+        sum -= &b_mut;
+        assert_eq!(sum, a);
+        sum += &mut b_mut;
+        assert_eq!(sum, expected_sum);
+        sum -= &mut b_mut;
+        assert_eq!(sum, a);
+
+        let mut product = a;
+        product *= b;
+        assert_eq!(product, expected_product);
+        product /= b;
+        assert_eq!(product, a);
+        product *= &b;
+        assert_eq!(product, expected_product);
+        product /= &b;
+        assert_eq!(product, a);
+        product *= &mut b_mut;
+        assert_eq!(product, expected_product);
+        product /= &mut b_mut;
+        assert_eq!(product, a);
+
+        let owned_sum: Field64 = [a, b].into_iter().sum();
+        let borrowed_sum: Field64 = [&a, &b].into_iter().sum();
+        let owned_product: Field64 = [a, b].into_iter().product();
+        let borrowed_product: Field64 = [&a, &b].into_iter().product();
+        assert_eq!(owned_sum, expected_sum);
+        assert_eq!(borrowed_sum, expected_sum);
+        assert_eq!(owned_product, expected_product);
+        assert_eq!(borrowed_product, expected_product);
+        assert_eq!(
+            core::iter::empty::<Field64>().sum::<Field64>(),
+            Field64::zero()
+        );
+        assert_eq!(
+            core::iter::empty::<Field64>().product::<Field64>(),
+            Field64::one()
+        );
+    }
+
+    #[test]
+    fn field_conversion_order_inverse_and_zeroization_edges() {
+        assert_eq!(Field64::from(U64::from(1_000_010u64)), Field64::from(7u64));
+        assert_eq!(Field64::from(true), Field64::one());
+        assert_eq!(Field64::from(false), Field64::zero());
+        assert!(Field64::from(2u64) < Field64::from(3u64));
+        assert_eq!(
+            Field64::from(3u64).cmp(&Field64::from(3u64)),
+            Ordering::Equal
+        );
+        assert_eq!(
+            Field64::from(42u64).partial_cmp(&Field64::from(42u64)),
+            Some(Ordering::Equal)
+        );
+        assert_eq!(u8::from(Field64::from(42u64)), 42);
+        assert_eq!(i8::from(Field64::from(42u64)), 42);
+        assert_eq!(format!("{}", Field64::from(42u64)), "000000000000002A",);
+        assert_eq!(format!("{:?}", Field64::from(42u64)), "000000000000002A",);
+        assert_eq!(Field64::extension_degree(), 1);
+
+        let value = Field64::from(7u64);
+        assert_eq!(value * value.inverse().unwrap(), Field64::one());
+        assert!(Field64::zero().inverse().is_none());
+
+        let expected_inverse = value.inverse().unwrap();
+        let mut invertible = value;
+        assert_eq!(
+            invertible.inverse_in_place().map(|inverse| *inverse),
+            Some(expected_inverse),
+        );
+        assert_eq!(invertible, expected_inverse);
+        let mut zero = Field64::zero();
+        assert!(zero.inverse_in_place().is_none());
+        assert!(zero.is_zero());
+
+        let mut erased = value;
+        zeroize::Zeroize::zeroize(&mut erased);
+        assert!(erased.is_zero());
+    }
+
+    #[test]
+    fn prime_field_and_parameter_conversions_cover_wide_and_overflow_inputs() {
+        let repr = U64::from(42u64);
+        let via_params = <Fp64Param as FpParams<LIMBS_64>>::from_bigint(repr);
+        assert_eq!(
+            <Fp64Param as FpParams<LIMBS_64>>::into_bigint(via_params),
+            repr,
+        );
+
+        let via_prime_field = <Field64 as PrimeField>::from_bigint(repr);
+        assert_eq!(via_prime_field, via_params);
+        assert_eq!(<Field64 as PrimeField>::into_bigint(via_prime_field), repr,);
+        let round_trip_uint: U64 = via_prime_field.into();
+        assert_eq!(round_trip_uint, repr);
+
+        let too_wide = Field128::from(U128::new([0, 1]));
+        assert!(
+            std::panic::catch_unwind(|| Field64::from_fp(too_wide)).is_err()
+        );
+
+        assert_eq!(-Field64::zero(), Field64::zero());
+        assert!(std::panic::catch_unwind(|| u8::from(Field64::from(256u64)))
+            .is_err());
+        assert!(std::panic::catch_unwind(|| i8::from(Field64::from(128u64)))
+            .is_err());
+
+        let zero = Field64::zero();
+        assert!(std::panic::catch_unwind(|| Field64::one() / zero).is_err());
+        let mut quotient = Field64::one();
+        assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            quotient /= &zero;
+        },))
+        .is_err());
+    }
+
+    #[test]
+    fn runtime_montgomery_and_negation_paths_match_field_arithmetic() {
+        use std::hint::black_box;
+
+        // Calling the const helper through a function pointer exercises the
+        // runtime implementation as well as the associated-constant use.
+        let inverse_fn: fn() -> u64 = black_box(inv::<Fp64Param, LIMBS_64>);
+        let inverse = inverse_fn();
+        assert_eq!(
+            Fp64Param::MODULUS.as_limbs()[0].wrapping_mul(inverse),
+            u64::MAX,
+        );
+
+        let nonzero = black_box(Field64::from(7u64));
+        assert_eq!(nonzero.neg(), Field64::from(999_996u64));
+        let zero = black_box(Field64::zero());
+        assert_eq!(zero.neg(), Field64::zero());
+
+        // A two-limb field executes both sides of the inner-limb selection in
+        // Montgomery reduction and checks the result against simple integers.
+        let lhs = black_box(Field128::from(123u64));
+        let rhs = black_box(Field128::from(456u64));
+        assert_eq!(lhs.mul(&rhs), Field128::from(56_088u64));
+
+        let (low, high) =
+            lhs.montgomery_form.widening_mul(&rhs.montgomery_form);
+        let reduce: fn(Uint<2>, Uint<2>) -> (bool, Uint<2>) =
+            black_box(Field128::widening_montgomery_reduction);
+        let (carry, reduced) = reduce(low, high);
+        assert!(!carry);
+        assert_eq!(Field128::new_unchecked(reduced), lhs.mul(&rhs));
     }
 }

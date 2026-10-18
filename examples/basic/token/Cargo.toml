@@ -11,8 +11,16 @@ openzeppelin-stylus.workspace = true
 alloy-primitives.workspace = true
 stylus-sdk.workspace = true
 
+[dev-dependencies]
+alloy.workspace = true
+eyre.workspace = true
+stylus-tools.workspace = true
+tokio.workspace = true
+
 [features]
-export-abi = ["openzeppelin-stylus/export-abi"]
+contract-client-gen = []
+integration-tests = ["stylus-tools/integration-tests"]
+export-abi = ["stylus-sdk/export-abi", "openzeppelin-stylus/export-abi"]
 
 [lib]
 crate-type = ["lib", "cdylib"]

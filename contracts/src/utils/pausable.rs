@@ -18,7 +18,7 @@ use alloc::{vec, vec::Vec};
 
 pub use sol::*;
 use stylus_sdk::{
-    call::MethodError, evm, msg, prelude::*, storage::StorageBool,
+    prelude::*, storage::StorageBool, stylus_core::calls::errors::MethodError,
 };
 
 #[cfg_attr(coverage_nightly, coverage(off))]
@@ -77,6 +77,8 @@ pub struct Pausable {
 }
 
 /// Pausable interface.
+#[allow(missing_docs)]
+#[public]
 pub trait IPausable {
     /// Returns true if the contract is paused, and false otherwise.
     ///
@@ -110,7 +112,7 @@ impl Pausable {
     pub fn pause(&mut self) -> Result<(), Error> {
         self.when_not_paused()?;
         self.paused.set(true);
-        evm::log(Paused { account: msg::sender() });
+        self.vm().log(Paused { account: self.vm().msg_sender() });
         Ok(())
     }
 
@@ -126,7 +128,7 @@ impl Pausable {
     pub fn unpause(&mut self) -> Result<(), Error> {
         self.when_paused()?;
         self.paused.set(false);
-        evm::log(Unpaused { account: msg::sender() });
+        self.vm().log(Unpaused { account: self.vm().msg_sender() });
         Ok(())
     }
 
@@ -164,18 +166,19 @@ impl Pausable {
         Ok(())
     }
 }
-
 #[cfg(test)]
 mod tests {
+    use crate::test_support::Contract;
     use alloy_primitives::Address;
-    use motsu::prelude::Contract;
+    use alloy_sol_types::SolError;
     use stylus_sdk::prelude::*;
+    use stylus_sdk::stylus_core::calls::errors::MethodError;
 
-    use crate::utils::pausable::{Error, IPausable, Pausable};
+    use crate::utils::pausable::{EnforcedPause, Error, IPausable, Pausable};
 
     unsafe impl TopLevelStorage for Pausable {}
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn paused_works(contract: Contract<Pausable>, alice: Address) {
         contract.sender(alice).paused.set(true);
         assert!(contract.sender(alice).paused());
@@ -184,7 +187,7 @@ mod tests {
         assert!(!contract.sender(alice).paused());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn when_not_paused_works(contract: Contract<Pausable>, alice: Address) {
         contract.sender(alice).paused.set(false);
 
@@ -192,7 +195,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn when_not_paused_errors_when_paused(
         contract: Contract<Pausable>,
         alice: Address,
@@ -204,7 +207,7 @@ mod tests {
         assert!(matches!(result, Err(Error::EnforcedPause(_))));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn when_paused_works(contract: Contract<Pausable>, alice: Address) {
         contract.sender(alice).pause().unwrap();
         assert!(contract.sender(alice).paused());
@@ -213,7 +216,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn when_paused_errors_when_not_paused(
         contract: Contract<Pausable>,
         alice: Address,
@@ -225,7 +228,7 @@ mod tests {
         assert!(matches!(result, Err(Error::ExpectedPause(_))));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn pause_works(contract: Contract<Pausable>, alice: Address) {
         contract.sender(alice).paused.set(false);
         assert!(!contract.sender(alice).paused());
@@ -236,7 +239,7 @@ mod tests {
         assert!(contract.sender(alice).paused());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn pause_errors_when_already_paused(
         contract: Contract<Pausable>,
         alice: Address,
@@ -249,7 +252,7 @@ mod tests {
         assert!(contract.sender(alice).paused());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn unpause_works(contract: Contract<Pausable>, alice: Address) {
         contract.sender(alice).paused.set(true);
         assert!(contract.sender(alice).paused());
@@ -260,7 +263,7 @@ mod tests {
         assert!(!contract.sender(alice).paused());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn unpause_errors_when_already_unpaused(
         contract: Contract<Pausable>,
         alice: Address,
@@ -272,5 +275,13 @@ mod tests {
         let result = contract.sender(alice).unpause();
         assert!(matches!(result, Err(Error::ExpectedPause(_))));
         assert!(!contract.sender(alice).paused());
+    }
+
+    #[test]
+    fn encodes_pause_error_with_its_solidity_selector() {
+        assert_eq!(
+            Error::EnforcedPause(EnforcedPause {}).encode(),
+            EnforcedPause {}.abi_encode()
+        );
     }
 }

@@ -1,3 +1,4 @@
+use crate::test_support::{constructor, receipt, Account};
 use alloy::{
     hex,
     network::{AnyNetwork, EthereumWallet},
@@ -6,7 +7,6 @@ use alloy::{
     sol,
     sol_types::SolCall,
 };
-use e2e::{constructor, receipt, Account};
 
 use crate::{
     report::{ContractReport, FunctionReport},
@@ -34,26 +34,33 @@ const ROLE: [u8; 32] =
 const NEW_ADMIN_ROLE: [u8; 32] =
     hex!("879ce0d4bfd332649ca3552efe772a38d64a315eb70ab69689fd309c735946b5");
 
+/// Run this contract benchmark in each cache and optimization mode.
+///
+/// # Errors
+///
+/// Returns an error if deployment, an RPC call, or receipt decoding fails.
 pub async fn bench() -> eyre::Result<ContractReport> {
-    ContractReport::generate("AccessControl", run).await
+    Box::pin(ContractReport::generate("AccessControl", run)).await
 }
 
+/// Deploy the contract and run its benchmarked calls.
+///
+/// # Errors
+///
+/// Returns an error if account setup, deployment, an RPC call, or receipt decoding fails.
+#[allow(clippy::large_futures)]
 pub async fn run(cache_opt: Opt) -> eyre::Result<Vec<FunctionReport>> {
     let alice = Account::new().await?;
     let alice_addr = alice.address();
-    let alice_wallet = ProviderBuilder::new()
-        .network::<AnyNetwork>()
-        .with_recommended_fillers()
+    let alice_wallet = ProviderBuilder::new_with_network::<AnyNetwork>()
         .wallet(EthereumWallet::from(alice.signer.clone()))
-        .on_http(alice.url().parse()?);
+        .connect_http(alice.url().parse()?);
 
     let bob = Account::new().await?;
     let bob_addr = bob.address();
-    let bob_wallet = ProviderBuilder::new()
-        .network::<AnyNetwork>()
-        .with_recommended_fillers()
+    let bob_wallet = ProviderBuilder::new_with_network::<AnyNetwork>()
         .wallet(EthereumWallet::from(bob.signer.clone()))
-        .on_http(bob.url().parse()?);
+        .connect_http(bob.url().parse()?);
 
     let contract_addr = deploy(&alice, cache_opt).await?;
 
@@ -61,20 +68,23 @@ pub async fn run(cache_opt: Opt) -> eyre::Result<Vec<FunctionReport>> {
     let contract_bob = AccessControl::new(contract_addr, &bob_wallet);
 
     // IMPORTANT: Order matters!
-    use AccessControl::*;
+    // `revokeRole` is benchmarked against a member so the measured call
+    // exercises the successful revoke path instead of reverting.
+    let _setup_receipt = receipt!(contract.grantRole(ROLE.into(), alice_addr))?;
+
     #[rustfmt::skip]
     let receipts = vec![
-        (hasRoleCall::SIGNATURE, receipt!(contract.hasRole(DEFAULT_ADMIN_ROLE.into(), alice_addr))?),
-        (getRoleAdminCall::SIGNATURE, receipt!(contract.getRoleAdmin(ROLE.into()))?),
-        (revokeRoleCall::SIGNATURE, receipt!(contract.revokeRole(ROLE.into(), alice_addr))?),
-        (grantRoleCall::SIGNATURE, receipt!(contract.grantRole(ROLE.into(), bob_addr))?),
-        (renounceRoleCall::SIGNATURE, receipt!(contract_bob.renounceRole(ROLE.into(), bob_addr))?),
-        (setRoleAdminCall::SIGNATURE, receipt!(contract.setRoleAdmin(ROLE.into(), NEW_ADMIN_ROLE.into()))?),
+        (AccessControl::hasRoleCall::SIGNATURE, receipt!(contract.hasRole(DEFAULT_ADMIN_ROLE.into(), alice_addr))?),
+        (AccessControl::getRoleAdminCall::SIGNATURE, receipt!(contract.getRoleAdmin(ROLE.into()))?),
+        (AccessControl::revokeRoleCall::SIGNATURE, receipt!(contract.revokeRole(ROLE.into(), alice_addr))?),
+        (AccessControl::grantRoleCall::SIGNATURE, receipt!(contract.grantRole(ROLE.into(), bob_addr))?),
+        (AccessControl::renounceRoleCall::SIGNATURE, receipt!(contract_bob.renounceRole(ROLE.into(), bob_addr))?),
+        (AccessControl::setRoleAdminCall::SIGNATURE, receipt!(contract.setRoleAdmin(ROLE.into(), NEW_ADMIN_ROLE.into()))?),
     ];
 
     receipts
         .into_iter()
-        .map(FunctionReport::new)
+        .map(|(signature, receipt)| FunctionReport::new(signature, &receipt))
         .collect::<eyre::Result<Vec<_>>>()
 }
 

@@ -18,7 +18,7 @@
 //!
 //! ```rust,ignore
 //! pub fn foo() {
-//!   assert!(self.has_role(MY_ROLE.into(), msg::sender()));
+//!   assert!(self.has_role(MY_ROLE.into(), self.vm().msg_sender()));
 //!   // ...
 //! }
 //! ```
@@ -45,10 +45,9 @@ use alloy_primitives::{aliases::B32, Address, B256};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
 use stylus_sdk::{
-    call::MethodError,
-    evm, msg,
     prelude::*,
     storage::{StorageB256, StorageBool, StorageMap},
+    stylus_core::calls::errors::MethodError,
 };
 
 use crate::utils::introspection::erc165::IErc165;
@@ -140,6 +139,8 @@ pub struct AccessControl {
 
 /// Interface for an [`AccessControl`] contract.
 #[interface_id]
+#[allow(missing_docs)]
+#[public]
 pub trait IAccessControl {
     /// The error type associated with this interface implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -153,7 +154,7 @@ pub trait IAccessControl {
     /// * `account` - The account to check for membership.
     fn has_role(&self, role: B256, account: Address) -> bool;
 
-    /// Checks if [`msg::sender`] has been granted `role`.
+    /// Checks if the message sender has been granted `role`.
     ///
     /// # Arguments
     ///
@@ -162,7 +163,7 @@ pub trait IAccessControl {
     ///
     /// # Errors
     ///
-    /// * [`Error::UnauthorizedAccount`] - If [`msg::sender`] has not been
+    /// * [`Error::UnauthorizedAccount`] - If the message sender has not been
     ///   granted `role`.
     fn only_role(&self, role: B256) -> Result<(), Self::Error>;
 
@@ -190,7 +191,7 @@ pub trait IAccessControl {
     ///
     /// # Errors
     ///
-    /// * [`Error::UnauthorizedAccount`] - If [`msg::sender`] has not been
+    /// * [`Error::UnauthorizedAccount`] - If the message sender has not been
     ///   granted `role`.
     ///
     /// # Events
@@ -214,7 +215,7 @@ pub trait IAccessControl {
     ///
     /// # Errors
     ///
-    /// * [`Error::UnauthorizedAccount`] - If [`msg::sender`] has not been
+    /// * [`Error::UnauthorizedAccount`] - If the message sender has not been
     ///   granted `role`.
     ///
     /// # Events
@@ -241,7 +242,7 @@ pub trait IAccessControl {
     ///
     /// # Errors
     ///
-    /// * [`Error::BadConfirmation`]  - If [`msg::sender`] is not the
+    /// * [`Error::BadConfirmation`]  - If the message sender is not the
     ///   `confirmation` address.
     ///
     /// # Events
@@ -266,8 +267,8 @@ impl IAccessControl for AccessControl {
         self.roles.getter(role).has_role.get(account)
     }
 
-    fn only_role(&self, role: B256) -> Result<(), Self::Error> {
-        self._check_role(role, msg::sender())
+    fn only_role(&self, role: B256) -> Result<(), Error> {
+        self._check_role(role, self.vm().msg_sender())
     }
 
     fn get_role_admin(&self, role: B256) -> B256 {
@@ -278,7 +279,7 @@ impl IAccessControl for AccessControl {
         &mut self,
         role: B256,
         account: Address,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let admin_role = self.get_role_admin(role);
         self.only_role(admin_role)?;
         self._grant_role(role, account);
@@ -289,7 +290,7 @@ impl IAccessControl for AccessControl {
         &mut self,
         role: B256,
         account: Address,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let admin_role = self.get_role_admin(role);
         self.only_role(admin_role)?;
         self._revoke_role(role, account);
@@ -300,8 +301,8 @@ impl IAccessControl for AccessControl {
         &mut self,
         role: B256,
         confirmation: Address,
-    ) -> Result<(), Self::Error> {
-        if msg::sender() != confirmation {
+    ) -> Result<(), Error> {
+        if self.vm().msg_sender() != confirmation {
             return Err(Error::BadConfirmation(
                 AccessControlBadConfirmation {},
             ));
@@ -330,7 +331,7 @@ impl AccessControl {
     pub fn _set_role_admin(&mut self, role: B256, new_admin_role: B256) {
         let previous_admin_role = self.get_role_admin(role);
         self.roles.setter(role).admin_role.set(new_admin_role);
-        evm::log(RoleAdminChanged {
+        self.vm().log(RoleAdminChanged {
             role,
             previous_admin_role,
             new_admin_role,
@@ -347,7 +348,7 @@ impl AccessControl {
     ///
     /// # Errors
     ///
-    /// * [`Error::UnauthorizedAccount`] - If [`msg::sender`] has not been
+    /// * [`Error::UnauthorizedAccount`] - If the message sender has not been
     ///   granted `role`.
     pub fn _check_role(
         &self,
@@ -382,7 +383,11 @@ impl AccessControl {
             false
         } else {
             self.roles.setter(role).has_role.insert(account, true);
-            evm::log(RoleGranted { role, account, sender: msg::sender() });
+            self.vm().log(RoleGranted {
+                role,
+                account,
+                sender: self.vm().msg_sender(),
+            });
             true
         }
     }
@@ -404,14 +409,17 @@ impl AccessControl {
     pub fn _revoke_role(&mut self, role: B256, account: Address) -> bool {
         if self.has_role(role, account) {
             self.roles.setter(role).has_role.insert(account, false);
-            evm::log(RoleRevoked { role, account, sender: msg::sender() });
+            self.vm().log(RoleRevoked {
+                role,
+                account,
+                sender: self.vm().msg_sender(),
+            });
             true
         } else {
             false
         }
     }
 }
-
 #[public]
 impl IErc165 for AccessControl {
     fn supports_interface(&self, interface_id: B32) -> bool {
@@ -419,10 +427,9 @@ impl IErc165 for AccessControl {
             || <Self as IErc165>::interface_id() == interface_id
     }
 }
-
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::Contract;
+    use crate::test_support::Contract;
     use stylus_sdk::{alloy_primitives::Address, prelude::*};
 
     use super::*;
@@ -447,7 +454,7 @@ mod tests {
 
     unsafe impl TopLevelStorage for AccessControl {}
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn default_role_is_default_admin(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -456,7 +463,7 @@ mod tests {
         assert_eq!(role_admin, DEFAULT_ADMIN_ROLE);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn default_admin_roles_admin_is_itself(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -466,7 +473,7 @@ mod tests {
         assert_eq!(role_admin, DEFAULT_ADMIN_ROLE);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn non_admin_cannot_grant_role_to_others(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -477,7 +484,7 @@ mod tests {
         assert!(matches!(err, Error::UnauthorizedAccount(_)));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn accounts_can_be_granted_roles_multiple_times(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -491,7 +498,7 @@ mod tests {
         assert!(has_role);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn not_granted_roles_can_be_revoked(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -506,7 +513,7 @@ mod tests {
         assert!(!has_role);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn admin_can_revoke_role(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -522,7 +529,7 @@ mod tests {
         assert!(!has_role);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn non_admin_cannot_revoke_role(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -537,7 +544,7 @@ mod tests {
         assert!(matches!(err, Error::UnauthorizedAccount(_)));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn roles_can_be_revoked_multiple_times(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -551,7 +558,7 @@ mod tests {
         assert!(!has_role);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn bearer_can_renounce_role(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -565,7 +572,7 @@ mod tests {
         assert!(!has_role);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn only_sender_can_renounce(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -577,7 +584,7 @@ mod tests {
         assert!(matches!(err, Error::BadConfirmation(_)));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn roles_can_be_renounced_multiple_times(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -591,7 +598,7 @@ mod tests {
         assert!(!has_role);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn a_roles_admin_role_can_change(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -603,7 +610,7 @@ mod tests {
         assert_eq!(admin_role, OTHER_ROLE);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn the_new_admin_can_grant_roles(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -617,7 +624,7 @@ mod tests {
         assert!(has_role);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn the_new_admin_can_revoke_roles(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -632,7 +639,7 @@ mod tests {
         assert!(!has_role);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn previous_admins_no_longer_grant_roles(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -646,7 +653,7 @@ mod tests {
         assert!(matches!(err, Error::UnauthorizedAccount(_)));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn previous_admins_no_longer_revoke_roles(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -660,7 +667,7 @@ mod tests {
         assert!(matches!(err, Error::UnauthorizedAccount(_)));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn does_not_revert_if_sender_has_role(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -670,7 +677,7 @@ mod tests {
         contract.sender(alice)._check_role(ROLE.into(), alice).unwrap();
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn reverts_if_sender_doesnt_have_role(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -685,7 +692,7 @@ mod tests {
         assert!(matches!(err, Error::UnauthorizedAccount(_)));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn internal_grant_role_true_if_no_role(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -695,7 +702,7 @@ mod tests {
         assert!(role_granted);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn internal_grant_role_false_if_role(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -707,7 +714,7 @@ mod tests {
         assert!(!role_granted);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn internal_revoke_role_true_if_role(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -720,7 +727,7 @@ mod tests {
         assert!(role_revoked);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn internal_revoke_role_false_if_no_role(
         contract: Contract<AccessControl>,
         alice: Address,
@@ -731,14 +738,14 @@ mod tests {
         assert!(!role_revoked);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn interface_id() {
         let actual = <AccessControl as IAccessControl>::interface_id();
         let expected: B32 = 0x7965db0b_u32.into();
         assert_ne!(actual, expected);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn supports_interface(contract: Contract<AccessControl>, alice: Address) {
         assert!(contract.sender(alice).supports_interface(
             <AccessControl as IAccessControl>::interface_id()

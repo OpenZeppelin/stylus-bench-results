@@ -40,6 +40,8 @@ pub struct Erc1155MetadataUri {
 
 /// Interface for the optional metadata functions from the ERC-1155 standard.
 #[interface_id]
+#[allow(missing_docs)]
+#[public]
 pub trait IErc1155MetadataUri {
     /// Returns the URI for token type `id`.
     ///
@@ -85,10 +87,9 @@ impl IErc165 for Erc1155MetadataUri {
             || <Self as IErc165>::interface_id() == interface_id
     }
 }
-
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::Contract;
+    use crate::test_support::Contract;
     use stylus_sdk::{
         alloy_primitives::{uint, Address},
         prelude::*,
@@ -98,7 +99,7 @@ mod tests {
 
     unsafe impl TopLevelStorage for Erc1155MetadataUri {}
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn uri_ignores_token_id(
         contract: Contract<Erc1155MetadataUri>,
         alice: Address,
@@ -113,7 +114,7 @@ mod tests {
         assert_eq!(uri, contract.sender(alice).uri(token_id));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn interface_id() {
         let actual =
             <Erc1155MetadataUri as IErc1155MetadataUri>::interface_id();
@@ -121,7 +122,7 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn supports_interface(
         contract: Contract<Erc1155MetadataUri>,
         alice: Address,

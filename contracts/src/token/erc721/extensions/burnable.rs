@@ -3,12 +3,14 @@ use alloc::vec::Vec;
 
 use alloy_primitives::{Address, U256};
 use openzeppelin_stylus_proc::interface_id;
-use stylus_sdk::{msg, prelude::*};
+use stylus_sdk::prelude::*;
 
 use crate::token::erc721::{self, Erc721};
 
 /// An [`Erc721`] token that can be burned (destroyed).
 #[interface_id]
+#[allow(missing_docs)]
+#[public]
 pub trait IErc721Burnable {
     /// The error type associated to this trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -36,21 +38,21 @@ pub trait IErc721Burnable {
 impl IErc721Burnable for Erc721 {
     type Error = erc721::Error;
 
-    fn burn(&mut self, token_id: U256) -> Result<(), Self::Error> {
+    fn burn(&mut self, token_id: U256) -> Result<(), erc721::Error> {
         // Setting an "auth" arguments enables the
         // [`super::super::Erc721::_is_authorized`] check which verifies that
         // the token exists (from != [`Address::ZERO`]).
         //
         // Therefore, it is not needed to verify that the return value is not 0
         // here.
-        self._update(Address::ZERO, token_id, msg::sender())?;
+        self._update(Address::ZERO, token_id, self.vm().msg_sender())?;
         Ok(())
     }
 }
 #[cfg(test)]
 mod tests {
+    use crate::test_support::*;
     use alloy_primitives::{uint, Address};
-    use motsu::prelude::*;
 
     use super::*;
     use crate::token::erc721::{
@@ -60,7 +62,7 @@ mod tests {
 
     const TOKEN_ID: U256 = uint!(1_U256);
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn burns(contract: Contract<Erc721>, alice: Address) {
         let one = uint!(1_U256);
 
@@ -97,7 +99,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn burns_with_approval(
         contract: Contract<Erc721>,
         alice: Address,
@@ -141,7 +143,7 @@ mod tests {
         assert_eq!(initial_balance - uint!(1_U256), balance);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn burns_with_approval_for_all(
         contract: Contract<Erc721>,
         alice: Address,
@@ -186,7 +188,7 @@ mod tests {
         assert_eq!(initial_balance - uint!(1_U256), balance);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_get_approved_of_previous_approval_burned(
         contract: Contract<Erc721>,
         alice: Address,
@@ -219,7 +221,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_burn_without_approval(
         contract: Contract<Erc721>,
         alice: Address,
@@ -244,7 +246,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_burn_nonexistent_token(
         contract: Contract<Erc721>,
         alice: Address,

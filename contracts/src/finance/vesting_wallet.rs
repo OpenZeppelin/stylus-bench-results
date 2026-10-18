@@ -35,11 +35,11 @@ use alloy_primitives::{aliases::B32, Address, U256, U64};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
 use stylus_sdk::{
-    block,
-    call::{call, Call, MethodError},
-    contract, evm, function_selector,
+    call::call,
+    function_selector,
     prelude::*,
     storage::{StorageMap, StorageU256, StorageU64},
+    stylus_core::calls::errors::{Error as CallError, MethodError},
 };
 
 use crate::{
@@ -48,7 +48,13 @@ use crate::{
         interface::Erc20Interface,
         utils::{safe_erc20, ISafeErc20, SafeErc20},
     },
-    utils::{introspection::erc165::IErc165, math::storage::AddAssignChecked},
+    utils::{
+        introspection::erc165::IErc165,
+        math::{
+            alloy::{Math, Rounding},
+            storage::AddAssignChecked,
+        },
+    },
 };
 
 #[cfg_attr(coverage_nightly, coverage(off))]
@@ -124,13 +130,11 @@ impl From<ownable::Error> for Error {
     }
 }
 
-impl From<stylus_sdk::call::Error> for Error {
-    fn from(value: stylus_sdk::call::Error) -> Self {
+impl From<CallError> for Error {
+    fn from(value: CallError) -> Self {
         match value {
-            stylus_sdk::call::Error::AbiDecodingFailed(_) => {
-                Error::FailedCall(FailedCall {})
-            }
-            stylus_sdk::call::Error::Revert(reason) => {
+            CallError::AbiDecodingFailed(_) => Error::FailedCall(FailedCall {}),
+            CallError::Revert(reason) => {
                 Error::ReleaseEtherFailed(ReleaseEtherFailed {
                     reason: String::from_utf8_lossy(&reason).to_string(),
                 })
@@ -184,6 +188,8 @@ unsafe impl TopLevelStorage for VestingWallet {}
 
 /// Required interface of a [`VestingWallet`] compliant contract.
 #[interface_id]
+#[allow(missing_docs)]
+#[public]
 pub trait IVestingWallet {
     /// The error type associated to this trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -291,7 +297,6 @@ pub trait IVestingWallet {
     /// # Panics
     ///
     /// * If total allocation exceeds [`U256::MAX`].
-    /// * If scaled, total allocation (mid calculation) exceeds [`U256::MAX`].
     #[selector(name = "releasable")]
     fn releasable_eth(&self) -> U256;
 
@@ -310,7 +315,6 @@ pub trait IVestingWallet {
     /// # Panics
     ///
     /// * If total allocation exceeds [`U256::MAX`].
-    /// * If scaled, total allocation (mid calculation) exceeds [`U256::MAX`].
     #[selector(name = "releasable")]
     fn releasable_erc20(&mut self, token: Address)
         -> Result<U256, Self::Error>;
@@ -332,7 +336,6 @@ pub trait IVestingWallet {
     /// # Panics
     ///
     /// * If total allocation exceeds [`U256::MAX`].
-    /// * If scaled total allocation (mid calculation) exceeds [`U256::MAX`].
     #[selector(name = "release")]
     fn release_eth(&mut self) -> Result<(), Self::Error>;
 
@@ -356,7 +359,6 @@ pub trait IVestingWallet {
     /// # Panics
     ///
     /// * If total allocation exceeds [`U256::MAX`].
-    /// * If scaled, total allocation (mid calculation) exceeds [`U256::MAX`].
     #[selector(name = "release")]
     fn release_erc20(&mut self, token: Address) -> Result<(), Self::Error>;
 
@@ -371,7 +373,6 @@ pub trait IVestingWallet {
     /// # Panics
     ///
     /// * If total allocation exceeds [`U256::MAX`].
-    /// * If scaled, total allocation (mid calculation) exceeds [`U256::MAX`].
     #[selector(name = "vestedAmount")]
     fn vested_amount_eth(&self, timestamp: u64) -> U256;
 
@@ -391,7 +392,6 @@ pub trait IVestingWallet {
     /// # Panics
     ///
     /// * If total allocation exceeds [`U256::MAX`].
-    /// * If scaled, total allocation (mid calculation) exceeds [`U256::MAX`].
     #[selector(name = "vestedAmount")]
     fn vested_amount_erc20(
         &mut self,
@@ -449,14 +449,11 @@ impl IVestingWallet for VestingWallet {
         self.ownable.owner()
     }
 
-    fn transfer_ownership(
-        &mut self,
-        new_owner: Address,
-    ) -> Result<(), Self::Error> {
+    fn transfer_ownership(&mut self, new_owner: Address) -> Result<(), Error> {
         Ok(self.ownable.transfer_ownership(new_owner)?)
     }
 
-    fn renounce_ownership(&mut self) -> Result<(), Self::Error> {
+    fn renounce_ownership(&mut self) -> Result<(), Error> {
         Ok(self.ownable.renounce_ownership()?)
     }
 
@@ -488,22 +485,21 @@ impl IVestingWallet for VestingWallet {
     fn releasable_eth(&self) -> U256 {
         // SAFETY: total vested amount is by definition greater than or equal to
         // the released amount.
-        self.vested_amount_eth(block::timestamp()) - self.released_eth()
+        self.vested_amount_eth(self.vm().block_timestamp())
+            - self.released_eth()
     }
 
     #[selector(name = "releasable")]
-    fn releasable_erc20(
-        &mut self,
-        token: Address,
-    ) -> Result<U256, Self::Error> {
-        let vested = self.vested_amount_erc20(token, block::timestamp())?;
+    fn releasable_erc20(&mut self, token: Address) -> Result<U256, Error> {
+        let vested =
+            self.vested_amount_erc20(token, self.vm().block_timestamp())?;
         // SAFETY: total vested amount is by definition greater than or equal to
         // the released amount.
         Ok(vested - self.released_erc20(token))
     }
 
     #[selector(name = "release")]
-    fn release_eth(&mut self) -> Result<(), Self::Error> {
+    fn release_eth(&mut self) -> Result<(), Error> {
         let amount = self.releasable_eth();
 
         self.released.add_assign_checked(
@@ -512,16 +508,17 @@ impl IVestingWallet for VestingWallet {
         );
 
         let owner = self.ownable.owner();
+        let host = (*self.vm()).clone();
 
-        call(Call::new_in(self).value(amount), owner, &[])?;
+        call(&host, Call::new_payable(self, amount), owner, &[])?;
 
-        evm::log(EtherReleased { amount });
+        self.vm().log(EtherReleased { amount });
 
         Ok(())
     }
 
     #[selector(name = "release")]
-    fn release_erc20(&mut self, token: Address) -> Result<(), Self::Error> {
+    fn release_erc20(&mut self, token: Address) -> Result<(), Error> {
         let amount = self.releasable_erc20(token)?;
         let owner = self.ownable.owner();
 
@@ -532,14 +529,16 @@ impl IVestingWallet for VestingWallet {
 
         self.safe_erc20.safe_transfer(token, owner, amount)?;
 
-        evm::log(ERC20Released { token, amount });
+        self.vm().log(ERC20Released { token, amount });
 
         Ok(())
     }
 
     #[selector(name = "vestedAmount")]
     fn vested_amount_eth(&self, timestamp: u64) -> U256 {
-        let total_allocation = contract::balance()
+        let total_allocation = self
+            .vm()
+            .balance(self.vm().contract_address())
             .checked_add(self.released_eth())
             .expect("total allocation should not exceed `U256::MAX`");
 
@@ -551,10 +550,10 @@ impl IVestingWallet for VestingWallet {
         &mut self,
         token: Address,
         timestamp: u64,
-    ) -> Result<U256, Self::Error> {
+    ) -> Result<U256, Error> {
         let erc20 = Erc20Interface::new(token);
         let balance = erc20
-            .balance_of(Call::new_in(self), contract::address())
+            .balance_of(self.vm(), Call::new(), self.vm().contract_address())
             .map_err(|_| InvalidToken { token })?;
 
         let total_allocation = balance
@@ -578,7 +577,6 @@ impl VestingWallet {
     ///
     /// # Panics
     ///
-    /// * If scaled, total allocation (mid calculation) exceeds [`U256::MAX`].
     fn vesting_schedule(&self, total_allocation: U256, timestamp: U64) -> U256 {
         let timestamp = U256::from(timestamp);
 
@@ -591,18 +589,13 @@ impl VestingWallet {
             // `self.start()` as checked by earlier bounds.
             let elapsed = timestamp - self.start();
 
-            let scaled_allocation = total_allocation
-                .checked_mul(elapsed)
-                .expect("scaled allocation exceeds `U256::MAX`");
-
             // SAFETY: `self.duration()` is non-zero. If `self.duration()` were
             // zero, then `end == start`, meaning that `timestamp >= self.end()`
             // and the function would have returned earlier.
-            scaled_allocation / self.duration()
+            total_allocation.mul_div(elapsed, self.duration(), Rounding::Floor)
         }
     }
 }
-
 #[public]
 impl IErc165 for VestingWallet {
     fn supports_interface(&self, interface_id: B32) -> bool {
@@ -611,24 +604,45 @@ impl IErc165 for VestingWallet {
             || <Self as IErc165>::interface_id() == interface_id
     }
 }
-
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::Contract;
-    use stylus_sdk::{
-        alloy_primitives::{uint, Address, U256, U64},
-        block,
-    };
+    use crate::test_support::{Contract, TransactionResultExt};
+    use alloy_sol_types::{SolCall, SolError, SolEvent, SolValue};
+    use stylus_sdk::alloy_primitives::{uint, Address, U256, U64};
+    use stylus_sdk::stylus_core::calls::errors::MethodError;
 
     use super::*;
     use crate::token::erc20::Erc20;
+
+    alloy_sol_types::sol! {
+        interface Erc20BalanceOfCall {
+            function balanceOf(address account) external view returns (uint256);
+        }
+
+        interface Erc20TransferCall {
+            function transfer(address to, uint256 value) external returns (bool);
+        }
+    }
 
     const BALANCE: u64 = 1000;
 
     const DURATION: u64 = 4 * 365 * 86400; // 4 years
 
-    fn start() -> u64 {
-        block::timestamp() + 3600 // 1 hour
+    fn start(contract: &Contract<VestingWallet>) -> u64 {
+        contract.vm().block_timestamp() + 3600
+    }
+
+    fn assert_not_emitted<E: SolEvent>(
+        contract: &Contract<VestingWallet>,
+        event: &E,
+    ) {
+        let expected = event.encode_log_data();
+        assert!(!contract.vm().get_emitted_logs().iter().any(
+            |(topics, data)| {
+                topics == expected.topics()
+                    && data.as_slice() == expected.data.as_ref()
+            }
+        ));
     }
 
     impl VestingWallet {
@@ -641,26 +655,28 @@ mod tests {
         }
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn reads_start(contract: Contract<VestingWallet>, alice: Address) {
-        let (start, _) = contract.sender(alice).init(start(), DURATION);
+        let (start, _) =
+            contract.sender(alice).init(start(&contract), DURATION);
         assert_eq!(U256::from(start), contract.sender(alice).start());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn reads_duration(contract: Contract<VestingWallet>, alice: Address) {
         let (_, duration) = contract.sender(alice).init(0, DURATION);
         assert_eq!(U256::from(duration), contract.sender(alice).duration());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn reads_end(contract: Contract<VestingWallet>, alice: Address) {
-        let (start, duration) = contract.sender(alice).init(start(), DURATION);
+        let (start, duration) =
+            contract.sender(alice).init(start(&contract), DURATION);
 
         assert_eq!(U256::from(start + duration), contract.sender(alice).end());
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn reads_max_end(contract: Contract<VestingWallet>, alice: Address) {
         contract.sender(alice).init(u64::MAX, u64::MAX);
         assert_eq!(
@@ -669,12 +685,13 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn gets_vesting_schedule(
         contract: Contract<VestingWallet>,
         alice: Address,
     ) {
-        let (start, duration) = contract.sender(alice).init(start(), DURATION);
+        let (start, duration) =
+            contract.sender(alice).init(start(&contract), DURATION);
 
         let one = uint!(1_U256);
         let two = uint!(2_U256);
@@ -701,12 +718,12 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn gets_vesting_schedule_zero_duration(
         contract: Contract<VestingWallet>,
         alice: Address,
     ) {
-        let (start, _) = contract.sender(alice).init(start(), 0);
+        let (start, _) = contract.sender(alice).init(start(&contract), 0);
 
         let two = uint!(2_U256);
 
@@ -721,19 +738,44 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
+    fn vesting_schedule_floors_each_partial_second(
+        contract: Contract<VestingWallet>,
+        alice: Address,
+    ) {
+        let start = U64::from(start(&contract));
+        let duration = U64::from(4);
+        contract.sender(alice).init(start.to(), duration.to());
+
+        let vested = [0, 2, 5, 7, 10];
+        for (elapsed, expected) in vested.into_iter().enumerate() {
+            assert_eq!(
+                U256::from(expected),
+                contract.sender(alice).vesting_schedule(
+                    U256::from(10),
+                    start + U64::from(elapsed as u64),
+                ),
+            );
+        }
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn check_vested_amount_erc20(
         vesting_wallet: Contract<VestingWallet>,
         erc20: Contract<Erc20>,
         alice: Address,
     ) {
-        vesting_wallet.sender(alice).init(start(), DURATION);
-        erc20
-            .sender(alice)
-            ._mint(vesting_wallet.address(), U256::from(BALANCE))
-            .unwrap();
+        vesting_wallet.sender(alice).init(start(&vesting_wallet), DURATION);
+        vesting_wallet.vm().mock_static_call(
+            erc20.address(),
+            Erc20BalanceOfCall::balanceOfCall {
+                account: vesting_wallet.address(),
+            }
+            .abi_encode(),
+            Ok(U256::from(BALANCE).abi_encode()),
+        );
 
-        let start = start();
+        let start = start(&vesting_wallet);
         for i in 0..64 {
             let timestamp = i * DURATION / 60 + start;
             let expected_amount = U256::from(std::cmp::min(
@@ -752,14 +794,14 @@ mod tests {
         }
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn interface_id() {
         let actual = <VestingWallet as IVestingWallet>::interface_id();
         let expected: B32 = 0x23a2649d_u32.into();
         assert_ne!(actual, expected);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn supports_interface(contract: Contract<VestingWallet>, alice: Address) {
         assert!(contract.sender(alice).supports_interface(
             <VestingWallet as IVestingWallet>::interface_id()
@@ -770,5 +812,263 @@ mod tests {
 
         let fake_interface_id: B32 = 0x12345678_u32.into();
         assert!(!contract.sender(alice).supports_interface(fake_interface_id));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn constructor_sets_schedule_and_rejects_zero_beneficiary(
+        contract: Contract<VestingWallet>,
+        alice: Address,
+    ) {
+        let start = U64::from(start(&contract));
+        let duration = U64::from(DURATION);
+
+        contract
+            .sender(alice)
+            .constructor(alice, start, duration)
+            .expect("valid beneficiary should be accepted");
+        assert_eq!(contract.sender(alice).owner(), alice);
+        assert_eq!(contract.sender(alice).start(), U256::from(start));
+        assert_eq!(contract.sender(alice).duration(), U256::from(duration));
+
+        let other = Contract::<VestingWallet>::new();
+        assert!(matches!(
+            other
+                .sender(alice)
+                .constructor(Address::ZERO, start, duration)
+                .expect_error("zero beneficiary must be rejected"),
+            Error::InvalidOwner(_)
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn release_eth_sends_only_the_vested_balance_and_emits_event(
+        contract: Contract<VestingWallet>,
+        alice: Address,
+    ) {
+        let start = U64::from(start(&contract));
+        let duration = U64::from(DURATION);
+        contract.sender(alice).constructor(alice, start, duration).unwrap();
+        contract.fund(contract.address(), U256::from(BALANCE));
+
+        let timestamp = start + duration / U64::from(2);
+        contract.vm().set_block_timestamp(timestamp.to());
+        let amount = U256::from(BALANCE / 2);
+        contract.vm().mock_call(alice, vec![], amount, Ok(vec![]));
+
+        contract.sender(alice).release_eth().unwrap();
+
+        assert_eq!(contract.sender(alice).released_eth(), amount);
+        contract.assert_emitted(&EtherReleased { amount });
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn failed_eth_release_rolls_back_released_amount(
+        contract: Contract<VestingWallet>,
+        alice: Address,
+    ) {
+        let start = U64::from(start(&contract));
+        let duration = U64::from(DURATION);
+        contract.sender(alice).constructor(alice, start, duration).unwrap();
+        contract.fund(contract.address(), U256::from(BALANCE));
+
+        let timestamp = start + duration / U64::from(2);
+        contract.vm().set_block_timestamp(timestamp.to());
+        let amount = U256::from(BALANCE / 2);
+        contract.vm().mock_call(
+            alice,
+            vec![],
+            amount,
+            Err(b"transfer failed".to_vec()),
+        );
+        contract.vm().log(EtherReleased { amount: amount + U256::ONE });
+
+        let error = contract
+            .sender(alice)
+            .release_eth()
+            .expect_error("reverting beneficiary call must fail release");
+        assert!(matches!(
+            error,
+            Error::ReleaseEtherFailed(ReleaseEtherFailed { reason })
+                if reason == "transfer failed"
+        ));
+        assert_eq!(contract.sender(alice).released_eth(), U256::ZERO);
+        assert_not_emitted(&contract, &EtherReleased { amount });
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn release_erc20_updates_accounting_and_emits_event(
+        contract: Contract<VestingWallet>,
+        token: Contract<Erc20>,
+        alice: Address,
+    ) {
+        let start = U64::from(start(&contract));
+        let duration = U64::from(DURATION);
+        contract.sender(alice).constructor(alice, start, duration).unwrap();
+        let timestamp = start + duration / U64::from(2);
+        contract.vm().set_block_timestamp(timestamp.to());
+        let amount = U256::from(BALANCE / 2);
+
+        contract.vm().mock_static_call(
+            token.address(),
+            Erc20BalanceOfCall::balanceOfCall { account: contract.address() }
+                .abi_encode(),
+            Ok(U256::from(BALANCE).abi_encode()),
+        );
+        contract.vm().mock_call(
+            token.address(),
+            Erc20TransferCall::transferCall { to: alice, value: amount }
+                .abi_encode(),
+            U256::ZERO,
+            Ok(true.abi_encode()),
+        );
+
+        contract.sender(alice).release_erc20(token.address()).unwrap();
+
+        assert_eq!(
+            contract.sender(alice).released_erc20(token.address()),
+            amount
+        );
+        contract
+            .assert_emitted(&ERC20Released { token: token.address(), amount });
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn failed_erc20_release_does_not_record_tokens_as_released(
+        contract: Contract<VestingWallet>,
+        token: Contract<Erc20>,
+        alice: Address,
+    ) {
+        let start = U64::from(start(&contract));
+        let duration = U64::from(DURATION);
+        contract.sender(alice).constructor(alice, start, duration).unwrap();
+        contract
+            .vm()
+            .set_block_timestamp((start + duration / U64::from(2)).to());
+        let amount = U256::from(BALANCE / 2);
+
+        contract.vm().mock_static_call(
+            token.address(),
+            Erc20BalanceOfCall::balanceOfCall { account: contract.address() }
+                .abi_encode(),
+            Ok(U256::from(BALANCE).abi_encode()),
+        );
+        contract.vm().mock_call(
+            token.address(),
+            Erc20TransferCall::transferCall { to: alice, value: amount }
+                .abi_encode(),
+            U256::ZERO,
+            Ok(false.abi_encode()),
+        );
+
+        assert!(matches!(
+            contract
+                .sender(alice)
+                .release_erc20(token.address())
+                .expect_error("false-returning token must fail safe transfer"),
+            Error::SafeErc20FailedOperation(
+                crate::token::erc20::utils::safe_erc20::SafeErc20FailedOperation { token: failed_token }
+            ) if failed_token == token.address()
+        ));
+        assert_eq!(
+            contract.sender(alice).released_erc20(token.address()),
+            U256::ZERO
+        );
+        assert_not_emitted(
+            &contract,
+            &ERC20Released { token: token.address(), amount },
+        );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn releasable_erc20_rejects_addresses_without_token_code(
+        contract: Contract<VestingWallet>,
+        alice: Address,
+        no_code: Address,
+    ) {
+        assert!(matches!(
+            contract
+                .sender(alice)
+                .releasable_erc20(no_code)
+                .expect_error("token without code must be rejected"),
+            Error::InvalidToken(InvalidToken { token }) if token == no_code
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn receive_accepts_ether(
+        contract: Contract<VestingWallet>,
+        alice: Address,
+    ) {
+        contract
+            .sender_and_value(alice, U256::ONE)
+            .receive()
+            .expect("should accept an empty-data Ether transfer");
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn interface_forwards_ownership_transfer_and_renounce(
+        contract: Contract<VestingWallet>,
+        alice: Address,
+        bob: Address,
+        charlie: Address,
+    ) {
+        contract
+            .sender(alice)
+            .constructor(alice, U64::from(1), U64::from(10))
+            .expect("should initialize the owner and vesting schedule");
+
+        assert!(matches!(
+            contract
+                .sender(bob)
+                .transfer_ownership(charlie)
+                .expect_error("non-owner should not transfer ownership"),
+            Error::UnauthorizedAccount(
+                ownable::OwnableUnauthorizedAccount { account }
+            ) if account == bob
+        ));
+
+        contract
+            .sender(alice)
+            .transfer_ownership(bob)
+            .expect("should transfer ownership through IVestingWallet");
+        assert_eq!(contract.sender(alice).owner(), bob);
+
+        contract
+            .sender(bob)
+            .renounce_ownership()
+            .expect("should renounce ownership through IVestingWallet");
+        assert_eq!(contract.sender(alice).owner(), Address::ZERO);
+    }
+
+    #[test]
+    fn converts_decrease_allowance_errors_and_encodes_wallet_errors() {
+        let spender = Address::from([0x12; 20]);
+        let current_allowance = U256::from(8);
+        let requested_decrease = U256::from(9);
+
+        let error =
+            Error::from(safe_erc20::Error::SafeErc20FailedDecreaseAllowance(
+                safe_erc20::SafeErc20FailedDecreaseAllowance {
+                    spender,
+                    current_allowance,
+                    requested_decrease,
+                },
+            ));
+        assert!(matches!(
+            error,
+            Error::SafeErc20FailedDecreaseAllowance(
+                safe_erc20::SafeErc20FailedDecreaseAllowance {
+                    spender: actual_spender,
+                    current_allowance: actual_allowance,
+                    requested_decrease: actual_decrease,
+                }
+            ) if actual_spender == spender
+                && actual_allowance == current_allowance
+                && actual_decrease == requested_decrease
+        ));
+
+        let token = Address::from([0x34; 20]);
+        let error = Error::InvalidToken(InvalidToken { token });
+        assert_eq!(error.encode(), InvalidToken { token }.abi_encode());
     }
 }

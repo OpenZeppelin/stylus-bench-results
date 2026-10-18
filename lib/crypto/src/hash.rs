@@ -226,4 +226,17 @@ mod tests {
             assert_eq!(hash1, hash2);
         });
     }
+
+    #[test]
+    fn build_hasher_hash_one_matches_direct_hashing() {
+        let builder = KeccakBuilder;
+        let value = vec![0, 1, 2, 3, 255];
+
+        let convenience_hash = builder.hash_one(value.clone());
+        let mut direct_hasher = builder.build_hasher();
+        value.hash(&mut direct_hasher);
+        assert_eq!(convenience_hash, direct_hasher.finalize());
+        assert_eq!(convenience_hash, builder.hash_one(value.clone()));
+        assert_ne!(convenience_hash, builder.hash_one(vec![0, 1, 2, 3, 254]));
+    }
 }

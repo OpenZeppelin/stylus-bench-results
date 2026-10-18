@@ -15,9 +15,9 @@ use alloy_primitives::{uint, U256, U32};
 pub use generic_size::{Size, S160, S208, S224};
 pub use sol::*;
 use stylus_sdk::{
-    call::MethodError,
     prelude::*,
     storage::{StorageGuard, StorageGuardMut, StorageVec},
+    stylus_core::calls::errors::MethodError,
 };
 
 use crate::utils::{
@@ -372,11 +372,12 @@ impl<S: Size> Trace<S> {
         new_checkpoint.value.set(value);
     }
 }
-
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{uint, Address};
+    use alloy_sol_types::SolError;
     use stylus_sdk::prelude::*;
+    use stylus_sdk::stylus_core::calls::errors::MethodError;
 
     use super::{
         generic_size::S160, CheckpointUnorderedInsertion, Error, Trace,
@@ -387,9 +388,9 @@ mod tests {
     #[public]
     impl Trace<S160> {}
 
-    use motsu::prelude::Contract;
+    use crate::test_support::Contract;
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn push(checkpoint: Contract<Trace<S160>>, alice: Address) {
         let first_key = uint!(1_U96);
         let first_value = uint!(11_U160);
@@ -429,7 +430,7 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn push_same_value(checkpoint: Contract<Trace<S160>>, alice: Address) {
         let first_key = uint!(1_U96);
         let first_value = uint!(11_U160);
@@ -468,7 +469,7 @@ mod tests {
             (third_key, third_value)
         );
     }
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn lower_lookup(checkpoint: Contract<Trace<S160>>, alice: Address) {
         checkpoint
             .sender(alice)
@@ -501,7 +502,7 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn upper_lookup(checkpoint: Contract<Trace<S160>>, alice: Address) {
         checkpoint
             .sender(alice)
@@ -534,7 +535,7 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn upper_lookup_recent(checkpoint: Contract<Trace<S160>>, alice: Address) {
         // `upper_lookup_recent` has different optimizations for "short" (<=5)
         // and "long" (>5) checkpoint arrays.
@@ -599,7 +600,7 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn latest(checkpoint: Contract<Trace<S160>>, alice: Address) {
         assert_eq!(checkpoint.sender(alice).latest(), uint!(0_U160));
         checkpoint
@@ -617,7 +618,7 @@ mod tests {
         assert_eq!(checkpoint.sender(alice).latest(), uint!(55_U160));
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn latest_checkpoint(checkpoint: Contract<Trace<S160>>, alice: Address) {
         assert_eq!(checkpoint.sender(alice).latest_checkpoint(), None);
         checkpoint
@@ -638,7 +639,7 @@ mod tests {
         );
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_unordered_insertion(
         checkpoint: Contract<Trace<S160>>,
         alice: Address,
@@ -661,5 +662,25 @@ mod tests {
                 CheckpointUnorderedInsertion {}
             )
         ));
+    }
+
+    #[test]
+    fn encodes_unordered_checkpoint_error_with_its_solidity_selector() {
+        assert_eq!(
+            Error::CheckpointUnorderedInsertion(
+                CheckpointUnorderedInsertion {},
+            )
+            .encode(),
+            CheckpointUnorderedInsertion {}.abi_encode()
+        );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    #[should_panic(expected = "should get checkpoint at index `0`")]
+    fn panics_when_checkpoint_index_is_out_of_bounds(
+        checkpoint: Contract<Trace<S160>>,
+        alice: Address,
+    ) {
+        checkpoint.sender(alice).at(uint!(0_U32));
     }
 }

@@ -1,16 +1,22 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::{constructor, receipt, send, EventExt, Revert};
 use abi::UpgradeableBeaconExample;
 use alloy::primitives::Address;
-use e2e::{constructor, receipt, send, Account, EventExt, Revert};
 use eyre::Result;
 use mock::erc20;
 
 mod abi;
 mod mock;
 
-#[e2e::test]
-async fn upgrade_to(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn upgrade_to() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let implementation_addr = erc20::deploy(&alice.wallet).await?;
     let receipt = alice
         .as_deployer()
@@ -23,10 +29,10 @@ async fn upgrade_to(alice: Account, bob: Account) -> Result<()> {
         UpgradeableBeaconExample::new(receipt.contract_address, &bob.wallet);
 
     // check initial state.
-    let implementation = contract.implementation().call().await?.implementation;
+    let implementation = contract.implementation().call().await?;
     assert_eq!(implementation, implementation_addr);
 
-    let owner = contract.owner().call().await?.owner;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, alice.address());
 
     assert!(receipt.emits(UpgradeableBeaconExample::Upgraded {
@@ -56,7 +62,7 @@ async fn upgrade_to(alice: Account, bob: Account) -> Result<()> {
         implementation: new_implementation,
     }));
 
-    let implementation = contract.implementation().call().await?.implementation;
+    let implementation = contract.implementation().call().await?;
     assert_eq!(implementation, new_implementation);
 
     Ok(())

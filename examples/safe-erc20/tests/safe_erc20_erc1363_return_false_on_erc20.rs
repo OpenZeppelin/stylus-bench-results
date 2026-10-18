@@ -1,9 +1,11 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::{send, watch, Revert};
 use abi::SafeErc20;
 use alloy::primitives::uint;
 use alloy_primitives::{Bytes, U256};
-use e2e::{send, watch, Account, Revert};
 use mock::{
     erc1363_receiver, erc1363_return_false_on_erc20,
     erc1363_return_false_on_erc20::ERC1363ReturnFalseOnERC20Mock,
@@ -15,11 +17,13 @@ mod mock;
 
 const DATA: Bytes = Bytes::from_static(b"0x12345678");
 
-#[e2e::test]
-async fn reverts_on_transfer_and_call_relaxed(
-    alice: Account,
-) -> eyre::Result<()> {
-    let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn reverts_on_transfer_and_call_relaxed() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
+    let safe_erc20_addr =
+        alice.as_deployer_with_initial_owner().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
 
     let value = uint!(10_U256);
@@ -53,11 +57,13 @@ async fn reverts_on_transfer_and_call_relaxed(
     Ok(())
 }
 
-#[e2e::test]
-async fn reverts_on_transfer_from_and_call_relaxed(
-    alice: Account,
-) -> eyre::Result<()> {
-    let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn reverts_on_transfer_from_and_call_relaxed() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
+    let safe_erc20_addr =
+        alice.as_deployer_with_initial_owner().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
 
     let value = uint!(10_U256);
@@ -93,11 +99,13 @@ async fn reverts_on_transfer_from_and_call_relaxed(
     Ok(())
 }
 
-#[e2e::test]
-async fn reverts_on_approve_and_call_relaxed(
-    alice: Account,
-) -> eyre::Result<()> {
-    let safe_erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn reverts_on_approve_and_call_relaxed() -> eyre::Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
+    let safe_erc20_addr =
+        alice.as_deployer_with_initial_owner().deploy().await?.contract_address;
     let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
 
     let value = uint!(10_U256);

@@ -1,10 +1,12 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 
+#[path = "../../test-support/mod.rs"]
+mod test_support;
+use crate::test_support::{
+    constructor, receipt, send, watch, Constructor, EventExt, Revert,
+};
 use abi::ProxyExample;
 use alloy::primitives::{Address, U256};
-use e2e::{
-    constructor, receipt, send, watch, Account, Constructor, EventExt, Revert,
-};
 use eyre::Result;
 use mock::erc20;
 
@@ -15,8 +17,11 @@ fn ctr(implementation: Address) -> Constructor {
     constructor!(implementation)
 }
 
-#[e2e::test]
-async fn constructs(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn constructs() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let implementation_addr = erc20::deploy(&alice.wallet).await?;
     let contract_addr = alice
         .as_deployer()
@@ -26,14 +31,18 @@ async fn constructs(alice: Account) -> Result<()> {
         .contract_address;
     let contract = ProxyExample::new(contract_addr, &alice.wallet);
 
-    let implementation = contract.implementation().call().await?.implementation;
+    let implementation = contract.implementation().call().await?;
     assert_eq!(implementation, implementation_addr);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn fallback(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn fallback() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let implementation_addr = erc20::deploy(&alice.wallet).await?;
     let contract_addr = alice
         .as_deployer()
@@ -44,10 +53,10 @@ async fn fallback(alice: Account, bob: Account) -> Result<()> {
     let contract = ProxyExample::new(contract_addr, &alice.wallet);
 
     // verify initial balance is [`U256::ZERO`].
-    let balance = contract.balanceOf(alice.address()).call().await?.balance;
+    let balance = contract.balanceOf(alice.address()).call().await?;
     assert_eq!(balance, U256::ZERO);
 
-    let total_supply = contract.totalSupply().call().await?.totalSupply;
+    let total_supply = contract.totalSupply().call().await?;
     assert_eq!(total_supply, U256::ZERO);
 
     // mint 1000 tokens.
@@ -55,10 +64,10 @@ async fn fallback(alice: Account, bob: Account) -> Result<()> {
     watch!(contract.mint(alice.address(), amount))?;
 
     // check that the balance can be accurately fetched through the proxy.
-    let balance = contract.balanceOf(alice.address()).call().await?.balance;
+    let balance = contract.balanceOf(alice.address()).call().await?;
     assert_eq!(balance, amount);
 
-    let total_supply = contract.totalSupply().call().await?.totalSupply;
+    let total_supply = contract.totalSupply().call().await?;
     assert_eq!(total_supply, amount);
 
     // check that the balance can be transferred through the proxy.
@@ -70,20 +79,24 @@ async fn fallback(alice: Account, bob: Account) -> Result<()> {
         value: amount,
     }));
 
-    let balance = contract.balanceOf(alice.address()).call().await?.balance;
+    let balance = contract.balanceOf(alice.address()).call().await?;
     assert_eq!(balance, U256::ZERO);
 
-    let balance = contract.balanceOf(bob.address()).call().await?.balance;
+    let balance = contract.balanceOf(bob.address()).call().await?;
     assert_eq!(balance, amount);
 
-    let total_supply = contract.totalSupply().call().await?.totalSupply;
+    let total_supply = contract.totalSupply().call().await?;
     assert_eq!(total_supply, amount);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn fallback_returns_error(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn fallback_returns_error() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+    let bob = crate::test_support::Account::new().await?;
+
     let implementation_addr = erc20::deploy(&alice.wallet).await?;
     let contract_addr = alice
         .as_deployer()

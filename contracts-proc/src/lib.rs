@@ -18,6 +18,17 @@ macro_rules! error {
 
 mod interface_id;
 
+/// Expands a test with deterministic SDK TestVM fixtures for each argument.
+///
+/// Test arguments must implement `crate::test_support::FromTag`.
+#[doc(hidden)]
+#[proc_macro_attribute]
+pub fn vm_test(attr: TokenStream, input: TokenStream) -> TokenStream {
+    vm_test::vm_test(&attr, input)
+}
+
+mod vm_test;
+
 /// Automatically computes the ERC-165 interface ID for a trait.
 ///
 /// Adds an `interface_id` associated function to your trait by XOR-ing all
@@ -67,7 +78,8 @@ mod interface_id;
 ///
 /// ### Selector collision error
 ///
-/// The macro will catch duplicate Solidity signatures at compile time:
+/// The macro rejects duplicate canonical signatures and distinct signatures
+/// with the same four-byte selector at compile time:
 ///
 /// ```compile_fail
 /// #[interface_id]
@@ -75,7 +87,7 @@ mod interface_id;
 ///     fn transfer(&self, to: Address, amount: U256);          // transfer(address,uint256)
 ///
 ///     #[selector(name = "transfer")]
-///     fn send_tokens(&self, recipient: Address, value: U256); // transfer(address,uint256) ❌ collision!
+///     fn send_tokens(&self, recipient: Address, value: U256); // same canonical signature ❌
 /// }
 /// ```
 #[proc_macro_attribute]

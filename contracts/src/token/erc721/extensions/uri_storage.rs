@@ -6,7 +6,6 @@ use alloc::{string::String, vec, vec::Vec};
 use alloy_primitives::U256;
 pub use sol::*;
 use stylus_sdk::{
-    evm,
     prelude::*,
     storage::{StorageMap, StorageString},
 };
@@ -64,7 +63,7 @@ impl Erc721UriStorage {
     /// * [`MetadataUpdate`].
     pub fn _set_token_uri(&mut self, token_id: U256, token_uri: String) {
         self.token_uris.setter(token_id).set_str(token_uri);
-        evm::log(MetadataUpdate { token_id });
+        self.vm().log(MetadataUpdate { token_id });
     }
 
     /// Check [`IErc721Metadata::token_uri()`] for more details.
@@ -95,11 +94,10 @@ impl Erc721UriStorage {
         Ok(uri)
     }
 }
-
 #[cfg(test)]
 mod tests {
+    use crate::test_support::*;
     use alloy_primitives::{uint, Address};
-    use motsu::prelude::*;
     use stylus_sdk::prelude::*;
 
     use super::*;
@@ -159,14 +157,14 @@ mod tests {
 
     unsafe impl TopLevelStorage for Erc721MetadataExample {}
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn interface_id() {
         let actual = <Erc721MetadataExample as IErc721Metadata>::interface_id();
         let expected: B32 = 0x5b5e139f_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn supports_interface(
         contract: Contract<Erc721MetadataExample>,
         alice: Address,
@@ -181,7 +179,22 @@ mod tests {
         let fake_interface_id: B32 = 0x12345678_u32.into();
         assert!(!contract.sender(alice).supports_interface(fake_interface_id));
     }
-    #[motsu::test]
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn constructor_initializes_name_and_symbol(
+        contract: Contract<Erc721MetadataExample>,
+        alice: Address,
+    ) {
+        let name = String::from("Example Collection");
+        let symbol = String::from("EX");
+
+        contract.sender(alice).constructor(name.clone(), symbol.clone());
+
+        assert_eq!(contract.sender(alice).name(), name);
+        assert_eq!(contract.sender(alice).symbol(), symbol);
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn token_uri_works(
         contract: Contract<Erc721MetadataExample>,
         alice: Address,
@@ -201,6 +214,61 @@ mod tests {
                 .sender(alice)
                 .token_uri(TOKEN_ID)
                 .expect("should return token URI")
+        );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn token_uri_combines_base_and_stored_suffix_or_token_id(
+        contract: Contract<Erc721MetadataExample>,
+        alice: Address,
+    ) {
+        contract
+            .sender(alice)
+            .erc721
+            ._mint(alice, TOKEN_ID)
+            .expect("should mint a token for Alice");
+        contract
+            .sender(alice)
+            .metadata
+            .base_uri
+            .set_str("https://example.test/token/");
+
+        assert_eq!(
+            contract.sender(alice).token_uri(TOKEN_ID).unwrap(),
+            "https://example.test/token/1"
+        );
+
+        let suffix = String::from("metadata.json");
+        contract.sender(alice).set_token_uri(TOKEN_ID, suffix.clone());
+        assert_eq!(
+            contract.sender(alice).token_uri(TOKEN_ID).unwrap(),
+            "https://example.test/token/metadata.json"
+        );
+        contract.assert_emitted(&MetadataUpdate { token_id: TOKEN_ID });
+        assert!(contract
+            .sender(alice)
+            .token_uri(TOKEN_ID + U256::ONE)
+            .is_err());
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn token_uri_without_base_returns_stored_uri_or_empty_string(
+        contract: Contract<Erc721MetadataExample>,
+        alice: Address,
+    ) {
+        contract
+            .sender(alice)
+            .erc721
+            ._mint(alice, TOKEN_ID)
+            .expect("should mint a token for Alice");
+
+        assert_eq!(contract.sender(alice).token_uri(TOKEN_ID).unwrap(), "");
+
+        let stored_uri = String::from("ipfs://metadata");
+        contract.sender(alice).set_token_uri(TOKEN_ID, stored_uri.clone());
+        assert_eq!(
+            contract.sender(alice).token_uri(TOKEN_ID).unwrap(),
+            stored_uri
         );
     }
 }

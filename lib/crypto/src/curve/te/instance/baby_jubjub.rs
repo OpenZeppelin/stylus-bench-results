@@ -12,9 +12,9 @@ use crate::{
     fp_from_num, from_num,
 };
 
-const G_GENERATOR_X: Fq = fp_from_num!("995203441582195749578291179787384436505546430278305826713579947235728471134");
-
-const G_GENERATOR_Y: Fq = fp_from_num!("5472060717959818805561601436314318772137091100104008585924551046643952123905");
+// EIP-2494's Base8 point is 8 * G and generates the prime-order subgroup.
+const BASE_GENERATOR_X: Fq = fp_from_num!("5299619240641551281634865583518297030282874472190772894086521144482721001553");
+const BASE_GENERATOR_Y: Fq = fp_from_num!("16950150798460657717958625567821834550301663161624707787222815936182638968203");
 
 /// Base Field for [`BabyJubjubConfig`].
 pub type Fq = Fp256<BabyJubjubFqParam>;
@@ -54,7 +54,7 @@ impl TECurveConfig for BabyJubjubConfig {
     const COEFF_A: Self::BaseField = fp_from_num!("168700");
     const COEFF_D: Self::BaseField = fp_from_num!("168696");
     const GENERATOR: Affine<Self> =
-        Affine::new_unchecked(G_GENERATOR_X, G_GENERATOR_Y);
+        Affine::new_unchecked(BASE_GENERATOR_X, BASE_GENERATOR_Y);
 }
 
 impl MontCurveConfig for BabyJubjubConfig {

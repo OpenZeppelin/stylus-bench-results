@@ -97,11 +97,11 @@ impl BitMap {
 
 #[cfg(test)]
 mod tests {
+    use crate::test_support::Contract;
     use alloy_primitives::{
         private::proptest::{prop_assert, proptest},
         Address, U256,
     };
-    use motsu::prelude::Contract;
     use stylus_sdk::prelude::{public, TopLevelStorage};
 
     use crate::utils::structs::bitmap::BitMap;
@@ -111,7 +111,7 @@ mod tests {
     #[public]
     impl BitMap {}
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn set_value() {
         proptest!(|(value: U256, alice: Address)| {
             let bit_map = Contract::<BitMap>::new();
@@ -122,7 +122,7 @@ mod tests {
         });
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn unset_value() {
         proptest!(|(value: U256, alice: Address)| {
             let bit_map = Contract::<BitMap>::new();
@@ -134,7 +134,7 @@ mod tests {
         });
     }
 
-    #[motsu::test]
+    #[openzeppelin_stylus_proc::vm_test]
     fn set_to_value() {
         proptest!(|(value: U256, alice: Address)| {
             let bit_map = Contract::<BitMap>::new();

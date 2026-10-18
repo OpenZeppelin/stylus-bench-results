@@ -58,9 +58,23 @@ impl<P: PoseidonParams<F>, F: PrimeField> Default for Poseidon2<P, F> {
 
 impl<P: PoseidonParams<F>, F: PrimeField> Poseidon2<P, F> {
     /// Create a new Poseidon sponge.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the parameter set uses an unsupported state size or a
+    /// capacity that is zero or not smaller than the state size.
     #[must_use]
     #[inline]
     pub fn new() -> Self {
+        assert!(
+            matches!(P::T, 2 | 3 | 4 | 8 | 12 | 16 | 20 | 24),
+            "unsupported Poseidon2 state size"
+        );
+        assert!(
+            P::CAPACITY > 0 && P::CAPACITY < P::T,
+            "Poseidon2 capacity must be positive and smaller than state size"
+        );
+
         Self {
             phantom: core::marker::PhantomData,
             state: vec![F::zero(); P::T].into_boxed_slice(),
@@ -367,5 +381,147 @@ impl<P: PoseidonParams<F>, F: PrimeField> Poseidon2<P, F> {
     #[inline]
     fn add_rc_internal(&mut self, round: usize) {
         self.state[0] += P::ROUND_CONSTANTS[round][0];
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Poseidon2;
+    use crate::{
+        field::instance::{FpBLS12, FpGoldiLocks},
+        poseidon2::{
+            instance::goldilocks::Goldilocks12Params, params::PoseidonParams,
+            Mode,
+        },
+    };
+
+    static T16_DIAG: [FpBLS12; 16] = [FpBLS12::ONE; 16];
+    static T16_ROUND: [FpBLS12; 16] = [FpBLS12::ZERO; 16];
+    static T16_ROUNDS: [&[FpBLS12]; 3] = [&T16_ROUND, &T16_ROUND, &T16_ROUND];
+    static T20_DIAG: [FpBLS12; 20] = [FpBLS12::ONE; 20];
+    static T20_ROUND: [FpBLS12; 20] = [FpBLS12::ZERO; 20];
+    static T20_ROUNDS: [&[FpBLS12]; 3] = [&T20_ROUND, &T20_ROUND, &T20_ROUND];
+
+    struct SupportedStateSize16;
+    impl PoseidonParams<FpBLS12> for SupportedStateSize16 {
+        const T: usize = 16;
+        const D: u8 = 1;
+        const CAPACITY: usize = 1;
+        const ROUNDS_F: usize = 2;
+        const ROUNDS_P: usize = 1;
+        const MAT_INTERNAL_DIAG_M_1: &'static [FpBLS12] = &T16_DIAG;
+        const ROUND_CONSTANTS: &'static [&'static [FpBLS12]] = &T16_ROUNDS;
+    }
+
+    struct SupportedStateSize20;
+    impl PoseidonParams<FpBLS12> for SupportedStateSize20 {
+        const T: usize = 20;
+        const D: u8 = 1;
+        const CAPACITY: usize = 1;
+        const ROUNDS_F: usize = 2;
+        const ROUNDS_P: usize = 1;
+        const MAT_INTERNAL_DIAG_M_1: &'static [FpBLS12] = &T20_DIAG;
+        const ROUND_CONSTANTS: &'static [&'static [FpBLS12]] = &T20_ROUNDS;
+    }
+
+    struct UnsupportedStateSize;
+
+    impl PoseidonParams<FpBLS12> for UnsupportedStateSize {
+        const T: usize = 5;
+        const D: u8 = 5;
+        const CAPACITY: usize = 1;
+        const ROUNDS_F: usize = 8;
+        const ROUNDS_P: usize = 1;
+        const MAT_INTERNAL_DIAG_M_1: &'static [FpBLS12] = &[];
+        const ROUND_CONSTANTS: &'static [&'static [FpBLS12]] = &[];
+    }
+
+    struct CapacityExceedsRate;
+
+    impl PoseidonParams<FpBLS12> for CapacityExceedsRate {
+        const T: usize = 2;
+        const D: u8 = 5;
+        const CAPACITY: usize = 2;
+        const ROUNDS_F: usize = 8;
+        const ROUNDS_P: usize = 1;
+        const MAT_INTERNAL_DIAG_M_1: &'static [FpBLS12] = &[];
+        const ROUND_CONSTANTS: &'static [&'static [FpBLS12]] = &[];
+    }
+
+    struct ZeroCapacity;
+
+    impl PoseidonParams<FpBLS12> for ZeroCapacity {
+        const T: usize = 2;
+        const D: u8 = 5;
+        const CAPACITY: usize = 0;
+        const ROUNDS_F: usize = 8;
+        const ROUNDS_P: usize = 1;
+        const MAT_INTERNAL_DIAG_M_1: &'static [FpBLS12] = &[];
+        const ROUND_CONSTANTS: &'static [&'static [FpBLS12]] = &[];
+    }
+
+    #[test]
+    #[should_panic(expected = "unsupported Poseidon2 state size")]
+    fn rejects_unsupported_state_size_at_construction() {
+        let _ = Poseidon2::<UnsupportedStateSize, FpBLS12>::new();
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Poseidon2 capacity must be positive and smaller than state size"
+    )]
+    fn rejects_capacity_that_leaves_no_rate() {
+        let _ = Poseidon2::<CapacityExceedsRate, FpBLS12>::new();
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Poseidon2 capacity must be positive and smaller than state size"
+    )]
+    fn rejects_zero_capacity() {
+        let _ = Poseidon2::<ZeroCapacity, FpBLS12>::new();
+    }
+
+    #[test]
+    fn default_and_batch_operations_match_single_element_operations() {
+        let input: Vec<_> = (0..20).map(FpGoldiLocks::from).collect();
+        let mut batch =
+            Poseidon2::<Goldilocks12Params, FpGoldiLocks>::default();
+        assert_eq!(batch.mode, Mode::Absorbing);
+        batch.absorb_batch(&input);
+        let batch_output = batch.squeeze_batch(20);
+        assert_eq!(batch.mode, Mode::Squeezing);
+
+        let mut individual =
+            Poseidon2::<Goldilocks12Params, FpGoldiLocks>::new();
+        for element in &input {
+            individual.absorb(element);
+        }
+        let individual_output: Vec<_> =
+            (0..20).map(|_| individual.squeeze()).collect();
+        assert_eq!(batch_output, individual_output);
+    }
+
+    #[test]
+    fn supported_wide_state_sizes_run_external_and_internal_matrices() {
+        fn exercise<P: PoseidonParams<FpBLS12>>() {
+            let mut sponge = Poseidon2::<P, FpBLS12>::new();
+            sponge.absorb(&FpBLS12::from(9u64));
+            sponge.permute();
+
+            assert_eq!(sponge.state.len(), P::T);
+            assert!(sponge.state.iter().any(|value| *value != FpBLS12::ZERO));
+        }
+
+        exercise::<SupportedStateSize16>();
+        exercise::<SupportedStateSize20>();
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot absorb while squeezing")]
+    fn absorb_after_squeezing_is_rejected() {
+        let mut sponge = Poseidon2::<Goldilocks12Params, FpGoldiLocks>::new();
+        let _ = sponge.squeeze();
+        sponge.absorb(&FpGoldiLocks::from(1u64));
     }
 }

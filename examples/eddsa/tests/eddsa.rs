@@ -1,7 +1,8 @@
-#![cfg(feature = "e2e")]
+#![cfg(feature = "integration-tests")]
 
+#[path = "../../test-support/mod.rs"]
+mod test_support;
 use alloy_primitives::hex;
-use e2e::Account;
 use eyre::Result;
 use openzeppelin_crypto::{
     curve::CurveGroup,
@@ -16,8 +17,11 @@ mod abi;
 // Integration Tests: EDDSA
 // ============================================================================
 
-#[e2e::test]
-async fn eddsa_works(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn eddsa_works() -> Result<()> {
+    let _test_context = crate::test_support::TestContext::new().await?;
+    let alice = crate::test_support::Account::new().await?;
+
     let contract_addr = alice.as_deployer().deploy().await?.contract_address;
     let contract = EddsaExample::new(contract_addr, &alice.wallet);
 
@@ -29,7 +33,7 @@ async fn eddsa_works(alice: Account) -> Result<()> {
     // Verify with signed message.
     let message = b"Sign me!";
     let signature = signing_key.sign(message);
-    let EddsaExample::verifyReturn { is_valid } = contract
+    let is_valid = contract
         .verify(
             encode_verifying_key(signing_key.verifying_key()),
             encode_signature(signature),
@@ -41,7 +45,7 @@ async fn eddsa_works(alice: Account) -> Result<()> {
 
     // Verify with a different message.
     let invalid_message = b"I'm not signed!";
-    let EddsaExample::verifyReturn { is_valid } = contract
+    let is_valid = contract
         .verify(
             encode_verifying_key(signing_key.verifying_key()),
             encode_signature(signature),

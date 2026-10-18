@@ -1,10 +1,13 @@
-use std::process::Command;
+use std::{path::PathBuf, process::Command};
 
+use crate::test_support::{Account, Constructor};
 use alloy::primitives::Address;
 use alloy_primitives::U128;
-use e2e::{Account, Constructor};
-use eyre::WrapErr;
+use eyre::{ContextCompat, WrapErr};
 use serde::Deserialize;
+
+#[path = "../../examples/test-support/mod.rs"]
+pub mod test_support;
 
 pub mod access_control;
 pub mod erc1155;
@@ -30,14 +33,14 @@ struct ArbOtherFields {
     l1_block_number: String,
 }
 
-/// Optimisation options for the contract.
+/// Benchmark modes supported by the SDK devnet.
 ///
-/// Cache or cache optimized WASM.
+/// Binaryen 116 output currently contains a `DataCountSection` rejected by the
+/// SDK devnet's Nitro parser, so benchmarks use the deployable Rust Wasm output.
 #[derive(Clone)]
 pub enum Opt {
     None,
     Cache,
-    CacheWasmOpt,
 }
 
 async fn deploy(
@@ -46,35 +49,43 @@ async fn deploy(
     constructor: Option<Constructor>,
     opt: Opt,
 ) -> eyre::Result<Address> {
-    let manifest_dir =
-        std::env::current_dir().context("should get current dir from env")?;
-
-    let contract_type = match opt {
-        Opt::CacheWasmOpt => "example_opt",
-        Opt::None | Opt::Cache => "example",
+    // Set this only for cross-version measurements. The path must be a
+    // workspace root with prebuilt release Wasm artifacts.
+    let source_root = std::env::var_os("OPENZEPPELIN_BENCH_SOURCE_ROOT");
+    let workspace_dir = match &source_root {
+        Some(path) => PathBuf::from(path),
+        None => PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .context("benches package should be inside a workspace")?
+            .to_path_buf(),
     };
+    let contract_dir = workspace_dir.join("examples").join(contract_name);
 
-    let wasm_path = manifest_dir
-        .join("target")
-        .join("wasm32-unknown-unknown")
-        .join("release")
-        .join(format!(
-            "{}_{}.wasm",
-            contract_name.replace('-', "_"),
-            contract_type
-        ));
-
-    let deployer = match constructor {
-        Some(constructor) => {
-            account.as_deployer().with_constructor(constructor)
-        }
-        None => account.as_deployer(),
-    };
-
-    let address = deployer.deploy_wasm(&wasm_path).await?.contract_address;
+    let mut deployer = account.as_deployer().with_directory(&contract_dir);
+    if source_root.is_some() {
+        let manifest =
+            std::fs::read_to_string(contract_dir.join("Cargo.toml"))?;
+        let package_name = manifest
+            .lines()
+            .skip_while(|line| *line != "[package]")
+            .skip(1)
+            .find_map(|line| {
+                line.strip_prefix("name = \"")
+                    .and_then(|line| line.strip_suffix('\"'))
+            })
+            .context("contract manifest should declare a package name")?;
+        let wasm_file = workspace_dir
+            .join("target/wasm32-unknown-unknown/release")
+            .join(format!("{}.wasm", package_name.replace('-', "_")));
+        deployer = deployer.with_wasm_file(wasm_file);
+    }
+    if let Some(constructor) = constructor {
+        deployer = deployer.with_constructor(constructor);
+    }
+    let address = deployer.deploy().await?.contract_address;
 
     match opt {
-        Opt::Cache | Opt::CacheWasmOpt => {
+        Opt::Cache => {
             cache_contract(account, address, 0)?;
         }
         Opt::None => {}
@@ -96,16 +107,11 @@ fn cache_contract(
     // Since it is not zero when the contract is already cached.
     Command::new("cargo")
         .args(["stylus", "cache", "bid"])
-        .args(["-e", &env("RPC_URL")?])
+        .args(["-e", account.url()])
         .args(["--private-key", &format!("0x{}", account.pk())])
         .arg(contract_addr.to_string())
         .arg(bid.to_string())
         .status()
         .context("failed to execute `cargo stylus cache bid` command")?;
     Ok(())
-}
-
-/// Load the `name` environment variable.
-fn env(name: &str) -> eyre::Result<String> {
-    std::env::var(name).wrap_err(format!("failed to load {name}"))
 }

@@ -24,6 +24,9 @@ mod helpers;
 pub mod sw;
 pub mod te;
 
+#[cfg(test)]
+mod tests;
+
 /// Elliptic curves can be represented via different "models" with varying
 /// efficiency properties.
 ///
@@ -311,7 +314,9 @@ mod test {
     use alloc::{vec, vec::Vec};
 
     use crate::{
-        curve::batch_inversion, field::instance::FpBN256, fp_from_num,
+        curve::{batch_inversion, batch_inversion_and_mul},
+        field::instance::FpBN256,
+        fp_from_num,
     };
 
     #[test]
@@ -343,5 +348,35 @@ mod test {
         batch_inversion(&mut v);
 
         assert!(v[0].is_zero());
+    }
+
+    #[test]
+    fn batch_inversion_scales_nonzero_values_and_preserves_every_zero() {
+        let original: Vec<FpBN256> = vec![
+            fp_from_num!("0"),
+            fp_from_num!("7"),
+            fp_from_num!("0"),
+            fp_from_num!("13"),
+            fp_from_num!("0"),
+        ];
+        let coefficient: FpBN256 = fp_from_num!("19");
+        let mut inverses = original.clone();
+        batch_inversion_and_mul(&mut inverses, &coefficient);
+
+        for (original, inverse) in original.iter().zip(&inverses) {
+            if original.is_zero() {
+                assert!(inverse.is_zero());
+            } else {
+                assert_eq!(*original * *inverse, coefficient);
+            }
+        }
+
+        let mut all_zero: Vec<FpBN256> = vec![fp_from_num!("0"); 3];
+        batch_inversion(&mut all_zero);
+        assert!(all_zero.into_iter().all(|value| value.is_zero()));
+
+        let mut empty = Vec::<FpBN256>::new();
+        batch_inversion(&mut empty);
+        assert!(empty.is_empty());
     }
 }

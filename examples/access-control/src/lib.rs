@@ -14,7 +14,6 @@ use openzeppelin_stylus::{
 };
 use stylus_sdk::{
     alloy_primitives::{aliases::B32, Address, B256, U256},
-    msg,
     prelude::*,
 };
 
@@ -110,11 +109,7 @@ impl IErc20 for AccessControlExample {
         self.erc20.balance_of(account)
     }
 
-    fn transfer(
-        &mut self,
-        to: Address,
-        value: U256,
-    ) -> Result<bool, Self::Error> {
+    fn transfer(&mut self, to: Address, value: U256) -> Result<bool, Error> {
         Ok(self.erc20.transfer(to, value)?)
     }
 
@@ -126,7 +121,7 @@ impl IErc20 for AccessControlExample {
         &mut self,
         spender: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, Error> {
         Ok(self.erc20.approve(spender, value)?)
     }
 
@@ -135,7 +130,7 @@ impl IErc20 for AccessControlExample {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, Error> {
         self.access.only_role(TRANSFER_ROLE.into())?;
         let transfer_result = self.erc20.transfer_from(from, to, value)?;
         Ok(transfer_result)
@@ -150,7 +145,7 @@ impl IAccessControl for AccessControlExample {
         self.access.has_role(role, account)
     }
 
-    fn only_role(&self, role: B256) -> Result<(), Self::Error> {
+    fn only_role(&self, role: B256) -> Result<(), control::Error> {
         self.access.only_role(role)
     }
 
@@ -162,7 +157,7 @@ impl IAccessControl for AccessControlExample {
         &mut self,
         role: B256,
         account: Address,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), control::Error> {
         let admin_role = self.get_role_admin(role);
         self.only_role(admin_role)?;
         self.access_enumerable._grant_role(role, account, &mut self.access);
@@ -173,20 +168,19 @@ impl IAccessControl for AccessControlExample {
         &mut self,
         role: B256,
         account: Address,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), control::Error> {
         let admin_role = self.get_role_admin(role);
         self.only_role(admin_role)?;
         self.access_enumerable._revoke_role(role, account, &mut self.access);
         Ok(())
     }
 
-    #[allow(deprecated)]
     fn renounce_role(
         &mut self,
         role: B256,
         confirmation: Address,
-    ) -> Result<(), Self::Error> {
-        if msg::sender() != confirmation {
+    ) -> Result<(), control::Error> {
+        if self.vm().msg_sender() != confirmation {
             return Err(control::Error::BadConfirmation(
                 control::AccessControlBadConfirmation {},
             ));
@@ -209,7 +203,7 @@ impl IAccessControlEnumerable for AccessControlExample {
         &self,
         role: B256,
         index: U256,
-    ) -> Result<Address, Self::Error> {
+    ) -> Result<Address, control::extensions::enumerable::Error> {
         self.access_enumerable.get_role_member(role, index)
     }
 

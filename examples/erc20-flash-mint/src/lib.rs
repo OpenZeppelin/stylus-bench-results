@@ -59,7 +59,7 @@ impl IErc3156FlashLender for Erc20FlashMintExample {
         &self,
         token: Address,
         value: U256,
-    ) -> Result<U256, Self::Error> {
+    ) -> Result<U256, flash_mint::Error> {
         self.flash_mint.flash_fee(token, value)
     }
 
@@ -69,7 +69,7 @@ impl IErc3156FlashLender for Erc20FlashMintExample {
         token: Address,
         value: U256,
         data: Bytes,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, flash_mint::Error> {
         self.flash_mint.flash_loan(
             receiver,
             token,
@@ -96,7 +96,7 @@ impl IErc20 for Erc20FlashMintExample {
         &mut self,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, flash_mint::Error> {
         Ok(self.erc20.transfer(to, value)?)
     }
 
@@ -108,7 +108,7 @@ impl IErc20 for Erc20FlashMintExample {
         &mut self,
         spender: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, flash_mint::Error> {
         Ok(self.erc20.approve(spender, value)?)
     }
 
@@ -117,7 +117,7 @@ impl IErc20 for Erc20FlashMintExample {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, flash_mint::Error> {
         Ok(self.erc20.transfer_from(from, to, value)?)
     }
 }

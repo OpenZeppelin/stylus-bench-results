@@ -1,3 +1,4 @@
+use crate::test_support::{receipt, Account};
 use alloy::{
     hex,
     network::{AnyNetwork, EthereumWallet},
@@ -6,7 +7,6 @@ use alloy::{
     sol,
     sol_types::SolCall,
 };
-use e2e::{receipt, Account};
 
 use crate::{
     report::{ContractReport, FunctionReport},
@@ -60,23 +60,31 @@ const PROOF: [[u8; 32]; 16] = bytes_array! {
     "fd47b6c292f51911e8dfdc3e4f8bd127773b17f25b7a554beaa8741e99c41208",
 };
 
+/// Run this contract benchmark in each cache and optimization mode.
+///
+/// # Errors
+///
+/// Returns an error if deployment, an RPC call, or receipt decoding fails.
 pub async fn bench() -> eyre::Result<ContractReport> {
     ContractReport::generate("MerkleProofs", run).await
 }
 
+/// Deploy the contract and run its benchmarked calls.
+///
+/// # Errors
+///
+/// Returns an error if account setup, deployment, an RPC call, or receipt decoding fails.
 pub async fn run(cache_opt: Opt) -> eyre::Result<Vec<FunctionReport>> {
     let alice = Account::new().await?;
-    let alice_wallet = ProviderBuilder::new()
-        .network::<AnyNetwork>()
-        .with_recommended_fillers()
+    let alice_wallet = ProviderBuilder::new_with_network::<AnyNetwork>()
         .wallet(EthereumWallet::from(alice.signer.clone()))
-        .on_http(alice.url().parse()?);
+        .connect_http(alice.url().parse()?);
 
     let contract_addr = deploy(&alice, cache_opt).await?;
 
     let contract = Verifier::new(contract_addr, &alice_wallet);
 
-    let proof = PROOF.map(|h| h.into()).to_vec();
+    let proof = PROOF.map(Into::into).to_vec();
 
     let receipts = vec![(
         Verifier::verifyCall::SIGNATURE,
@@ -85,7 +93,7 @@ pub async fn run(cache_opt: Opt) -> eyre::Result<Vec<FunctionReport>> {
 
     receipts
         .into_iter()
-        .map(FunctionReport::new)
+        .map(|(signature, receipt)| FunctionReport::new(signature, &receipt))
         .collect::<eyre::Result<Vec<_>>>()
 }
 

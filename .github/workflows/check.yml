@@ -55,7 +55,7 @@ jobs:
       matrix:
         # Get early warning of new lints which are regularly introduced in beta
         # channels.
-        toolchain: [stable, beta]
+        toolchain: [1.91.0, beta]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -110,7 +110,7 @@ jobs:
       - name: Install rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.91.0
           target: wasm32-unknown-unknown
           rustflags: ""
 
@@ -121,7 +121,7 @@ jobs:
         # target in this context means one of `--lib`, `--bin`, etc, and not the
         # target triple.
       - name: Cargo hack
-        run: cargo hack check --feature-powerset --depth 2 --release --target wasm32-unknown-unknown --workspace --exclude e2e --exclude basic-script-example --exclude benches
+        run: cargo hack check --feature-powerset --depth 2 --release --target wasm32-unknown-unknown --workspace --exclude basic-script-example --exclude benches
 
   typos:
     runs-on: ubuntu-latest
@@ -149,7 +149,7 @@ jobs:
       - name: Install rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.91.0
           rustflags: ""
 
       - name: Add rust targets ${{ matrix.target }}

@@ -13,14 +13,15 @@ stylus-sdk.workspace = true
 
 [dev-dependencies]
 alloy.workspace = true
-e2e.workspace = true
+stylus-tools.workspace = true
 tokio.workspace = true
 eyre.workspace = true
 rand.workspace = true
 
 [features]
-e2e = []
-export-abi = ["openzeppelin-stylus/export-abi"]
+contract-client-gen = []
+integration-tests = ["stylus-tools/integration-tests"]
+export-abi = ["stylus-sdk/export-abi", "openzeppelin-stylus/export-abi"]
 
 [lib]
 crate-type = ["lib", "cdylib"]
