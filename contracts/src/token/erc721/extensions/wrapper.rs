@@ -681,6 +681,66 @@ mod tests {
     }
 
     #[test]
+    fn withdraw_to_reverts_when_underlying_has_no_code() {
+        let contract = TestVMContract::<Erc721WrapperTestExample>::new(
+            stringify!(contract),
+        );
+        let alice = test_address(stringify!(alice));
+        let underlying = test_address(stringify!(underlying));
+        let token_id = random_token_ids(1)[0];
+
+        contract.sender(alice).constructor(underlying);
+        contract
+            .sender(alice)
+            .erc721
+            ._mint(alice, token_id)
+            .expect("should mint wrapped token for test");
+
+        let err = contract
+            .sender(alice)
+            .withdraw_to(alice, vec![token_id])
+            .expect_err("withdrawal must not burn without an underlying token");
+        assert!(matches!(
+            err,
+            Error::UnsupportedToken(ERC721UnsupportedToken { token })
+                if token == underlying
+        ));
+        assert_eq!(
+            contract
+                .sender(alice)
+                .owner_of(token_id)
+                .expect("wrapped token should remain owned after failed withdrawal"),
+            alice
+        );
+    }
+
+    #[test]
+    fn on_erc721_received_reverts_when_underlying_has_no_code() {
+        let contract = TestVMContract::<Erc721WrapperTestExample>::new(
+            stringify!(contract),
+        );
+        let alice = test_address(stringify!(alice));
+        let underlying = test_address(stringify!(underlying));
+        let token_id = random_token_ids(1)[0];
+
+        contract.sender(alice).constructor(underlying);
+
+        let err = contract
+            .sender(underlying)
+            .on_erc721_received(
+                underlying,
+                alice,
+                token_id,
+                vec![].into(),
+            )
+            .expect_err("an address without code cannot mint a wrapped token");
+        assert_eq!(
+            err,
+            ERC721UnsupportedToken { token: underlying }.abi_encode()
+        );
+    }
+
+    #[test]
     fn deposit_for_reverts_when_nonexistent_token() {
         let contract = TestVMContract::<Erc721WrapperTestExample>::new(
             stringify!(contract),
