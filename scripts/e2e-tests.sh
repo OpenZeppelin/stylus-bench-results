@@ -24,7 +24,7 @@ E2E_PACKAGES=()
 while IFS= read -r package; do
   E2E_PACKAGES+=("${package}")
 done < <(
-  find examples -mindepth 2 -maxdepth 2 -name Cargo.toml -print0 |
+  find examples -name Cargo.toml -print0 |
     while IFS= read -r -d '' manifest; do
       if grep -Eq '^e2e[[:space:]]*=[[:space:]]*\[\]' "${manifest}"; then
         awk '
