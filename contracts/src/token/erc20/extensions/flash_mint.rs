@@ -367,6 +367,8 @@ impl Erc20FlashMint {
 
 #[cfg(test)]
 mod tests {
+    use alloy_sol_types::{sol, SolCall};
+    use stylus_test::TestVMBuilder;
     use motsu::prelude::*;
     use stylus_sdk::{
         abi::Bytes,
@@ -375,6 +377,16 @@ mod tests {
     };
 
     use super::*;
+
+    sol! {
+        function onFlashLoan(
+            address initiator,
+            address token,
+            uint256 amount,
+            uint256 fee,
+            bytes data
+        ) external returns (bytes32);
+    }
 
     #[storage]
     struct Erc20FlashMintTestExample {
@@ -420,6 +432,55 @@ mod tests {
     }
 
     unsafe impl TopLevelStorage for Erc20FlashMintTestExample {}
+
+    #[test]
+    fn flash_loan_insufficient_repayment_error_keeps_allowance() {
+        let contract_address = Address::from([1_u8; 20]);
+        let receiver = Address::from([2_u8; 20]);
+        let initiator = Address::from([3_u8; 20]);
+        let vm = TestVMBuilder::new()
+            .contract_address(contract_address)
+            .build();
+        let mut flash_mint = Erc20FlashMint::from(&vm);
+        let mut erc20 = Erc20::from(&vm);
+        let amount = uint!(3_U256);
+        let fee = uint!(1_U256);
+        let repayment = amount + fee;
+
+        flash_mint.flash_fee_value.set(fee);
+        vm.set_code(receiver, alloc::vec![0x00]);
+        vm.set_sender(receiver);
+        erc20
+            ._approve(receiver, contract_address, repayment, true)
+            .unwrap();
+
+        let calldata = onFlashLoanCall {
+            initiator,
+            token: contract_address,
+            amount,
+            fee,
+            data: Vec::<u8>::new().into(),
+        }
+        .abi_encode();
+        vm.mock_call(
+            receiver,
+            calldata,
+            U256::ZERO,
+            Ok(BORROWER_CALLBACK_VALUE.to_vec()),
+        );
+        vm.set_sender(initiator);
+        let result = flash_mint.flash_loan(
+            receiver,
+            contract_address,
+            amount,
+            &Bytes::default(),
+            &mut erc20,
+        );
+        assert!(matches!(result, Err(Error::InsufficientBalance(_))));
+
+        assert_eq!(erc20.allowance(receiver, contract_address), repayment);
+        assert_eq!(erc20.balance_of(receiver), amount);
+    }
 
     #[motsu::test]
     fn max_flash_loan_token_match(

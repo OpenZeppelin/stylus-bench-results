@@ -9,7 +9,7 @@ extern crate alloc;
 use alloy_primitives::{Address, B256, U256, address, keccak256, uint};
 use alloy_sol_types::{SolType, SolValue, sol};
 use openzeppelin_stylus::token::{
-    erc20::extensions::{Erc20Permit, permit},
+    erc20::extensions::{Erc20Permit, Erc4626, IErc20Burnable, permit},
     erc20::{Erc20, Error as Erc20Error, IErc20},
     erc721::{Erc721, Error as Erc721Error, IErc721},
     erc1155::{Erc1155, Error as Erc1155Error, IErc1155},
@@ -177,6 +177,43 @@ fn erc20_transfer_from_insufficient_balance_error_keeps_allowance() {
 
     consumer_catches(result).unwrap();
     assert_eq!(token.allowance(ALICE, SPENDER), amount);
+}
+
+#[test]
+fn erc20_burn_from_insufficient_balance_error_keeps_allowance() {
+    let vm = TestVMBuilder::new().contract_address(CONTRACT).build();
+    let mut token = Erc20::from(&vm);
+    let amount = uint!(2_U256);
+
+    vm.set_sender(ALICE);
+    IErc20::approve(&mut token, SPENDER, amount).unwrap();
+    vm.set_sender(SPENDER);
+    let result = IErc20Burnable::burn_from(&mut token, ALICE, amount);
+    assert!(matches!(result, Err(Erc20Error::InsufficientBalance(_))));
+
+    consumer_catches(result).unwrap();
+    assert_eq!(token.allowance(ALICE, SPENDER), amount);
+}
+
+#[test]
+fn erc4626_withdraw_insufficient_balance_error_keeps_share_allowance() {
+    let vm = TestVMBuilder::new().contract_address(CONTRACT).build();
+    let mut vault = Erc4626::from(&vm);
+    let mut shares = Erc20::from(&vm);
+    let amount = uint!(2_U256);
+
+    vm.set_sender(ALICE);
+    IErc20::approve(&mut shares, SPENDER, amount).unwrap();
+    vm.set_sender(SPENDER);
+    let result =
+        vault._withdraw(SPENDER, BOB, ALICE, U256::ZERO, amount, &mut shares);
+    assert!(matches!(
+        result,
+        Err(openzeppelin_stylus::token::erc20::extensions::erc4626::Error::InsufficientBalance(_))
+    ));
+
+    consumer_catches(result).unwrap();
+    assert_eq!(shares.allowance(ALICE, SPENDER), amount);
 }
 
 #[test]
