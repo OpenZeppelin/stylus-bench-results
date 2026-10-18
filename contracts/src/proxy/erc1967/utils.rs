@@ -1067,45 +1067,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "TestVM does not roll back storage after a reverted call; transaction atomicity requires devnet coverage"]
-    fn upgrade_beacon_to_and_call_with_beacon_returning_invalid_implementation()
-    {
-        let contract =
-            TestVMContract::<TestContract>::new(stringify!(contract));
-        let beacon = TestVMContract::<MockBeacon>::new(stringify!(beacon));
-        mock_code(contract.vm(), beacon.address());
-        let alice = test_address(stringify!(alice));
-
-        // beacon returns an address with no code.
-        let invalid_address = alice; // address with no code.
-        beacon.sender(alice).constructor(invalid_address);
-        mock_beacon_implementation(
-            &contract,
-            beacon.address(),
-            invalid_address,
-        );
-
-        let err = contract
-            .sender(alice)
-            .test_upgrade_beacon_to_and_call(beacon.address(), vec![].into())
-            .expect_err(
-                "should fail when beacon returns invalid implementation",
-            );
-
-        assert_eq!(
-            err,
-            Error::InvalidImplementation(ERC1967InvalidImplementation {
-                implementation: invalid_address,
-            })
-            .encode()
-        );
-
-        // beacon should remain unchanged.
-        let beacon_address = contract.sender(alice).test_get_beacon();
-        assert_eq!(beacon_address, Address::ZERO);
-    }
-
-    #[test]
     fn upgrade_beacon_to_and_call_with_beacon_returning_zero_implementation() {
         let contract =
             TestVMContract::<TestContract>::new(stringify!(contract));

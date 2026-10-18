@@ -2503,6 +2503,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "erc1967-beacon-rollback-example"
+version = "0.3.0"
+dependencies = [
+ "alloy",
+ "alloy-primitives",
+ "alloy-sol-types",
+ "eyre",
+ "openzeppelin-stylus",
+ "stylus-sdk",
+ "tokio",
+]
+
+[[package]]
 name = "erc1967-example"
 version = "0.3.0"
 dependencies = [
