@@ -30,6 +30,47 @@ devnet matrix is recorded in `MIGRATION.md`.
 | Storage collections and macros | Lengths and indices stay in bounds, sentinel values cannot alias valid entries, generated interface selectors are unique within a trait, and ERC-165 IDs match the declared trait selectors. The remaining trait/implementation selector mismatch limitation is documented below.
 | Examples | Every mint, pause, role-admin, upgrade, burn, URI, metadata, and fee-setting entrypoint has the stated authority. Constructor owners are explicit under SDK deployer semantics; proxy owner initialization is one-time and must be called atomically.
 
+### Per-component invariants
+
+| Contract or component | Invariants exercised |
+|---|---|
+| `Ownable` | The owner alone transfers or renounces ownership; zero owners are rejected where ownership must remain live; ownership events match stored state. |
+| `Ownable2Step` | A transfer records one pending owner; only that address can accept; the active owner changes only on acceptance; cancellation clears the pending address. |
+| `AccessControl` | Only a role's admin can grant or revoke it; renouncing requires self-confirmation; role events and membership state agree. |
+| `AccessControlEnumerable` | Per-role member arrays and indexes match role membership after grants, revokes, and self-renunciation; swap-removal does not skip or duplicate members. |
+| `Erc20` | Transfers conserve balances; mint/burn are the only total-supply changes; zero-address and overflow/underflow checks happen before writes. |
+| `IErc20Burnable` | A holder burns their own balance; `burn_from` also requires and spends sufficient allowance; balance and supply decrease by the same amount. |
+| `Capped` | Every mint checks the cap before updating balances and supply, including after prior burns and at the numeric boundary. |
+| `Erc20FlashMint` | Loans cannot exceed available mint capacity; callback selector and repayment are validated; repayment plus fee is collected before loaned supply is burned. |
+| `Erc20Permit` and `Nonces` | Signatures are domain-bound and canonical; invalid signatures do not consume a nonce; each successful permit consumes exactly one nonce. |
+| `Erc20Metadata` | Name, symbol, and decimals are returned consistently and decimals remain within the ERC-20 range. |
+| `Erc20Wrapper` and `SafeErc20` | Wrapper supply tracks successfully received underlying tokens; no-code targets and malformed return data are rejected; relaxed calls follow documented return semantics. |
+| `Erc4626` | Conversion rounding follows the requested direction; share and asset totals remain coherent on deposit, mint, withdraw, and redeem; failed token/callback errors are propagated. |
+| `Erc721` | Owner, balance, token approval, and operator approval agree across mint, transfer, and burn; only authorized callers transfer or burn; callbacks occur after state is updated. |
+| `IErc721Burnable` | A token owner or approved caller burns the token; burning clears approvals and updates owner balance and enumeration. |
+| `Erc721Enumerable` | Global and owner indexes contain each live token exactly once; transfers and burns repair both sides; token ID zero cannot alias an empty slot. |
+| `Erc721Consecutive` | Consecutive minting is available only during its one-time construction phase; ranges do not overflow; runtime minting uses ordinary ERC-721 events and checks. |
+| `Erc721Metadata` and `Erc721UriStorage` | Metadata is associated with the correct token; token-specific URI precedence is stable; burning and reminting cannot expose stale URI data. |
+| `Erc721Wrapper` | Each receipt is backed by the configured underlying NFT; deposits and withdrawals are atomic; unauthorized receipt burns and no-code underlying calls fail. |
+| `Erc721Holder` and `IErc721Receiver` | Receiver hooks return the required selector only for accepted transfers; callback failure propagates so the transaction rolls back. |
+| `Erc1155` | Batch arrays have matching lengths; every balance update is consistent; operator authorization is checked; receiver hooks observe updated balances and their errors propagate. |
+| `IErc1155Burnable` and `Erc1155Supply` | Only the account or approved operator burns; per-ID supply changes equal balance changes; aggregate supply and batch state remain consistent. |
+| `Erc1155MetadataUri` and `Erc1155UriStorage` | URI changes follow the consuming contract's access policy; per-token overrides and base URI composition return the intended value. |
+| `Erc1155Holder` and `IErc1155Receiver` | Single and batch receiver hooks return the required selectors; callback errors are not swallowed. |
+| `Erc2981` | Royalty receiver and fee are read from the configured state; zero denominator uses the documented default; full-precision royalty math rounds down. |
+| `VestingWallet` | Released value never exceeds vested value or allocation; release accounting advances only after a successful transfer; schedules are monotonic in time. |
+| `Pausable` | Protected operations reject while paused and resume only after unpause; the component does not imply an authorization policy for consumer entrypoints. |
+| `IErc165` and `#[interface_id]` | Advertised IDs equal the XOR of declared selectors; duplicate signatures and four-byte collisions inside one trait are rejected. Cross-macro custom-selector matching remains a documented limitation. |
+| `Erc1967Proxy`, `Erc1967Utils`, and `BeaconProxy` | Standard slots are isolated from ordinary storage; implementation targets have code; delegated calls use the configured implementation and preserve proxy storage. |
+| `UpgradeableBeacon` and `IBeacon` | Only the configured owner changes the implementation; new implementations contain code; beacon proxies read the current beacon target. |
+| `UUPSUpgradeable` and `IErc1822Proxiable` | Upgrade methods are proxy-only; direct calls to implementation-only methods are rejected; UUID and version checks prevent incompatible or regressive upgrades. |
+| `IEip712` and ECDSA/P-256 helpers | Domain separators bind chain and verifying contract; signatures reject non-canonical/high-s values and malformed precompile output. |
+| `EdDSA` | Key and signature scalars are canonical; identity and small-order points are rejected; secret key material is zeroized on drop. |
+| Merkle, Poseidon, Pedersen, field and curve arithmetic | Proof ordering is explicit; field values are canonical; arithmetic and point normalization handle zero and boundary values without panic or overflow. |
+| `EnumerableSet`, `BitMap`, and `Trace` checkpoints | Set indexes and lengths remain consistent; bit operations affect only the requested bit; checkpoint keys are ordered and historical lookup returns the latest value at or before the query. |
+| `AddressUtils`, `StorageSlot`, and precompile wrappers | Code-presence checks distinguish EOAs from contracts; namespaced slots are deterministic; precompile calls validate outputs and propagate failures. |
+| Token, proxy, and crypto examples | Public mint, pause, role-admin, metadata, burn, fee, and upgrade operations enforce the documented owner/role policy; proxy initialization is one-time and atomic; crypto examples reject invalid encodings. |
+
 ## New findings fixed in this migration
 
 Severity is based on the effect if a consumer exposed the affected component or
