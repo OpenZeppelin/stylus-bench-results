@@ -1,5 +1,9 @@
-# Reproducible, SDK-managed optimization used for deployments and verification.
-# Keep this aligned with scripts/bench.sh so measured gas matches deployed code.
+# SDK deployment optimization. Keep the version and flags aligned with
+# scripts/build-wasm-artifacts.sh so benches measure the deployed artifact.
+[workspace]
+
+[workspace.networks]
+
 [wasm-opt]
 version = "116"
 flags = ["--enable-bulk-memory", "-O3"]

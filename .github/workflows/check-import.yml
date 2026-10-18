@@ -27,20 +27,18 @@ jobs:
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
+          toolchain: 1.91.0
           rustflags: ""
           cache: true
           target: wasm32-unknown-unknown
 
-      - name: Cache cargo-stylus binary
-        id: cache-cargo-stylus
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/bin/cargo-stylus
-          key: cargo-stylus-0.6.3-${{ runner.os }}
-
       - name: Install cargo-stylus
-        if: steps.cache-cargo-stylus.outputs.cache-hit != 'true'
-        run: cargo install --locked --force cargo-stylus@0.6.3
+        run: cargo install --locked --force cargo-stylus@0.10.10
+
+      - name: Install pinned WebAssembly optimizer and validator
+        run: |
+          cargo install --locked --force wasm-opt@0.116.1
+          cargo install --locked --force wasm-tools@1.262.0
 
       - name: Verify cargo-stylus installation
         run: cargo stylus --version
@@ -62,12 +60,17 @@ jobs:
 
       - name: Run tests
         working-directory: templates/crypto-erc20
-        run: cargo test
+        run: cargo test --locked
 
-      - name: Build and check contract
+      - name: Build and check contract on devnet
         working-directory: templates/crypto-erc20
-        run: cargo stylus check -e=https://sepolia-rollup.arbitrum.io/rpc
+        run: >-
+          ../../scripts/devnet.sh run -- bash -c
+          'source ../../scripts/wasm-opt-wrapper/env.sh &&
+          cargo stylus check --contract crypto-erc20 --endpoint "$RPC_URL"'
 
       - name: Export ABI
         working-directory: templates/crypto-erc20
-        run: cargo stylus export-abi
+        run: |
+          source ../../scripts/wasm-opt-wrapper/env.sh
+          cargo stylus export-abi
