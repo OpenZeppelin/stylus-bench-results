@@ -387,7 +387,13 @@ impl<P: PoseidonParams<F>, F: PrimeField> Poseidon2<P, F> {
 #[cfg(test)]
 mod tests {
     use super::Poseidon2;
-    use crate::{field::instance::FpBLS12, poseidon2::params::PoseidonParams};
+    use crate::{
+        field::instance::{FpBLS12, FpGoldiLocks},
+        poseidon2::{
+            instance::goldilocks::Goldilocks12Params, params::PoseidonParams,
+            Mode,
+        },
+    };
 
     struct UnsupportedStateSize;
 
@@ -445,5 +451,33 @@ mod tests {
     )]
     fn rejects_zero_capacity() {
         let _ = Poseidon2::<ZeroCapacity, FpBLS12>::new();
+    }
+
+    #[test]
+    fn default_and_batch_operations_match_single_element_operations() {
+        let input: Vec<_> = (0..20).map(FpGoldiLocks::from).collect();
+        let mut batch =
+            Poseidon2::<Goldilocks12Params, FpGoldiLocks>::default();
+        assert_eq!(batch.mode, Mode::Absorbing);
+        batch.absorb_batch(&input);
+        let batch_output = batch.squeeze_batch(20);
+        assert_eq!(batch.mode, Mode::Squeezing);
+
+        let mut individual =
+            Poseidon2::<Goldilocks12Params, FpGoldiLocks>::new();
+        for element in &input {
+            individual.absorb(element);
+        }
+        let individual_output: Vec<_> =
+            (0..20).map(|_| individual.squeeze()).collect();
+        assert_eq!(batch_output, individual_output);
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot absorb while squeezing")]
+    fn absorb_after_squeezing_is_rejected() {
+        let mut sponge = Poseidon2::<Goldilocks12Params, FpGoldiLocks>::new();
+        let _ = sponge.squeeze();
+        sponge.absorb(&FpGoldiLocks::from(1u64));
     }
 }

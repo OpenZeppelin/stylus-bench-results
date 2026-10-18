@@ -1228,4 +1228,113 @@ mod tests {
             assert_eq!(scalar, expected_scalar);
         });
     }
+
+    #[test]
+    #[allow(clippy::op_ref)]
+    fn arithmetic_traits_cover_owned_borrowed_and_in_place_forms() {
+        let a = Field64::from(21i64);
+        let b = Field64::from(3i64);
+        let expected_sum = Field64::from(24i64);
+        let expected_difference = Field64::from(18i64);
+        let expected_product = Field64::from(63i64);
+        let expected_quotient = a * b.inverse().unwrap();
+
+        assert_eq!(a + &b, expected_sum);
+        assert_eq!(&a + &b, expected_sum);
+        let mut b_mut = b;
+        assert_eq!(a + &mut b_mut, expected_sum);
+
+        assert_eq!(a - &b, expected_difference);
+        assert_eq!(&a - &b, expected_difference);
+        assert_eq!(a - &mut b_mut, expected_difference);
+
+        assert_eq!(a * &b, expected_product);
+        assert_eq!(&a * &b, expected_product);
+        assert_eq!(a * &mut b_mut, expected_product);
+
+        assert_eq!(a / &b, expected_quotient);
+        assert_eq!(&a / &b, expected_quotient);
+        assert_eq!(a / &mut b_mut, expected_quotient);
+
+        let mut sum = a;
+        sum += b;
+        assert_eq!(sum, expected_sum);
+        sum -= b;
+        assert_eq!(sum, a);
+        sum += &b_mut;
+        assert_eq!(sum, expected_sum);
+        sum -= &mut b_mut;
+        assert_eq!(sum, a);
+
+        let mut product = a;
+        product *= b;
+        assert_eq!(product, expected_product);
+        product /= b;
+        assert_eq!(product, a);
+        product *= &b;
+        assert_eq!(product, expected_product);
+        product /= &b;
+        assert_eq!(product, a);
+        product *= &mut b_mut;
+        assert_eq!(product, expected_product);
+        product /= &mut b_mut;
+        assert_eq!(product, a);
+
+        let owned_sum: Field64 = [a, b].into_iter().sum();
+        let borrowed_sum: Field64 = [&a, &b].into_iter().sum();
+        let owned_product: Field64 = [a, b].into_iter().product();
+        let borrowed_product: Field64 = [&a, &b].into_iter().product();
+        assert_eq!(owned_sum, expected_sum);
+        assert_eq!(borrowed_sum, expected_sum);
+        assert_eq!(owned_product, expected_product);
+        assert_eq!(borrowed_product, expected_product);
+        assert_eq!(
+            core::iter::empty::<Field64>().sum::<Field64>(),
+            Field64::zero()
+        );
+        assert_eq!(
+            core::iter::empty::<Field64>().product::<Field64>(),
+            Field64::one()
+        );
+    }
+
+    #[test]
+    fn field_conversion_order_inverse_and_zeroization_edges() {
+        assert_eq!(Field64::from(U64::from(1_000_010u64)), Field64::from(7u64));
+        assert_eq!(Field64::from(true), Field64::one());
+        assert_eq!(Field64::from(false), Field64::zero());
+        assert!(Field64::from(2u64) < Field64::from(3u64));
+        assert_eq!(
+            Field64::from(3u64).cmp(&Field64::from(3u64)),
+            Ordering::Equal
+        );
+        assert_eq!(
+            Field64::from(42u64).partial_cmp(&Field64::from(42u64)),
+            Some(Ordering::Equal)
+        );
+        assert_eq!(u8::from(Field64::from(42u64)), 42);
+        assert_eq!(i8::from(Field64::from(42u64)), 42);
+        assert_eq!(format!("{}", Field64::from(42u64)), "000000000000002A",);
+        assert_eq!(format!("{:?}", Field64::from(42u64)), "000000000000002A",);
+        assert_eq!(Field64::extension_degree(), 1);
+
+        let value = Field64::from(7u64);
+        assert_eq!(value * value.inverse().unwrap(), Field64::one());
+        assert!(Field64::zero().inverse().is_none());
+
+        let expected_inverse = value.inverse().unwrap();
+        let mut invertible = value;
+        assert_eq!(
+            invertible.inverse_in_place().map(|inverse| *inverse),
+            Some(expected_inverse),
+        );
+        assert_eq!(invertible, expected_inverse);
+        let mut zero = Field64::zero();
+        assert!(zero.inverse_in_place().is_none());
+        assert!(zero.is_zero());
+
+        let mut erased = value;
+        zeroize::Zeroize::zeroize(&mut erased);
+        assert!(erased.is_zero());
+    }
 }
