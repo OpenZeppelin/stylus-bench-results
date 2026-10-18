@@ -618,7 +618,7 @@ mod tests {
         use super::*;
         use crate::{
             proxy::{self, erc1967::Erc1967Proxy, IProxy},
-            token::erc20::{Erc20, IErc20},
+            token::erc20::{self, Erc20, IErc20},
         };
 
         #[entrypoint]
