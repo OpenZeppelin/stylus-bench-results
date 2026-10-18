@@ -55,7 +55,7 @@ mod sol {
 /// An error that occurred in the implementation of an `ECDSA` library.
 #[derive(SolidityError, Debug)]
 pub enum Error {
-    /// The signature derives the [`Address::ZERO`].
+    /// The signature is invalid or derives the [`Address::ZERO`].
     InvalidSignature(ECDSAInvalidSignature),
     /// The signature has an `S` value that is in the upper half order.
     InvalidSignatureS(ECDSAInvalidSignatureS),
@@ -81,8 +81,8 @@ impl MethodError for Error {
 ///
 /// * [`Error::InvalidSignatureS`] - If the `s` value is grater than
 ///   [`SIGNATURE_S_UPPER_BOUND`].
-/// * [`Error::InvalidSignature`] - If the recovered address is
-///   [`Address::ZERO`].
+/// * [`Error::InvalidSignature`] - If `ecRecover` returns a malformed result
+///   or the recovered address is [`Address::ZERO`].
 ///
 /// # Panics
 ///
@@ -115,8 +115,8 @@ pub fn recover(
 ///
 /// # Errors
 ///
-/// * [`Error::InvalidSignature`] - If the recovered address is
-///   [`Address::ZERO`].
+/// * [`Error::InvalidSignature`] - If `ecRecover` returns a malformed result
+///   or the recovered address is [`Address::ZERO`].
 ///
 /// # Panics
 ///
@@ -140,6 +140,10 @@ fn _recover(
     let recovered =
         call::static_call(host, Call::new(), ECRECOVER_ADDR, &calldata)
             .expect("should call `ecRecover` precompile");
+
+    if recovered.len() != 32 {
+        return Err(ECDSAInvalidSignature {}.into());
+    }
 
     let recovered = Address::from_slice(&recovered[12..]);
 
