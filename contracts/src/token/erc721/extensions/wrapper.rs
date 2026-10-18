@@ -645,6 +645,108 @@ mod tests {
     }
 
     #[openzeppelin_stylus_proc::vm_test]
+    fn wrapper_forwards_standard_erc721_operations(
+        contract: Contract<Erc721WrapperTestExample>,
+        erc721_contract: Contract<Erc721>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let token_ids = random_token_ids(3);
+        contract.sender(alice).constructor(erc721_contract.address());
+        for token_id in &token_ids {
+            contract
+                .sender(alice)
+                .erc721
+                ._mint(alice, *token_id)
+                .expect("should mint test share");
+        }
+
+        let mut call = contract.sender(alice);
+        assert_eq!(
+            <Erc721WrapperTestExample as IErc721>::balance_of(&call, alice)
+                .unwrap(),
+            U256::from(token_ids.len())
+        );
+        assert_eq!(
+            <Erc721WrapperTestExample as IErc721>::owner_of(
+                &call,
+                token_ids[0]
+            )
+            .unwrap(),
+            alice
+        );
+        assert_eq!(
+            <Erc721WrapperTestExample as IErc721>::get_approved(
+                &call,
+                token_ids[0]
+            )
+            .unwrap(),
+            Address::ZERO
+        );
+
+        <Erc721WrapperTestExample as IErc721>::approve(
+            &mut call,
+            bob,
+            token_ids[0],
+        )
+        .unwrap();
+        assert_eq!(
+            <Erc721WrapperTestExample as IErc721>::get_approved(
+                &call,
+                token_ids[0]
+            )
+            .unwrap(),
+            bob
+        );
+        <Erc721WrapperTestExample as IErc721>::transfer_from(
+            &mut call,
+            alice,
+            bob,
+            token_ids[0],
+        )
+        .unwrap();
+        <Erc721WrapperTestExample as IErc721>::safe_transfer_from(
+            &mut call,
+            alice,
+            bob,
+            token_ids[1],
+        )
+        .unwrap();
+        <Erc721WrapperTestExample as IErc721>::safe_transfer_from_with_data(
+            &mut call,
+            alice,
+            bob,
+            token_ids[2],
+            vec![1, 2, 3].into(),
+        )
+        .unwrap();
+
+        let operator = erc721_contract.address();
+        <Erc721WrapperTestExample as IErc721>::set_approval_for_all(
+            &mut call, operator, true,
+        )
+        .unwrap();
+        assert!(<Erc721WrapperTestExample as IErc721>::is_approved_for_all(
+            &call, alice, operator
+        ));
+        assert_eq!(
+            <Erc721WrapperTestExample as IErc721>::balance_of(&call, alice)
+                .unwrap(),
+            U256::ZERO
+        );
+        assert_eq!(
+            <Erc721WrapperTestExample as IErc721>::balance_of(&call, bob)
+                .unwrap(),
+            U256::from(token_ids.len())
+        );
+
+        assert!(<Erc721WrapperTestExample as IErc165>::supports_interface(
+            &call,
+            <Erc721 as IErc165>::interface_id()
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn deposit_for_reverts_when_unsupported_token(
         contract: Contract<Erc721WrapperTestExample>,
         alice: Address,
@@ -882,6 +984,38 @@ mod tests {
             contract.sender(alice).erc721.balance_of(alice).unwrap(),
             initial_wrapped_balance + U256::from(tokens)
         );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn deposit_for_rejects_zero_account_without_minting(
+        contract: Contract<Erc721WrapperTestExample>,
+        erc721_contract: Contract<Erc721>,
+        alice: Address,
+    ) {
+        let token_id = random_token_ids(1)[0];
+        let underlying = erc721_contract.address();
+        contract.sender(alice).constructor(underlying);
+        mock_transfer_from(
+            &contract,
+            underlying,
+            alice,
+            contract.address(),
+            token_id,
+            Ok(vec![]),
+        );
+
+        let err = contract
+            .sender(alice)
+            .deposit_for(Address::ZERO, vec![token_id])
+            .expect_error(
+                "wrapped tokens cannot be minted to the zero address",
+            );
+
+        assert!(matches!(err, Error::InvalidReceiver(_)));
+        assert!(matches!(
+            contract.sender(alice).erc721.owner_of(token_id),
+            Err(erc721::Error::NonexistentToken(_))
+        ));
     }
 
     #[openzeppelin_stylus_proc::vm_test]

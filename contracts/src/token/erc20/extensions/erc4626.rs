@@ -1399,6 +1399,14 @@ mod tests {
         );
     }
 
+    fn is_invalid_asset<T>(result: &Result<T, Error>) -> bool {
+        matches!(
+            result,
+            Err(Error::InvalidAsset(InvalidAsset { asset }))
+                if *asset == Address::ZERO
+        )
+    }
+
     #[openzeppelin_stylus_proc::vm_test]
     fn asset_works(contract: Contract<Erc4626TestExample>, alice: Address) {
         let asset = address!("DeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF");
@@ -1627,6 +1635,47 @@ mod tests {
             U256::from(2)
         );
         assert_eq!(contract.sender(alice).max_redeem(alice), U256::from(5));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn conversions_and_operations_reject_an_unconfigured_asset(
+        contract: Contract<Erc4626TestExample>,
+        alice: Address,
+        bob: Address,
+    ) {
+        assert!(is_invalid_asset(
+            &contract.sender(alice).convert_to_shares(U256::ONE)
+        ));
+        assert!(is_invalid_asset(
+            &contract.sender(alice).convert_to_assets(U256::ONE)
+        ));
+        assert!(is_invalid_asset(
+            &contract.sender(alice).preview_deposit(U256::ONE)
+        ));
+        assert!(is_invalid_asset(
+            &contract.sender(alice).preview_mint(U256::ONE)
+        ));
+        assert!(is_invalid_asset(
+            &contract.sender(alice).preview_withdraw(U256::ONE)
+        ));
+        assert!(is_invalid_asset(
+            &contract.sender(alice).preview_redeem(U256::ONE)
+        ));
+        assert!(is_invalid_asset(&contract.sender(alice).max_withdraw(alice)));
+        assert!(is_invalid_asset(
+            &contract.sender(alice).deposit(U256::ONE, bob)
+        ));
+        assert!(is_invalid_asset(&contract.sender(alice).mint(U256::ONE, bob)));
+        assert!(is_invalid_asset(&contract.sender(alice).withdraw(
+            U256::ONE,
+            bob,
+            alice
+        )));
+        assert!(is_invalid_asset(&contract.sender(alice).redeem(
+            U256::ZERO,
+            bob,
+            alice
+        )));
     }
 
     #[openzeppelin_stylus_proc::vm_test]
@@ -1883,6 +1932,43 @@ mod tests {
             contract.sender(alice).erc20.allowance(alice, bob),
             U256::ZERO
         );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn delegated_redeem_spends_share_allowance_and_emits_withdrawal(
+        contract: Contract<Erc4626TestExample>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let asset = address!("DeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF");
+        let supply = U256::from(10);
+        let shares = U256::from(3);
+        let assets = U256::from(3);
+        contract.sender(alice).erc4626.asset.set(asset);
+        contract.sender(alice).erc20._mint(alice, supply).unwrap();
+        contract.sender(alice).erc20.approve(bob, supply).unwrap();
+        mock_asset_balance(&contract, asset, supply);
+        mock_asset_transfer(&contract, asset, bob, assets);
+
+        assert_eq!(
+            contract.sender(bob).redeem(shares, bob, alice).unwrap(),
+            assets
+        );
+        assert_eq!(
+            contract.sender(alice).erc20.balance_of(alice),
+            supply - shares
+        );
+        assert_eq!(
+            contract.sender(alice).erc20.allowance(alice, bob),
+            supply - shares
+        );
+        contract.assert_emitted(&Withdraw {
+            sender: bob,
+            receiver: bob,
+            owner: alice,
+            assets,
+            shares,
+        });
     }
 
     #[openzeppelin_stylus_proc::vm_test]
