@@ -14,12 +14,14 @@ sol!(
         function depositFor(address account, uint256[] memory tokenIds) external returns (bool);
         #[derive(Debug)]
         function withdrawTo(address account, uint256[] memory tokenIds) external returns (bool);
+        function burn(uint256 tokenId) external;
 
 
         #[derive(Debug, PartialEq)]
         event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
 
         error ERC721NonexistentToken(uint256 tokenId);
+        error ERC721InsufficientApproval(address operator, uint256 tokenId);
         error ERC721UnsupportedToken(address token);
     }
 

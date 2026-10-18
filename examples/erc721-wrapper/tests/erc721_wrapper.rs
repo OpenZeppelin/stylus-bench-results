@@ -3,7 +3,7 @@
 mod devnet_test_support;
 
 use crate::devnet_test_support::{
-    constructor, receipt, watch, Account, Constructor, EventExt, Revert,
+    constructor, receipt, send, watch, Account, Constructor, EventExt, Revert,
 };
 use abi::{Erc721, Erc721Wrapper};
 use alloy::primitives::{uint, Address};
@@ -102,6 +102,38 @@ async fn deposit_for_success() -> Result<()> {
         initial_wrapped_balance + one,
         contract.balanceOf(alice_address).call().await?
     );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn unapproved_operator_cannot_burn_wrapped_token() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let token_id = uint!(1_U256);
+    let (asset_addr, contract_addr) = deploy(&alice).await?;
+    let alice_addr = alice.address();
+    let asset = ERC721Mock::new(asset_addr, &alice.wallet);
+    let wrapper = Erc721Wrapper::new(contract_addr, &alice.wallet);
+
+    watch!(asset.safeMint(alice_addr, token_id))?;
+    watch!(asset.approve(contract_addr, token_id))?;
+    watch!(wrapper.depositFor(alice_addr, vec![token_id]))?;
+
+    let attacker_wrapper = Erc721Wrapper::new(contract_addr, &bob.wallet);
+    let error = send!(attacker_wrapper.burn(token_id))
+        .expect_err("an unapproved operator must not burn a wrapped token");
+    assert!(error.reverted_with(Erc721Wrapper::ERC721InsufficientApproval {
+        operator: bob.address(),
+        tokenId: token_id,
+    }));
+
+    assert_eq!(alice_addr, wrapper.ownerOf(token_id).call().await?);
+    assert_eq!(contract_addr, asset.ownerOf(token_id).call().await?);
+
+    watch!(wrapper.withdrawTo(alice_addr, vec![token_id]))?;
+    assert_eq!(alice_addr, asset.ownerOf(token_id).call().await?);
 
     Ok(())
 }
