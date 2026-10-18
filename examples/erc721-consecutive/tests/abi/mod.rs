@@ -32,6 +32,7 @@ sol!(
         error ERC721ExceededMaxBatchMint(uint256 batchSize, uint256 maxBatch);
         error ERC721ForbiddenMint();
         error ERC721ForbiddenBatchBurn();
+        error OwnableUnauthorizedAccount(address account);
 
         #[derive(Debug, PartialEq)]
         event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
