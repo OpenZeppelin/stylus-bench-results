@@ -3,6 +3,7 @@ extern crate alloc;
 
 use alloc::{string::String, vec::Vec};
 
+use openzeppelin_stylus::access::ownable::{self, IOwnable, Ownable};
 use openzeppelin_stylus::{
     token::erc721::{
         self,
@@ -18,6 +19,7 @@ use stylus_sdk::{
     abi::Bytes,
     alloy_primitives::{aliases::B32, Address, U256},
     prelude::*,
+    storage::StorageBool,
 };
 
 #[entrypoint]
@@ -26,15 +28,44 @@ struct Erc721MetadataExample {
     erc721: Erc721,
     metadata: Erc721Metadata,
     uri_storage: Erc721UriStorage,
+    ownable: Ownable,
+    owner_initialized: StorageBool,
 }
 
 #[public]
-#[implements(IErc721<Error = erc721::Error>, IErc721Burnable<Error = erc721::Error>, IErc721Metadata<Error = erc721::Error>, IErc165)]
+#[implements(IErc721<Error = erc721::Error>, IErc721Burnable<Error = erc721::Error>, IErc721Metadata<Error = erc721::Error>, IErc165, IOwnable)]
 impl Erc721MetadataExample {
     #[constructor]
-    fn constructor(&mut self, name: String, symbol: String, base_uri: String) {
+    fn constructor(
+        &mut self,
+        name: String,
+        symbol: String,
+        base_uri: String,
+    ) -> Result<(), Vec<u8>> {
+        self.ownable.constructor(self.vm().msg_sender())?;
+        self.owner_initialized.set(true);
         self.metadata.constructor(name, symbol);
         self.metadata.base_uri.set_str(base_uri);
+        Ok(())
+    }
+
+    /// Initializes ownership when upgrading a proxy created by the v0.3.0
+    /// example. Call this atomically with the implementation upgrade.
+    fn initialize_owner(
+        &mut self,
+        initial_owner: Address,
+    ) -> Result<(), Vec<u8>> {
+        if self.owner_initialized.get() {
+            return Err(ownable::Error::UnauthorizedAccount(
+                ownable::OwnableUnauthorizedAccount {
+                    account: self.vm().msg_sender(),
+                },
+            )
+            .into());
+        }
+        self.ownable.constructor(initial_owner)?;
+        self.owner_initialized.set(true);
+        Ok(())
     }
 
     fn mint(
@@ -46,8 +77,32 @@ impl Erc721MetadataExample {
     }
 
     #[selector(name = "setTokenURI")]
-    fn set_token_uri(&mut self, token_id: U256, token_uri: String) {
+    fn set_token_uri(
+        &mut self,
+        token_id: U256,
+        token_uri: String,
+    ) -> Result<(), Vec<u8>> {
+        self.ownable.only_owner()?;
         self.uri_storage._set_token_uri(token_id, token_uri);
+        Ok(())
+    }
+}
+
+#[public]
+impl IOwnable for Erc721MetadataExample {
+    fn owner(&self) -> Address {
+        self.ownable.owner()
+    }
+
+    fn transfer_ownership(
+        &mut self,
+        new_owner: Address,
+    ) -> Result<(), Vec<u8>> {
+        Ok(self.ownable.transfer_ownership(new_owner)?)
+    }
+
+    fn renounce_ownership(&mut self) -> Result<(), Vec<u8>> {
+        Ok(self.ownable.renounce_ownership()?)
     }
 }
 

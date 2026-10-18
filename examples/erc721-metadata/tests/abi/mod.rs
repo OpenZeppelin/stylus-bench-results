@@ -25,6 +25,10 @@ sol!(
         function tokenURI(uint256 tokenId) external view returns (string memory tokenURI);
         function setTokenURI(uint256 tokenId, string memory tokenURI) external;
         function supportsInterface(bytes4 interfaceId) external pure returns (bool);
+        function owner() external view returns (address);
+        function initializeOwner(address initialOwner) external;
+        function transferOwnership(address newOwner) external;
+        function renounceOwnership() external;
 
         error ERC721InvalidOwner(address owner);
         error ERC721NonexistentToken(uint256 tokenId);
@@ -35,6 +39,7 @@ sol!(
         error ERC721InvalidApprover(address approver);
         error ERC721InvalidOperator(address operator);
         error OwnableUnauthorizedAccount(address account);
+        error OwnableInvalidOwner(address owner);
 
         #[derive(Debug, PartialEq)]
         event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
