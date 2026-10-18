@@ -178,13 +178,23 @@ Nitro version bundled with SDK 0.10.10's devnet. SDK 0.10.10 reports paused
 Stylus activations as a distinct error; wait for activations to resume before
 running deployment or devnet activation checks.
 
-SDK 0.10.5 deprecated the `reentrant` and `deny_reentrant` features because
-SDK calls now flush the storage cache around external calls. New contracts do
-not need these flags or macros. The library keeps a compatibility feature for
-downstream manifests, but consumers should remove the flag when they migrate.
-Cache flushing preserves storage coherence; it does not block reentrant calls.
-Keep checks-effects-interactions ordering and callback authorization wherever
-the contract's invariants require them.
+SDK 0.10.5 deprecated the `reentrant` feature because high-level SDK calls
+flush the storage cache around external calls. In SDK 0.10.10, the generated
+entrypoint still rejects reentrant calls unless this feature is enabled. Most
+contracts should remove the old feature because they do not need callbacks
+into themselves. A flash lender or another contract that deliberately supports
+callbacks must keep it enabled until the SDK removes the guard:
+
+[source,toml]
+----
+[dependencies]
+openzeppelin-stylus = { version = "=0.3.0", features = ["reentrant"] }
+----
+
+The library preserves this compatibility feature and forwards it to the SDK.
+Storage cache flushing preserves state coherence; it is not a reentrancy guard
+or a replacement for checks-effects-interactions ordering and callback
+authorization.
 
 == Storage layout changes
 
