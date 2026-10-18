@@ -274,6 +274,17 @@ v0.3.0 accepted. The ERC-721 wrapper example has the ABI change listed below:
   `setFlashFeeValue(uint256)` but now requires the owner to call them. Its
   no-argument constructor initializes the owner to the deployer. It also
   exposes the `IOwnable` methods and `initializeOwner(address)`.
+* The `basic/token`, `erc20`, `erc20-permit`, `erc1155`,
+  `erc1155-supply`, and `erc721` examples now restrict their mint methods to
+  the owner. ERC-20 `pause()` and `unpause()` are owner-only. ERC-1155
+  `mintBatch` follows the same owner check as `mint`. These examples expose
+  `IOwnable` and a one-time `initializeOwner(address)`; their constructors set
+  the owner to the deployer for new deployments.
+* The `uups-proxy` V1 and V2 implementations restrict their example mint
+  methods to the proxy owner. The `erc1967-beacon-rollback` fixture now
+  restricts `upgrade_beacon_to_and_call(address,bytes)` to its owner; its
+  constructor arguments and selector are unchanged. It exposes `IOwnable`
+  and `initializeOwner(address)` for old proxy state.
 * Token, approval, permit, burn, vault withdrawal, and flash-loan repayment
   helpers validate local failure conditions before committing local state.
   Their successful ABI behavior and error types remain the same. When a helper
@@ -283,15 +294,20 @@ v0.3.0 accepted. The ERC-721 wrapper example has the ABI change listed below:
 
 The library storage layout is unchanged. The examples with new owner-controlled
 settings append an `Ownable` component and a `StorageBool` initializer guard
-after their existing storage fields; no previous field is reordered. The
-consecutive extension's constructor phase uses a separate namespaced slot.
-New deployments initialize this state in their constructors. For an
-existing proxy using one of these examples, invoke `initializeOwner(address)`
-through the proxy atomically with the implementation upgrade and pass the
-intended owner. The initializer can be called only once. Do not leave a gap
-between upgrading and initializing, because an account that calls first would
-become owner. The ERC-721 enumerable count continues to use an otherwise unused
-key in the existing nested mapping; the owner initialization and the
+after their existing storage fields; no previous field is reordered. This
+applies to `basic/token`, `erc20`, `erc20-permit`, `erc1155`,
+`erc1155-supply`, `erc721`, `erc721-consecutive`, `erc721-metadata`,
+`erc1155-metadata-uri`, `erc20-flash-mint`, and
+`erc1967-beacon-rollback`. The UUPS examples already stored an owner. New
+deployments initialize owner state in their constructors. For an existing
+proxy using one of these examples, invoke `initializeOwner(address)` through
+the proxy atomically with the implementation upgrade and pass the intended
+owner. The initializer is deliberately first-caller-wins and can be called
+only once, so do not leave a gap between upgrading and initializing. An
+uninitialized proxy must never be exposed to public calls between those two
+operations. The consecutive extension's constructor phase uses a separate
+namespaced slot. The ERC-721 enumerable count continues to use an otherwise
+unused key in the existing nested mapping; the owner initialization and the
 ID-zero-enumeration backfill above are the only state reconciliation required
 by these example and library changes.
 
