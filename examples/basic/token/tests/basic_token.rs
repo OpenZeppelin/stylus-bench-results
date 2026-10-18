@@ -3,7 +3,7 @@
 #[path = "../../../test-support/mod.rs"]
 mod test_support;
 
-use crate::test_support::{Account, EventExt, constructor, receipt};
+use crate::test_support::{constructor, receipt, Account, EventExt};
 use abi::BasicToken;
 use alloy::primitives::{Address, U256};
 use eyre::Result;

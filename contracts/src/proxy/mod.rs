@@ -121,10 +121,10 @@ mod tests {
     use alloy_sol_macro::sol;
     use alloy_sol_types::{SolCall, SolError, SolValue};
     use stylus_sdk::{
-        ArbResult,
         alloy_primitives::{Address, U256},
         prelude::*,
         storage::{StorageAddress, StorageBool},
+        ArbResult,
     };
 
     use super::*;

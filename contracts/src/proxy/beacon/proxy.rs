@@ -22,9 +22,9 @@ use alloy_primitives::Address;
 use stylus_sdk::{abi::Bytes, prelude::*, storage::StorageAddress};
 
 use crate::proxy::{
-    IProxy,
     beacon::IBeaconInterface,
     erc1967::{Erc1967Utils, Error},
+    IProxy,
 };
 
 /// State of an [`BeaconProxy`] contract.
@@ -95,11 +95,11 @@ mod tests {
     use alloy_sol_macro::sol;
     use alloy_sol_types::{SolCall, SolError, SolValue};
     use stylus_sdk::{
-        ArbResult,
         alloy_primitives::{Address, U256},
         function_selector,
         prelude::*,
         testing::TestVM,
+        ArbResult,
     };
 
     use super::*;

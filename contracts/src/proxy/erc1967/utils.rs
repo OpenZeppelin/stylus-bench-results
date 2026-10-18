@@ -3,7 +3,7 @@
 //!
 //! [ERC-1967]: https://eips.ethereum.org/EIPS/eip-1967
 
-use alloy_primitives::{Address, U256, aliases::B256, uint};
+use alloy_primitives::{aliases::B256, uint, Address, U256};
 pub use sol::*;
 use stylus_sdk::{
     abi::Bytes, host::VM, prelude::*, storage::StorageAddress,
