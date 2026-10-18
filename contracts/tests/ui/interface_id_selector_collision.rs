@@ -1,4 +1,4 @@
-use alloy_primitives::{B16, U256};
+use alloy_primitives::{aliases::B16, U256};
 use openzeppelin_stylus_proc::interface_id;
 
 #[interface_id]
