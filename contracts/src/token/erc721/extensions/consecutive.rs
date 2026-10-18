@@ -559,6 +559,7 @@ impl Erc721Consecutive {
     ///
     /// * [`erc721::Error::InvalidSender`] - If `token_id` already exists.
     /// * [`erc721::Error::InvalidReceiver`] - If `to` is [`Address::ZERO`].
+    /// * [`Error::ForbiddenMint`] - If called during construction.
     ///
     /// # Events
     ///
@@ -569,6 +570,11 @@ impl Erc721Consecutive {
                 ERC721InvalidReceiver { receiver: Address::ZERO },
             )
             .into());
+        }
+
+        let vm = self.vm();
+        if vm.code_size(vm.contract_address()) == 0 {
+            return Err(ERC721ForbiddenMint {}.into());
         }
 
         let previous_owner = self._update(to, token_id, Address::ZERO)?;
@@ -841,7 +847,9 @@ impl IErc165 for Erc721Consecutive {
 use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
-    use crate::test_support::{test_address, TestContract as TestVMContract};
+    use crate::test_support::{
+        mock_code, test_address, TestContract as TestVMContract,
+    };
     use alloy_primitives::{uint, Address, U256};
 
     use super::*;
@@ -850,6 +858,13 @@ mod tests {
     const MAX_BATCH_SIZE: U96 = uint!(5000_U96);
     const TOKEN_ID: U256 = uint!(1_U256);
     const NON_CONSECUTIVE_TOKEN_ID: U256 = uint!(10001_U256);
+
+    fn deployed_contract() -> TestVMContract<Erc721Consecutive> {
+        let contract =
+            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        mock_code(contract.vm(), contract.address());
+        contract
+    }
 
     impl Erc721Consecutive {
         fn init(&mut self, receivers: Vec<Address>, batches: Vec<U96>) {
@@ -875,6 +890,7 @@ mod tests {
 
         let init_tokens_count = uint!(10_U96);
         contract.sender(alice).init(vec![alice], vec![init_tokens_count]);
+        mock_code(contract.vm(), contract.address());
 
         let balance1 = contract
             .sender(alice)
@@ -908,10 +924,9 @@ mod tests {
             TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
         let alice = test_address(stringify!(alice));
 
-        let error = contract
-            .sender(alice)
-            ._mint(alice, TOKEN_ID)
-            .expect_err("individual mint must be unavailable during construction");
+        let error = contract.sender(alice)._mint(alice, TOKEN_ID).expect_err(
+            "individual mint must be unavailable during construction",
+        );
 
         assert!(matches!(error, Error::ForbiddenMint(_)));
         assert_eq!(
@@ -922,8 +937,7 @@ mod tests {
 
     #[test]
     fn error_when_minting_token_id_twice() {
-        let contract =
-            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let contract = deployed_contract();
         let alice = test_address(stringify!(alice));
 
         contract
@@ -1013,6 +1027,7 @@ mod tests {
         contract
             .sender(alice)
             .init(vec![alice, bob], vec![uint!(1000_U96), uint!(1000_U96)]);
+        mock_code(contract.vm(), contract.address());
 
         // Transfer first consecutive token from Alice to Bob.
         contract
@@ -1069,6 +1084,7 @@ mod tests {
 
         // Mint batch of 1000 tokens to Alice.
         contract.sender(alice).init(vec![alice], vec![uint!(1000_U96)]);
+        mock_code(contract.vm(), contract.address());
 
         // Check consecutive token burn.
         contract
@@ -1143,8 +1159,7 @@ mod tests {
 
     #[test]
     fn safe_transfer_from() {
-        let contract =
-            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let contract = deployed_contract();
         let alice = test_address(stringify!(alice));
         let bob = test_address(stringify!(bob));
 
@@ -1168,8 +1183,7 @@ mod tests {
 
     #[test]
     fn safe_transfers_from_approved_token() {
-        let contract =
-            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let contract = deployed_contract();
         let alice = test_address(stringify!(alice));
         let bob = test_address(stringify!(bob));
 
@@ -1194,8 +1208,7 @@ mod tests {
 
     #[test]
     fn error_when_safe_transfer_from_incorrect_owner() {
-        let contract =
-            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let contract = deployed_contract();
         let alice = test_address(stringify!(alice));
         let bob = test_address(stringify!(bob));
         let dave = test_address(stringify!(dave));
@@ -1242,8 +1255,7 @@ mod tests {
 
     #[test]
     fn error_when_safe_transfer_to_invalid_receiver() {
-        let contract =
-            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let contract = deployed_contract();
         let alice = test_address(stringify!(alice));
 
         let invalid_receiver = Address::ZERO;
@@ -1274,8 +1286,7 @@ mod tests {
 
     #[test]
     fn safe_transfers_from_with_data() {
-        let contract =
-            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let contract = deployed_contract();
         let alice = test_address(stringify!(alice));
         let bob = test_address(stringify!(bob));
 
@@ -1304,8 +1315,7 @@ mod tests {
 
     #[test]
     fn error_when_internal_safe_transfer_to_invalid_receiver() {
-        let contract =
-            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let contract = deployed_contract();
         let alice = test_address(stringify!(alice));
 
         let invalid_receiver = Address::ZERO;
@@ -1341,8 +1351,7 @@ mod tests {
 
     #[test]
     fn error_when_internal_safe_transfer_from_incorrect_owner() {
-        let contract =
-            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let contract = deployed_contract();
         let alice = test_address(stringify!(alice));
         let bob = test_address(stringify!(bob));
         let dave = test_address(stringify!(dave));
@@ -1368,8 +1377,7 @@ mod tests {
 
     #[test]
     fn safe_mints() {
-        let contract =
-            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let contract = deployed_contract();
         let alice = test_address(stringify!(alice));
 
         let initial_balance = contract
@@ -1418,8 +1426,7 @@ mod tests {
 
     #[test]
     fn error_when_approve_by_invalid_approver() {
-        let contract =
-            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let contract = deployed_contract();
         let alice = test_address(stringify!(alice));
         let bob = test_address(stringify!(bob));
         let dave = test_address(stringify!(dave));
