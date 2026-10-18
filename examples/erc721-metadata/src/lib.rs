@@ -205,5 +205,6 @@ impl IErc165 for Erc721MetadataExample {
     fn supports_interface(&self, interface_id: B32) -> bool {
         self.erc721.supports_interface(interface_id)
             || <Self as IErc721Metadata>::interface_id() == interface_id
+            || <Self as IOwnable>::interface_id() == interface_id
     }
 }

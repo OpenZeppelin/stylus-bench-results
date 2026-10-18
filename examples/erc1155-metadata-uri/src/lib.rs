@@ -163,5 +163,6 @@ impl IErc165 for Erc1155MetadataUriExample {
     fn supports_interface(&self, interface_id: B32) -> bool {
         self.erc1155.supports_interface(interface_id)
             || self.metadata_uri.supports_interface(interface_id)
+            || <Self as IOwnable>::interface_id() == interface_id
     }
 }

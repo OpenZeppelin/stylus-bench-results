@@ -227,6 +227,23 @@ v0.3.0 accepted. The ERC-721 wrapper example has the ABI change listed below:
   burned cannot be attributed or redeemed by this change. A directly deployed
   v0.3.0 example cannot have its ABI changed; migrate intact positions to a new
   wrapper before retiring it.
+* The `erc721-metadata` and `erc721-consecutive` examples keep
+  `burn(uint256)` in their ABI, but it now checks ERC-721 ownership or approval.
+  An unauthorized burn reverts with `ERC721InsufficientApproval`; existing
+  holders and approved operators retain the previous successful behavior.
+* The `erc721-metadata` example's `setTokenURI(uint256,string)` and the
+  `erc1155-metadata-uri` example's `setTokenURI(uint256,string)` and
+  `setBaseURI(string)` now require the owner. Their selectors remain unchanged.
+  The examples expose `owner`, `transferOwnership`, and `renounceOwnership`
+  through `IOwnable`, plus a one-time `initializeOwner` function.
+  `OwnableUnauthorizedAccount` and
+  `OwnableInvalidOwner` are added errors. New deployments set the owner to the
+  deployer, and existing constructor arguments are unchanged. The ERC-721
+  metadata owner can still set a URI before minting.
+* The `erc20-flash-mint` example keeps `setFlashFeeReceiver(address)` and
+  `setFlashFeeValue(uint256)` but now requires the owner to call them. Its
+  no-argument constructor initializes the owner to the deployer. It also
+  exposes the `IOwnable` methods and `initializeOwner(address)`.
 * Token, approval, permit, burn, vault withdrawal, and flash-loan repayment
   helpers validate local failure conditions before committing local state.
   Their successful ABI behavior and error types remain the same. When a helper
@@ -234,10 +251,18 @@ v0.3.0 accepted. The ERC-721 wrapper example has the ABI change listed below:
   EVM rolls back the entire call; catching that error can still preserve earlier
   writes across contracts.
 
-No storage field was added or reordered in the library or examples. The
-ERC-721 enumerable count uses an otherwise unused key in the existing nested
-mapping; the live-proxy migration note above is the only state reconciliation
-required by these fixes.
+The library storage layout is unchanged. The three examples with new
+owner-controlled settings append an `Ownable` component and a `StorageBool`
+initializer guard after their existing storage fields; no previous field is
+reordered. New deployments initialize this state in their constructors. For an
+existing proxy using one of these examples, invoke `initializeOwner(address)`
+through the proxy atomically with the implementation upgrade and pass the
+intended owner. The initializer can be called only once. Do not leave a gap
+between upgrading and initializing, because an account that calls first would
+become owner. The ERC-721 enumerable count continues to use an otherwise unused
+key in the existing nested mapping; the owner initialization and the
+ID-zero-enumeration backfill above are the only state reconciliation required
+by these example and library changes.
 
 == Build, deploy, and verify
 
