@@ -997,6 +997,27 @@ mod tests {
         assert!(matches!(err, Error::ForbiddenBatchMint(_)));
     }
 
+    #[test]
+    fn batch_mint_during_sdk_constructor_is_allowed() {
+        use stylus_sdk::testing::TestVM;
+
+        let vm = TestVM::default();
+        let mut contract = Erc721Consecutive::from(&vm);
+        contract.constructor();
+
+        vm.set_code(vm.contract_address(), vec![0x00]);
+        vm.set_sender(alloy_primitives::address!(
+            "0xcEcba2F1DC234f70Dd89F2041029807F8D03A990"
+        ));
+
+        let result = contract._mint_consecutive(
+            Address::from([1; 20]),
+            uint!(1_U96),
+        );
+
+        assert!(result.is_ok(), "SDK constructor batch mint should succeed");
+    }
+
     #[motsu::test]
     fn transfers_from(
         contract: Contract<Erc721Consecutive>,
