@@ -3,7 +3,7 @@
 mod devnet_test_support;
 
 use crate::devnet_test_support::{
-    receipt, watch, Account, Constructor, ContractInitializationError,
+    receipt, send, watch, Account, Constructor, ContractInitializationError,
     EventExt, Revert,
 };
 use alloy::primitives::{Address, U256};
@@ -238,6 +238,35 @@ async fn burns() -> eyre::Result<()> {
     assert!(err.reverted_with(Erc721::ERC721NonexistentToken {
         tokenId: non_consecutive_token_id
     }));
+    Ok(())
+}
+
+#[tokio::test]
+async fn unauthorized_burn_reverts_and_preserves_consecutive_token(
+) -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let receivers = vec![alice.address()];
+    let amounts = vec![uint!(1_U96)];
+    let contract_addr = alice
+        .as_deployer()
+        .with_constructor(ctr(&receivers, &amounts))
+        .deploy()
+        .await?
+        .contract_address;
+    let token_id = U256::from(FIRST_CONSECUTIVE_ID);
+    let contract_alice = Erc721::new(contract_addr, &alice.wallet);
+    let contract_bob = Erc721::new(contract_addr, &bob.wallet);
+
+    let err = send!(contract_bob.burn(token_id))
+        .expect_err("an unapproved account must not burn Alice's token");
+    assert!(err.reverted_with(Erc721::ERC721InsufficientApproval {
+        operator: bob.address(),
+        tokenId: token_id,
+    }));
+    assert_eq!(contract_alice.ownerOf(token_id).call().await?, alice.address());
+
     Ok(())
 }
 
