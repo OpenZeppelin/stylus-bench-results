@@ -3,8 +3,8 @@
 mod devnet_test_support;
 
 use crate::devnet_test_support::{
-    receipt, send, watch, Account, Constructor, ContractInitializationError,
-    EventExt, Revert,
+    Account, Constructor, ContractInitializationError, EventExt, Revert,
+    receipt, send, watch,
 };
 use alloy::primitives::{Address, U256};
 use alloy_primitives::{aliases::U96, uint};
@@ -51,6 +51,33 @@ async fn constructs() -> eyre::Result<()> {
 
     let balance = contract.balanceOf(alice_addr).call().await?;
     assert_eq!(balance, uint!(10_U256));
+    Ok(())
+}
+
+#[tokio::test]
+async fn sdk_constructor_route_mints_multiple_batches() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let receivers = vec![alice.address(), bob.address()];
+    let amounts = vec![uint!(2_U96), uint!(3_U96)];
+    let receipt = alice
+        .as_deployer()
+        .with_constructor(ctr(&receivers, &amounts))
+        .deploy()
+        .await?;
+    let contract = Erc721::new(receipt.contract_address, &alice.wallet);
+
+    assert_eq!(
+        contract.balanceOf(alice.address()).call().await?,
+        uint!(2_U256)
+    );
+    assert_eq!(contract.balanceOf(bob.address()).call().await?, uint!(3_U256));
+    assert_eq!(contract.ownerOf(U256::ZERO).call().await?, alice.address());
+    assert_eq!(contract.ownerOf(uint!(1_U256)).call().await?, alice.address());
+    assert_eq!(contract.ownerOf(uint!(2_U256)).call().await?, bob.address());
+    assert_eq!(contract.ownerOf(uint!(4_U256)).call().await?, bob.address());
+
     Ok(())
 }
 
@@ -242,8 +269,8 @@ async fn burns() -> eyre::Result<()> {
 }
 
 #[tokio::test]
-async fn unauthorized_burn_reverts_and_preserves_consecutive_token(
-) -> eyre::Result<()> {
+async fn unauthorized_burn_reverts_and_preserves_consecutive_token()
+-> eyre::Result<()> {
     let alice = Account::new().await?;
     let bob = Account::new().await?;
 
