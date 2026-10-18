@@ -4,19 +4,20 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 use openzeppelin_stylus::{
+    access::ownable::{self, IOwnable, Ownable},
     token::erc20::{
-        self,
+        self, Erc20, IErc20,
         extensions::{
-            capped, Capped, Erc20Metadata, ICapped, IErc20Burnable,
-            IErc20Metadata,
+            Capped, Erc20Metadata, ICapped, IErc20Burnable, IErc20Metadata,
+            capped,
         },
-        Erc20, IErc20,
     },
-    utils::{introspection::erc165::IErc165, pausable, IPausable, Pausable},
+    utils::{IPausable, Pausable, introspection::erc165::IErc165, pausable},
 };
 use stylus_sdk::{
-    alloy_primitives::{aliases::B32, uint, Address, U256, U8},
+    alloy_primitives::{Address, U8, U256, aliases::B32, uint},
     prelude::*,
+    storage::StorageBool,
 };
 
 const DECIMALS: U8 = uint!(10_U8);
@@ -33,6 +34,8 @@ enum Error {
     InvalidApprover(erc20::ERC20InvalidApprover),
     EnforcedPause(pausable::EnforcedPause),
     ExpectedPause(pausable::ExpectedPause),
+    UnauthorizedAccount(ownable::OwnableUnauthorizedAccount),
+    InvalidOwner(ownable::OwnableInvalidOwner),
 }
 
 impl From<capped::Error> for Error {
@@ -70,6 +73,17 @@ impl From<pausable::Error> for Error {
     }
 }
 
+impl From<ownable::Error> for Error {
+    fn from(value: ownable::Error) -> Self {
+        match value {
+            ownable::Error::UnauthorizedAccount(e) => {
+                Error::UnauthorizedAccount(e)
+            }
+            ownable::Error::InvalidOwner(e) => Error::InvalidOwner(e),
+        }
+    }
+}
+
 #[entrypoint]
 #[storage]
 struct Erc20Example {
@@ -77,10 +91,12 @@ struct Erc20Example {
     metadata: Erc20Metadata,
     capped: Capped,
     pausable: Pausable,
+    ownable: Ownable,
+    owner_initialized: StorageBool,
 }
 
 #[public]
-#[implements(IErc20<Error = Error>, IErc20Burnable<Error = Error>, IErc20Metadata, ICapped, IPausable, IErc165)]
+#[implements(IErc20<Error = Error>, IErc20Burnable<Error = Error>, IErc20Metadata, ICapped, IPausable, IErc165, IOwnable)]
 impl Erc20Example {
     #[constructor]
     pub fn constructor(
@@ -89,8 +105,28 @@ impl Erc20Example {
         symbol: String,
         cap: U256,
     ) -> Result<(), Error> {
+        self.ownable.constructor(self.vm().msg_sender())?;
+        self.owner_initialized.set(true);
         self.metadata.constructor(name, symbol);
         self.capped.constructor(cap)?;
+        Ok(())
+    }
+
+    /// Initializes ownership when upgrading a proxy created by the previous
+    /// version. Call this atomically with the implementation upgrade.
+    fn initialize_owner(
+        &mut self,
+        initial_owner: Address,
+    ) -> Result<(), Error> {
+        if self.owner_initialized.get() {
+            return Err(Error::UnauthorizedAccount(
+                ownable::OwnableUnauthorizedAccount {
+                    account: self.vm().msg_sender(),
+                },
+            ));
+        }
+        self.ownable.constructor(initial_owner)?;
+        self.owner_initialized.set(true);
         Ok(())
     }
 
@@ -100,6 +136,7 @@ impl Erc20Example {
     // [`Erc20::_update`] to mint tokens -- it will the break `Capped`
     // mechanism.
     fn mint(&mut self, account: Address, value: U256) -> Result<(), Error> {
+        self.ownable.only_owner()?;
         self.pausable.when_not_paused()?;
         let max_supply = self.capped.cap();
 
@@ -123,16 +160,34 @@ impl Erc20Example {
         Ok(())
     }
 
-    /// WARNING: These functions are intended for **testing purposes** only. In
-    /// **production**, ensure strict access control to prevent unauthorized
-    /// pausing or unpausing, which can disrupt contract functionality. Remove
-    /// or secure these functions before deployment.
+    /// Pauses transfers and minting. Only the owner can pause the token.
     fn pause(&mut self) -> Result<(), Error> {
+        self.ownable.only_owner()?;
         Ok(self.pausable.pause()?)
     }
 
+    /// Resumes transfers and minting. Only the owner can unpause the token.
     fn unpause(&mut self) -> Result<(), Error> {
+        self.ownable.only_owner()?;
         Ok(self.pausable.unpause()?)
+    }
+}
+
+#[public]
+impl IOwnable for Erc20Example {
+    fn owner(&self) -> Address {
+        self.ownable.owner()
+    }
+
+    fn transfer_ownership(
+        &mut self,
+        new_owner: Address,
+    ) -> Result<(), Vec<u8>> {
+        Ok(self.ownable.transfer_ownership(new_owner)?)
+    }
+
+    fn renounce_ownership(&mut self) -> Result<(), Vec<u8>> {
+        Ok(self.ownable.renounce_ownership()?)
     }
 }
 
@@ -200,6 +255,7 @@ impl IErc165 for Erc20Example {
     fn supports_interface(&self, interface_id: B32) -> bool {
         Erc20::supports_interface(&self.erc20, interface_id)
             || Erc20Metadata::supports_interface(&self.metadata, interface_id)
+            || <Self as IOwnable>::interface_id() == interface_id
     }
 }
 
