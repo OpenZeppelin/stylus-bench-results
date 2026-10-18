@@ -27,6 +27,11 @@ mod interface_id;
 ///
 /// By default, Rust method names are converted to camelCase for Solidity.
 /// Use `#[selector(name = "...")]` to override the Solidity function name.
+/// When an interface trait uses a custom selector, put the same selector
+/// override on the corresponding method in its `#[public]` implementation.
+/// The macro uses the trait selector to compute the interface ID, while the
+/// SDK expands the implementation separately and does not check that the two
+/// selectors match.
 ///
 /// ## Examples
 ///

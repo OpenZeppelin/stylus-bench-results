@@ -313,14 +313,18 @@ pub trait IUUPSUpgradeable: IErc1822Proxiable {
 /// ```rust
 /// extern crate alloc;
 ///
-/// use openzeppelin_stylus::proxy::utils::uups_upgradeable::UUPSUpgradeable;
-/// use stylus_sdk::{prelude::*, storage::StorageU256};
+/// use openzeppelin_stylus::{
+///     access::ownable::Ownable,
+///     proxy::utils::uups_upgradeable::UUPSUpgradeable,
+/// };
+/// use stylus_sdk::{alloy_primitives::Address, prelude::*, storage::StorageU256};
 ///
 /// #[storage]
 /// #[entrypoint]
 /// pub struct MyUpgradeableContract {
 ///     // Must include UUPSUpgradeable as the first field
 ///     uups: UUPSUpgradeable,
+///     ownable: Ownable,
 ///
 ///     // Your contract's state variables
 ///     value: StorageU256,
@@ -329,8 +333,12 @@ pub trait IUUPSUpgradeable: IErc1822Proxiable {
 ///
 /// #[public]
 /// impl MyUpgradeableContract {
-///     // Call this via the proxy once to align the proxy's version with the logic.
+///     // Only expose this wrapper when needed, and restrict it to the upgrade
+///     // authority. Prefer calling `uups.set_version()` inside an authorized
+///     // initializer so the authority and version are set atomically.
+///     // Initialize `ownable` before this function can be called.
 ///     pub fn set_version(&mut self) -> Result<(), Vec<u8>> {
+///         self.ownable.only_owner().map_err(Into::into)?;
 ///         self.uups.set_version().map_err(Into::into)
 ///     }
 ///
