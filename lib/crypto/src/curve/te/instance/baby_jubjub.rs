@@ -53,10 +53,8 @@ impl TECurveConfig for BabyJubjubConfig {
 
     const COEFF_A: Self::BaseField = fp_from_num!("168700");
     const COEFF_D: Self::BaseField = fp_from_num!("168696");
-    const GENERATOR: Affine<Self> = Affine::new_unchecked(
-        BASE_GENERATOR_X,
-        BASE_GENERATOR_Y,
-    );
+    const GENERATOR: Affine<Self> =
+        Affine::new_unchecked(BASE_GENERATOR_X, BASE_GENERATOR_Y);
 }
 
 impl MontCurveConfig for BabyJubjubConfig {
