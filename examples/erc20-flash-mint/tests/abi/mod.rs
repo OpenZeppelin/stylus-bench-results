@@ -21,6 +21,7 @@ sol!(
         function setFlashFeeReceiver(address newReceiver) external;
         function setFlashFeeValue(uint256 newValue) external;
         function owner() external view returns (address);
+        function initializeOwner(address initialOwner) external;
         function transferOwnership(address newOwner) external;
         function renounceOwnership() external;
 
