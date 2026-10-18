@@ -993,11 +993,8 @@ async fn should_not_deploy_capped_with_invalid_cap() -> Result<()> {
         .await
         .expect_err("should not deploy due to `ERC20InvalidCap`");
 
-    // TODO: assert the actual `OwnableInvalidOwner` error was returned once
-    // `StylusDeployer` is able to return the exact revert reason from
-    // constructors. assert!(err.reverted_with(Erc20::ERC20InvalidCap { cap:
-    // invalid_cap }));
-
+    // StylusDeployer reports constructor reverts as a generic initialization
+    // error, so the exact custom error is not available to this E2E assertion.
     assert!(err.downcast_ref::<ContractInitializationError>().is_some());
 
     Ok(())

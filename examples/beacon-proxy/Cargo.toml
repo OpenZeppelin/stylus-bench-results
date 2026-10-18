@@ -22,9 +22,10 @@ crate-type = ["lib", "cdylib"]
 
 [features]
 e2e = []
-contract-client-gen = []
 export-abi = ["openzeppelin-stylus/export-abi"]
 
 [[bin]]
 name = "beacon-proxy-example"
 path = "src/main.rs"
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("contract-client-gen"))'] }

@@ -13,4 +13,3 @@ alloy.workspace = true
 tokio.workspace = true
 
 [features]
-contract-client-gen = []

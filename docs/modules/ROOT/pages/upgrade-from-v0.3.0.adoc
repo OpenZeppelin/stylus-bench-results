@@ -73,11 +73,15 @@ access, testing, and deployment:
 * SDK 0.10.10 detects when Stylus activation is paused on the target chain and
   reports an `ActivationsPaused` error. Treat this as a chain deployment
   condition and retry after activations resume; it is not a contract error.
-* Declare a package-level `contract-client-gen = []` feature on a contract
-  crate whose public API should be callable as a client, then enable that
-  feature on the dependency in the consumer's manifest. This build mode
-  replaces the contract entrypoint/router with client stubs, so do not deploy
-  an artifact built with this feature.
+* SDK 0.10.10 can generate typed clients from plain SDK `#[public]` traits.
+  That mode rewrites public implementations into host-call stubs. The library's
+  `#[interface_id]` traits carry ERC-165 IDs, associated contract error types,
+  and component interfaces; they are not SDK `#[public]` client declarations.
+  Do not enable `contract-client-gen` while compiling this library or its
+  examples. Downstream contracts can use SDK client generation for separate
+  plain `#[public]` interfaces, but should keep OpenZeppelin component
+  interfaces in the normal contract build. Never deploy an artifact built as a
+  generated client.
 * Storage cache flushing around high-level external calls provides storage
   coherence across reentrancy. SDK 0.10.5 deprecated its `reentrant` feature
   and entrypoint guard, but SDK 0.10.10 still rejects reentrant entrypoint
@@ -155,6 +159,13 @@ the old `Self::Error` expansion trouble in generated router and ABI code.
 delegation calls in explicit `unsafe` blocks. The implementation must guarantee
 that the storage context and implementation address passed to `delegate_call`
 are valid. Do not expose delegation to an untrusted implementation address.
+
+The `#[interface_id]` macro computes an interface ID from selectors declared
+on the trait. The SDK does not verify that a custom selector is repeated on a
+corresponding `#[public]` implementation, so keep those selectors identical
+and check the exported ABI. The macro rejects duplicate signatures and actual
+four-byte selector collisions within the trait; the SDK's router check does
+not cover separate `#[public]` blocks or inherited methods.
 
 == Testing
 
@@ -251,6 +262,26 @@ v0.3.0 accepted. The ERC-721 wrapper example has the ABI change listed below:
   burned cannot be attributed or redeemed by this change. A directly deployed
   v0.3.0 example cannot have its ABI changed; migrate intact positions to a new
   wrapper before retiring it.
+* `Erc721Wrapper` now rejects deposit, withdrawal, and receiver-hook calls when
+  the configured underlying address has no code. These calls return the
+  existing `ERC721UnsupportedToken` error instead of treating an empty return
+  as a successful token call.
+* `IErc1155Supply::burn` and `burn_batch` now require the caller to own the
+  account or be its approved operator. Unauthorized calls return
+  `ERC1155MissingApprovalForAll`; direct balance or supply mutation through
+  those entrypoints is no longer possible.
+* The `access-control` example's `set_role_admin` helper now requires the
+  default admin role. It remains an example-only method and is not part of the
+  library's `AccessControl` ABI.
+* `Erc2981` treats a zero stored fee denominator as the default 10,000 basis
+  points, matching its documented default. Royalty multiplication now uses a
+  full-precision intermediate and rounds down instead of reverting when the
+  intermediate product overflows `U256`. A configured nonzero denominator is
+  unchanged.
+* The ECDSA helper now rejects malformed or empty `ecrecover` return data with
+  an error instead of interpreting it as the zero address.
+* Read-only `IErc4626` methods now take `&self`; implementations that used the
+  former `&mut self` signatures must update their Rust trait implementations.
 * The `erc721-metadata` and `erc721-consecutive` examples keep
   `burn(uint256)` in their ABI, but it now checks ERC-721 ownership or approval.
   An unauthorized burn reverts with `ERC721InsufficientApproval`; existing
@@ -316,9 +347,8 @@ original order:
 |`erc1967-beacon-rollback` |`implementation, initial_owner`
 |===
 
-For an existing
-proxy
-proxy using one of these examples, invoke `initializeOwner(address)` through
+For an existing proxy using one of these examples, invoke
+`initializeOwner(address)` through
 the proxy atomically with the implementation upgrade and pass the intended
 owner. The initializer is deliberately first-caller-wins and can be called
 only once, so do not leave a gap between upgrading and initializing. An
@@ -356,8 +386,10 @@ update path. Like Solidity's `_update` hooks and Cairo's composable components,
 this keeps balance changes in one path. Rust consumers choose which storage
 components and public traits to compose; pause and mint permissions remain
 explicit application decisions. A contract crate's package-level
-`contract-client-gen` feature can generate typed clients from its public API;
-artifacts built with it are client stubs and must not be deployed.
+SDK client generation remains available for plain SDK public interfaces. It
+cannot be enabled for this library's `#[interface_id]` component traits because
+SDK client generation changes their method signatures and does not preserve
+the ERC-165 trait shape.
 
 This composition model also reflects the useful parts of the other
 OpenZeppelin contract libraries while keeping Rust's storage and trait rules
