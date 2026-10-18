@@ -14,7 +14,12 @@ mod abi;
 async fn non_deployer_cannot_mint() -> Result<()> {
     let alice = Account::new().await?;
     let bob = Account::new().await?;
-    let contract_address = alice.as_deployer().deploy().await?.contract_address;
+    let contract_address = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let contract = Erc1155Supply::new(contract_address, &bob.wallet);
     let id = U256::from(7);
 
@@ -32,7 +37,12 @@ async fn non_deployer_cannot_mint() -> Result<()> {
 async fn non_deployer_cannot_mint_batch() -> Result<()> {
     let alice = Account::new().await?;
     let bob = Account::new().await?;
-    let contract_address = alice.as_deployer().deploy().await?.contract_address;
+    let contract_address = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let contract = Erc1155Supply::new(contract_address, &bob.wallet);
     let ids = vec![U256::from(7), U256::from(8)];
 
