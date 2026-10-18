@@ -203,4 +203,36 @@ mod tests {
         assert_eq!(contract.sender(alice).name(), name);
         assert_eq!(contract.sender(alice).symbol(), symbol);
     }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn token_uri_requires_existing_token_and_uses_base_uri(
+        contract: Contract<Erc721MetadataExample>,
+        alice: Address,
+    ) {
+        let token_id = U256::from(17);
+        contract
+            .sender(alice)
+            .erc721
+            ._mint(alice, token_id)
+            .expect("should mint token");
+
+        assert_eq!(
+            contract.sender(alice).token_uri(token_id).unwrap(),
+            String::new()
+        );
+
+        contract
+            .sender(alice)
+            .metadata
+            .base_uri
+            .set_str("https://example.test/token/");
+        assert_eq!(
+            contract.sender(alice).token_uri(token_id).unwrap(),
+            "https://example.test/token/17"
+        );
+        assert!(contract
+            .sender(alice)
+            .token_uri(token_id + U256::ONE)
+            .is_err());
+    }
 }

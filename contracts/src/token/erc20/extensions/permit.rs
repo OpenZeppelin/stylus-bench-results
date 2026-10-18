@@ -263,3 +263,215 @@ impl<T: IEip712 + StorageType> Erc20Permit<T> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use alloy_primitives::{b256, Address, B256, U256};
+    use alloy_sol_types::SolValue;
+    use stylus_sdk::{prelude::*, testing::TestVM};
+
+    use super::*;
+    use crate::{
+        test_support::{Contract, TransactionResultExt},
+        token::erc20::{Approval, IErc20},
+        utils::{
+            cryptography::eip712::IEip712,
+            nonces::{INonces, Nonces},
+            precompiles::primitives::ecrecover::SIGNATURE_S_UPPER_BOUND,
+        },
+    };
+
+    const SIGNED_HASH: B256 = b256!(
+        "4242424242424242424242424242424242424242424242424242424242424242"
+    );
+    const R: B256 = b256!(
+        "1111111111111111111111111111111111111111111111111111111111111111"
+    );
+    const S: B256 = b256!(
+        "2222222222222222222222222222222222222222222222222222222222222222"
+    );
+
+    #[storage]
+    struct PermitDomain;
+
+    impl IEip712 for PermitDomain {
+        const NAME: &'static str = "Permit tests";
+        const VERSION: &'static str = "1";
+
+        fn hash_typed_data_v4(&self, _struct_hash: B256) -> B256 {
+            SIGNED_HASH
+        }
+    }
+
+    #[storage]
+    struct PermitExample {
+        permit: Erc20Permit<PermitDomain>,
+        erc20: Erc20,
+        nonces: Nonces,
+    }
+
+    impl PermitExample {
+        #[allow(clippy::too_many_arguments)]
+        fn permit(
+            &mut self,
+            owner: Address,
+            spender: Address,
+            value: U256,
+            deadline: U256,
+            v: u8,
+            r: B256,
+            s: B256,
+        ) -> Result<(), Error> {
+            self.permit.permit(
+                owner,
+                spender,
+                value,
+                deadline,
+                v,
+                r,
+                s,
+                &mut self.erc20,
+                &mut self.nonces,
+            )
+        }
+    }
+
+    unsafe impl TopLevelStorage for PermitExample {}
+
+    fn mock_recover(vm: &TestVM, v: u8, recovered: Address) {
+        let mut calldata = Vec::with_capacity(128);
+        calldata.extend_from_slice(SIGNED_HASH.as_slice());
+        let mut v_word = [0u8; 32];
+        v_word[31] = v;
+        calldata.extend_from_slice(&v_word);
+        calldata.extend_from_slice(R.as_slice());
+        calldata.extend_from_slice(S.as_slice());
+        vm.mock_static_call(
+            ecrecover::ECRECOVER_ADDR,
+            calldata,
+            Ok(recovered.abi_encode()),
+        );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn permit_accepts_valid_signature_and_updates_allowance_and_nonce(
+        contract: Contract<PermitExample>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let vm = contract.vm();
+        vm.set_block_timestamp(100);
+        mock_recover(&vm, 27, alice);
+        let value = U256::from(42);
+        let deadline = U256::from(101);
+
+        contract
+            .sender(alice)
+            .permit(alice, bob, value, deadline, 27, R, S)
+            .expect("valid permit should approve the spender");
+
+        assert_eq!(contract.sender(alice).erc20.allowance(alice, bob), value);
+        assert_eq!(contract.sender(alice).nonces.nonces(alice), U256::ONE);
+        assert_ne!(
+            contract.sender(alice).permit.domain_separator(),
+            B256::ZERO
+        );
+        contract.assert_emitted(&Approval {
+            owner: alice,
+            spender: bob,
+            value,
+        });
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn permit_rejects_expired_deadline_before_recovering_signature(
+        contract: Contract<PermitExample>,
+        alice: Address,
+        bob: Address,
+    ) {
+        contract.vm().set_block_timestamp(100);
+
+        let err = contract
+            .sender(alice)
+            .permit(alice, bob, U256::from(1), U256::from(99), 27, R, S)
+            .expect_error("expired permit must fail before signature recovery");
+
+        assert!(matches!(
+            err,
+            Error::ExpiredSignature(ERC2612ExpiredSignature { deadline })
+                if deadline == U256::from(99)
+        ));
+        assert_eq!(contract.sender(alice).nonces.nonces(alice), U256::ZERO);
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn permit_rejects_signature_from_another_account(
+        contract: Contract<PermitExample>,
+        alice: Address,
+        bob: Address,
+        charlie: Address,
+    ) {
+        contract.vm().set_block_timestamp(100);
+        mock_recover(&contract.vm(), 27, charlie);
+
+        let err = contract
+            .sender(alice)
+            .permit(alice, bob, U256::from(1), U256::from(100), 27, R, S)
+            .expect_error("permit must recover the owner address");
+
+        assert!(matches!(
+            err,
+            Error::InvalidSigner(ERC2612InvalidSigner { signer, owner })
+                if signer == charlie && owner == alice
+        ));
+        assert_eq!(contract.sender(alice).nonces.nonces(alice), U256::ZERO);
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn permit_rejects_malleable_signature_s(
+        contract: Contract<PermitExample>,
+        alice: Address,
+        bob: Address,
+    ) {
+        contract.vm().set_block_timestamp(100);
+        let high_s = B256::from_slice(
+            &(SIGNATURE_S_UPPER_BOUND + U256::ONE).to_be_bytes::<32>(),
+        );
+
+        let err = contract
+            .sender(alice)
+            .permit(alice, bob, U256::from(1), U256::from(100), 27, R, high_s)
+            .expect_error("malleable signature s must be rejected");
+
+        assert!(matches!(
+            err,
+            Error::InvalidSignatureS(ECDSAInvalidSignatureS { s }) if s == high_s
+        ));
+        assert_eq!(contract.sender(alice).nonces.nonces(alice), U256::ZERO);
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn permit_propagates_invalid_spender_without_consuming_nonce(
+        contract: Contract<PermitExample>,
+        alice: Address,
+    ) {
+        contract.vm().set_block_timestamp(100);
+        mock_recover(&contract.vm(), 27, alice);
+
+        let err = contract
+            .sender(alice)
+            .permit(
+                alice,
+                Address::ZERO,
+                U256::from(1),
+                U256::from(100),
+                27,
+                R,
+                S,
+            )
+            .expect_error("zero spender must be rejected by ERC-20 approval");
+
+        assert!(matches!(err, Error::InvalidSpender(_)));
+        assert_eq!(contract.sender(alice).nonces.nonces(alice), U256::ZERO);
+    }
+}

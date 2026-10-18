@@ -201,4 +201,59 @@ mod tests {
                 .expect("should return token URI")
         );
     }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn token_uri_combines_base_and_stored_suffix_or_token_id(
+        contract: Contract<Erc721MetadataExample>,
+        alice: Address,
+    ) {
+        contract
+            .sender(alice)
+            .erc721
+            ._mint(alice, TOKEN_ID)
+            .expect("should mint a token for Alice");
+        contract
+            .sender(alice)
+            .metadata
+            .base_uri
+            .set_str("https://example.test/token/");
+
+        assert_eq!(
+            contract.sender(alice).token_uri(TOKEN_ID).unwrap(),
+            "https://example.test/token/1"
+        );
+
+        let suffix = String::from("metadata.json");
+        contract.sender(alice).set_token_uri(TOKEN_ID, suffix.clone());
+        assert_eq!(
+            contract.sender(alice).token_uri(TOKEN_ID).unwrap(),
+            "https://example.test/token/metadata.json"
+        );
+        contract.assert_emitted(&MetadataUpdate { token_id: TOKEN_ID });
+        assert!(contract
+            .sender(alice)
+            .token_uri(TOKEN_ID + U256::ONE)
+            .is_err());
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn token_uri_without_base_returns_stored_uri_or_empty_string(
+        contract: Contract<Erc721MetadataExample>,
+        alice: Address,
+    ) {
+        contract
+            .sender(alice)
+            .erc721
+            ._mint(alice, TOKEN_ID)
+            .expect("should mint a token for Alice");
+
+        assert_eq!(contract.sender(alice).token_uri(TOKEN_ID).unwrap(), "");
+
+        let stored_uri = String::from("ipfs://metadata");
+        contract.sender(alice).set_token_uri(TOKEN_ID, stored_uri.clone());
+        assert_eq!(
+            contract.sender(alice).token_uri(TOKEN_ID).unwrap(),
+            stored_uri
+        );
+    }
 }

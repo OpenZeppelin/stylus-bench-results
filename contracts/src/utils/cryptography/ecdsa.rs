@@ -209,7 +209,9 @@ fn check_if_malleable(s: &B256) -> Result<(), Error> {
 }
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{b256, B256};
+    use alloy_primitives::{address, b256, Address, B256, U256};
+    use alloy_sol_types::SolValue;
+    use stylus_sdk::{prelude::Call, testing::TestVM};
 
     use super::*;
 
@@ -251,5 +253,78 @@ mod tests {
         let invalid_s = B256::from_slice(&valid_s.to_be_bytes_vec());
         let result = check_if_malleable(&invalid_s);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn recovers_nonzero_signer_from_precompile() {
+        let vm = TestVM::new();
+        let signer = address!("1111111111111111111111111111111111111111");
+        vm.mock_static_call(
+            ECRECOVER_ADDR,
+            encode_calldata(MSG_HASH, V, R, S),
+            Ok(signer.abi_encode()),
+        );
+
+        assert_eq!(
+            recover(&vm, Call::new(), MSG_HASH, V, R, S).unwrap(),
+            signer
+        );
+    }
+
+    #[test]
+    fn rejects_legacy_v_values_before_precompile_call() {
+        for v in [0, 1] {
+            let err = recover(&TestVM::new(), Call::new(), MSG_HASH, v, R, S)
+                .expect_err("v values 0 and 1 are not accepted");
+            assert!(matches!(err, Error::InvalidSignature(_)));
+        }
+    }
+
+    #[test]
+    fn rejects_zero_address_returned_by_precompile() {
+        let vm = TestVM::new();
+        vm.mock_static_call(
+            ECRECOVER_ADDR,
+            encode_calldata(MSG_HASH, V, R, S),
+            Ok(Address::ZERO.abi_encode()),
+        );
+
+        let err = recover(&vm, Call::new(), MSG_HASH, V, R, S)
+            .expect_err("a zero address is not a recovered signer");
+        assert!(matches!(err, Error::InvalidSignature(_)));
+    }
+
+    #[test]
+    fn accepts_signature_s_at_the_upper_bound() {
+        let vm = TestVM::new();
+        let signer = address!("2222222222222222222222222222222222222222");
+        let s = B256::from_slice(&SIGNATURE_S_UPPER_BOUND.to_be_bytes::<32>());
+        vm.mock_static_call(
+            ECRECOVER_ADDR,
+            encode_calldata(MSG_HASH, V, R, s),
+            Ok(signer.abi_encode()),
+        );
+
+        assert_eq!(
+            recover(&vm, Call::new(), MSG_HASH, V, R, s).unwrap(),
+            signer
+        );
+    }
+
+    #[test]
+    fn rejects_signature_s_above_the_upper_bound_before_calling_precompile() {
+        let invalid_s = B256::from_slice(
+            &(SIGNATURE_S_UPPER_BOUND + U256::ONE).to_be_bytes::<32>(),
+        );
+
+        let err =
+            recover(&TestVM::new(), Call::new(), MSG_HASH, V, R, invalid_s)
+                .expect_err(
+                    "high-s signature must fail before precompile recovery",
+                );
+        assert!(matches!(
+            err,
+            Error::InvalidSignatureS(ECDSAInvalidSignatureS { s }) if s == invalid_s
+        ));
     }
 }
