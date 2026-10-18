@@ -276,6 +276,7 @@ async fn upgrade_to_non_erc1822_reverts() -> Result<()> {
     let invalid_logic_addr = alice
         .as_deployer()
         .with_example_name("erc20-permit")
+        .with_owner(&alice)
         .deploy()
         .await?
         .contract_address;
@@ -312,6 +313,7 @@ async fn upgrade_to_invalid_proxiable_uuid_reverts() -> Result<()> {
     let invalid_logic_addr = alice
         .as_deployer()
         .with_example_name("ownable")
+        .with_owner(&alice)
         .deploy()
         .await?
         .contract_address;
