@@ -13,15 +13,16 @@
 
 use alloc::{vec, vec::Vec};
 
-use alloy_primitives::{Address, U8, U256};
+use alloy_primitives::{Address, U256, U8};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
 use stylus_sdk::{prelude::*, storage::StorageAddress};
 
 use crate::token::erc20::{
-    self, Erc20, IErc20,
+    self,
     interface::{Erc20Interface, IErc20MetadataInterface},
-    utils::{ISafeErc20, SafeErc20, safe_erc20},
+    utils::{safe_erc20, ISafeErc20, SafeErc20},
+    Erc20, IErc20,
 };
 
 /// Default number of decimals for an [ERC-20] token.
@@ -363,8 +364,8 @@ use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
     use crate::test_support::{
-        TestContract as TestVMContract, mock_call, mock_code, mock_static_call,
-        test_address,
+        mock_call, mock_code, mock_static_call, test_address,
+        TestContract as TestVMContract,
     };
     use alloy_primitives::{aliases::B32, keccak256, uint};
     use alloy_sol_types::SolValue;
@@ -764,12 +765,10 @@ mod tests {
             amount,
         );
 
-        assert!(
-            contract
-                .sender(alice)
-                .deposit_for(alice, amount)
-                .expect("should deposit")
-        );
+        assert!(contract
+            .sender(alice)
+            .deposit_for(alice, amount)
+            .expect("should deposit"));
 
         contract.assert_emitted(&erc20::Transfer {
             from: Address::ZERO,
@@ -904,12 +903,10 @@ mod tests {
             amount,
         );
 
-        assert!(
-            contract
-                .sender(alice)
-                .withdraw_to(alice, amount)
-                .expect("should withdraw")
-        );
+        assert!(contract
+            .sender(alice)
+            .withdraw_to(alice, amount)
+            .expect("should withdraw"));
 
         contract.assert_emitted(&erc20::Transfer {
             from: alice,

@@ -2,9 +2,7 @@
 #[path = "../../devnet_test_support.rs"]
 mod devnet_test_support;
 
-use crate::devnet_test_support::{
-    constructor, receipt, send, Account, Revert,
-};
+use crate::devnet_test_support::{constructor, receipt, send, Account, Revert};
 use abi::Erc1967Example;
 use alloy::primitives::Bytes;
 use eyre::Result;

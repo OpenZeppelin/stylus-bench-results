@@ -120,7 +120,8 @@ pub(crate) fn interface_id(
             )
         },
     );
-    let interface_id_selectors = selectors.iter().map(|(_, selector, _)| selector);
+    let interface_id_selectors =
+        selectors.iter().map(|(_, selector, _)| selector);
 
     // Keep the same trait with an additional associated function
     // `interface_id`.

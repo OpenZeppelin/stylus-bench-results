@@ -6,18 +6,18 @@
 
 extern crate alloc;
 
-use alloy_primitives::{Address, B256, U256, address, keccak256, uint};
-use alloy_sol_types::{SolType, SolValue, sol};
+use alloy_primitives::{address, keccak256, uint, Address, B256, U256};
+use alloy_sol_types::{sol, SolType, SolValue};
 use openzeppelin_stylus::token::{
-    erc20::extensions::{Erc20Permit, Erc4626, IErc20Burnable, permit},
+    erc1155::{Erc1155, Error as Erc1155Error, IErc1155},
+    erc20::extensions::{permit, Erc20Permit, Erc4626, IErc20Burnable},
     erc20::{Erc20, Error as Erc20Error, IErc20},
     erc721::{Erc721, Error as Erc721Error, IErc721},
-    erc1155::{Erc1155, Error as Erc1155Error, IErc1155},
 };
 use openzeppelin_stylus::utils::{
-    cryptography::eip712::{IEip712, to_typed_data_hash},
+    cryptography::eip712::{to_typed_data_hash, IEip712},
     nonces::{INonces, Nonces},
-    precompiles::primitives::ecrecover::{ECRECOVER_ADDR, EcRecoverData},
+    precompiles::primitives::ecrecover::{EcRecoverData, ECRECOVER_ADDR},
 };
 use stylus_sdk::{abi::Bytes, prelude::*};
 use stylus_test::{TestVM, TestVMBuilder};

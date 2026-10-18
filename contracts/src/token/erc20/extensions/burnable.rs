@@ -85,8 +85,8 @@ impl IErc20Burnable for Erc20 {
 
 #[cfg(test)]
 mod tests {
-    use crate::test_support::{TestContract as TestVMContract, test_address};
-    use alloy_primitives::{Address, U256, uint};
+    use crate::test_support::{test_address, TestContract as TestVMContract};
+    use alloy_primitives::{uint, Address, U256};
 
     use super::IErc20Burnable;
     use crate::token::erc20::{Erc20, Error, IErc20};

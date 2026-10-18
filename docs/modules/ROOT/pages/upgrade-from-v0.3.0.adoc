@@ -62,6 +62,10 @@ access, testing, and deployment:
   including trailing bytes that the old decoding variants could ignore.
   Callers should encode canonical Solidity ABI values and remove trailing
   calldata and return bytes rather than depend on permissive decoding.
+* `stylus_sdk::abi::Bytes` is now Alloy's `Bytes` type. Replace tuple
+  construction such as `Bytes(vec)` with `Bytes::from(vec)` and `.0` access
+  with `as_ref()` or the relevant Alloy method. The Solidity ABI remains
+  `bytes`; a Rust `Vec<u8>` encodes as `uint8[]`.
 * Large Wasm modules can deploy in fragments, including constructor execution.
   `cargo stylus deploy --wasm-file` can deploy a prebuilt artifact. The SDK
   tooling also fixes verification of fragmented deployments and supports
@@ -84,6 +88,9 @@ access, testing, and deployment:
   contract does not need reentrant calls, and keep checks-effects-interactions
   and application-specific reentrancy protection; cache flushing only keeps
   storage coherent across external calls.
+  `RawCall` does not flush the cache by default. Choose its cache policy
+  explicitly with `flush_storage_cache()` or `clear_storage_cache()` when
+  using raw calls.
 * Mini-alloc is maintained as a separate crate. Keep the SDK's default
   allocator unless the contract deliberately supplies a different allocator.
   Several SDK host I/O helpers call `Vec::set_len` on fresh buffers, which is
@@ -175,18 +182,24 @@ intend to deploy before submitting a proxy upgrade.
 `Erc721Enumerable` now records each owner's token count at the reserved inner
 mapping key `U256::MAX`; valid owner indices are always smaller than this key.
 This avoids adding a storage field that would change the surrounding contract's
-layout. The original zero-token sentinel bug is fixed. The v0.3.0 layout did
-not store an owner count, so every owner who already held tokens when upgrading
-needs a count backfill before `token_of_owner_by_index` can be used. This also
-applies to owners whose tokens are all nonzero: the new implementation reads
-the count sentinel to validate every index. `token_by_index` continues to work
+layout. The original zero-token sentinel bug is fixed for new state. The v0.3.0
+implementation treated token ID zero as an empty owner-index slot, so existing
+ID-zero holdings were not enumerable before the upgrade either. To make those
+holdings enumerable after upgrading, call
+`Erc721Enumerable::_initialize_owner_enumeration(owner, erc721)` once for each
+existing owner whose legacy holdings include ID zero. The helper reads the
+paired ERC-721 balance and writes the reserved count entry. Legacy nonzero token
+IDs remain readable without a backfill. `token_by_index` continues to work
 because global enumeration already stores its length in `all_tokens`.
 
-UUPS example initializers reject repeat initialization while `set_version()`
-remains idempotent for existing upgrade flows. Consumer initializers must guard
-their own privileged state initialization: do not assume that calling
-`set_version()` alone prevents a second call from replacing the owner or other
-application state. For a new implementation version, permit its initializer
+The UUPS examples reject repeat initialization, and their public
+`set_version()` wrappers now require the owner. The shared UUPS component
+cannot choose an application's authorization policy; consumers must protect
+any public wrapper with their upgrade authority and initialize privileged
+state before recording the implementation version. Deploy a proxy with its
+initializer calldata atomically: an empty-init proxy remains available for
+anyone to initialize, so pass the intended owner and initialization data in the
+proxy constructor. For a new implementation version, permit its initializer
 once when the proxy still stores the previous version, then reject calls once
 the proxy version reaches the new implementation's version.
 
@@ -214,10 +227,11 @@ v0.3.0 accepted. The ERC-721 wrapper example has the ABI change listed below:
   count initialized as described in the storage section below.
 * `_mint_consecutive` now returns `ERC721ForbiddenBatchMint` after deployment.
   Move post-deployment minting to `_mint` and emit ordinary `Transfer` events.
-* The UUPS example rejects a second initializer call for the same implementation
-  version. Consumer initializers must likewise guard their own privileged state;
-  `set_version()` only tracks implementation versions and is not an owner-init
-  guard.
+* The UUPS examples reject a second initializer call for the same implementation
+  version and require the owner to call their public `set_version()` wrapper.
+  Consumer initializers must likewise guard their own privileged state;
+  `set_version()` only tracks implementation versions and is not an
+  owner-initialization guard.
 * The ERC-721 wrapper example removes `burn(uint256)` from its public ABI. In
   v0.3.0 this method called unauthenticated `_burn`, allowing any account to
   destroy another user's wrapped receipt and strand the escrowed NFT. Use

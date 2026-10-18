@@ -34,7 +34,8 @@ export-abi = ["openzeppelin-stylus/export-abi"]
 ```
 
 If you need typed Rust clients for calls to this contract from another Rust
-contract, enable `contract-client-gen` on the contract package.
+contract, enable `contract-client-gen` on the contract package. This feature
+builds client stubs and does not produce a deployable contract artifact.
 
 ## 🧱 `no_std` Projects
 
@@ -53,10 +54,11 @@ This release uses stable Rust 1.91.0 and Stylus SDK 0.10.10. Install the `wasm32
 
 The example contracts pin Binaryen 116 and the optimizer recipe in `Stylus.toml`. `cargo-stylus` applies this recipe during deployment and verification.
 
-To compile contracts for Arbitrum Stylus, run:
+Build a contract package with the SDK tool, selecting it explicitly in this
+workspace:
 
 ```sh
-cargo build --release --target wasm32-unknown-unknown
+cargo stylus build --contract <contract-package>
 ```
 
 ## 🧪 Example: ERC20 Token

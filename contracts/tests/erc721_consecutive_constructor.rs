@@ -10,14 +10,11 @@ use stylus_test::TestVMBuilder;
 
 const CONTRACT_ADDRESS: Address =
     address!("0000000000000000000000000000000000000001");
-const RECIPIENT: Address =
-    address!("0000000000000000000000000000000000000002");
+const RECIPIENT: Address = address!("0000000000000000000000000000000000000002");
 const MAX_BATCH_SIZE: U96 = uint!(5000_U96);
 
 fn new_contract() -> (stylus_test::TestVM, Erc721Consecutive) {
-    let vm = TestVMBuilder::new()
-        .contract_address(CONTRACT_ADDRESS)
-        .build();
+    let vm = TestVMBuilder::new().contract_address(CONTRACT_ADDRESS).build();
     let mut contract = Erc721Consecutive::from(&vm);
     contract.max_batch_size.set(MAX_BATCH_SIZE);
     (vm, contract)

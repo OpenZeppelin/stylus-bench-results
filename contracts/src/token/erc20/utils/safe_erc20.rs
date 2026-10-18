@@ -11,8 +11,8 @@
 
 use alloc::{vec, vec::Vec};
 
-use alloy_primitives::{Address, U256, aliases::B32};
-use alloy_sol_types::{SolCall, SolType, sol_data::Bool};
+use alloy_primitives::{aliases::B32, Address, U256};
+use alloy_sol_types::{sol_data::Bool, SolCall, SolType};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
 use stylus_sdk::{abi::Bytes, call::RawCall, function_selector, prelude::*};
@@ -654,9 +654,9 @@ use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
     use crate::test_support::{
-        TestContract as TestVMContract, mock_call, mock_code, test_address,
+        mock_call, mock_code, test_address, TestContract as TestVMContract,
     };
-    use alloy_primitives::{Address, uint};
+    use alloy_primitives::{uint, Address};
     use alloy_sol_types::SolValue;
 
     use super::*;

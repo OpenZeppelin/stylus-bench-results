@@ -476,12 +476,9 @@ impl IErc721 for Erc721 {
         let owner = self._owner_of(token_id);
         self._check_authorized(owner, self.vm().msg_sender(), token_id)?;
         if owner != from {
-            return Err(ERC721IncorrectOwner {
-                sender: from,
-                token_id,
-                owner,
-            }
-            .into());
+            return Err(
+                ERC721IncorrectOwner { sender: from, token_id, owner }.into()
+            );
         }
 
         self._update(to, token_id, Address::ZERO)?;

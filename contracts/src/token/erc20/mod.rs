@@ -6,7 +6,7 @@
 //! [`Erc20`] applications.
 use alloc::{vec, vec::Vec};
 
-use alloy_primitives::{Address, U256, aliases::B32};
+use alloy_primitives::{aliases::B32, Address, U256};
 use openzeppelin_stylus_proc::interface_id;
 use stylus_sdk::{
     prelude::*,
@@ -636,8 +636,8 @@ impl IErc165 for Erc20 {
 use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
-    use crate::test_support::{TestContract as TestVMContract, test_address};
-    use alloy_primitives::{Address, U256, uint};
+    use crate::test_support::{test_address, TestContract as TestVMContract};
+    use alloy_primitives::{uint, Address, U256};
 
     use super::*;
 
@@ -991,16 +991,12 @@ mod tests {
         let contract = TestVMContract::<Erc20>::new(stringify!(contract));
         let alice = test_address(stringify!(alice));
 
-        assert!(
-            contract
-                .sender(alice)
-                .supports_interface(<Erc20 as IErc20>::interface_id())
-        );
-        assert!(
-            contract
-                .sender(alice)
-                .supports_interface(<Erc20 as IErc165>::interface_id())
-        );
+        assert!(contract
+            .sender(alice)
+            .supports_interface(<Erc20 as IErc20>::interface_id()));
+        assert!(contract
+            .sender(alice)
+            .supports_interface(<Erc20 as IErc165>::interface_id()));
 
         let fake_interface_id: B32 = 0x12345678_u32.into();
         assert!(!contract.sender(alice).supports_interface(fake_interface_id));

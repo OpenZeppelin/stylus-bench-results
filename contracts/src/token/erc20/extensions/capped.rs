@@ -130,7 +130,7 @@ impl ICapped for Capped {
 use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
-    use crate::test_support::{TestContract as TestVMContract, test_address};
+    use crate::test_support::{test_address, TestContract as TestVMContract};
     use alloy_primitives::uint;
     use stylus_sdk::prelude::*;
 

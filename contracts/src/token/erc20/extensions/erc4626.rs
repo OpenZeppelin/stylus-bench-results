@@ -9,7 +9,7 @@
 
 use alloc::{vec, vec::Vec};
 
-use alloy_primitives::{Address, U8, U256, uint};
+use alloy_primitives::{uint, Address, U256, U8};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
 use stylus_sdk::{
@@ -20,9 +20,10 @@ use stylus_sdk::{
 use super::IErc20Metadata;
 use crate::{
     token::erc20::{
-        self, Erc20, IErc20,
+        self,
         interface::{Erc20Interface, IErc20MetadataInterface},
-        utils::{ISafeErc20, SafeErc20, safe_erc20},
+        utils::{safe_erc20, ISafeErc20, SafeErc20},
+        Erc20, IErc20,
     },
     utils::math::alloy::{Math, Rounding},
 };
@@ -1148,15 +1149,15 @@ impl Erc4626 {
 use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
-    use crate::test_support::{TestContract as TestVMContract, test_address};
-    use alloy_primitives::{Address, U8, U256, address, aliases::B32};
+    use crate::test_support::{test_address, TestContract as TestVMContract};
+    use alloy_primitives::{address, aliases::B32, Address, U256, U8};
     use stylus_sdk::prelude::*;
 
     use super::*;
     use crate::{
         token::erc20::{
-            Erc20,
             extensions::{Erc20Metadata, IErc20Metadata},
+            Erc20,
         },
         utils::introspection::erc165::IErc165,
     };

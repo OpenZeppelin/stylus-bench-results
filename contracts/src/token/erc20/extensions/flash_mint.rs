@@ -392,11 +392,11 @@ impl Erc20FlashMint {
 use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
-    use crate::test_support::{TestContract as TestVMContract, test_address};
-    use alloy_sol_types::{SolCall, sol};
+    use crate::test_support::{test_address, TestContract as TestVMContract};
+    use alloy_sol_types::{sol, SolCall};
     use stylus_sdk::{
         abi::Bytes,
-        alloy_primitives::{Address, U256, aliases::B32, uint},
+        alloy_primitives::{aliases::B32, uint, Address, U256},
         prelude::*,
     };
     use stylus_test::TestVMBuilder;
