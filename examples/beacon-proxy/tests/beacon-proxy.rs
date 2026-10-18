@@ -3,8 +3,8 @@
 #[path = "../../test-support/mod.rs"]
 mod test_support;
 use crate::test_support::{
-    constructor, receipt, send, watch, Account, ContractInitializationError,
-    EventExt, Revert,
+    constructor, receipt, send, watch, ContractInitializationError, EventExt,
+    Revert,
 };
 use abi::BeaconProxyExample;
 use alloy::{primitives::U256, sol_types::SolCall};

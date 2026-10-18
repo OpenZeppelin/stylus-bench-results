@@ -2,7 +2,6 @@
 
 #[path = "../../test-support/mod.rs"]
 mod test_support;
-use crate::test_support::Account;
 use eyre::Result;
 use openzeppelin_crypto::arithmetic::uint::{from_str_hex, U256};
 

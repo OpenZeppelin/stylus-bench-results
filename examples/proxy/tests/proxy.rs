@@ -3,7 +3,7 @@
 #[path = "../../test-support/mod.rs"]
 mod test_support;
 use crate::test_support::{
-    constructor, receipt, send, watch, Account, Constructor, EventExt, Revert,
+    constructor, receipt, send, watch, Constructor, EventExt, Revert,
 };
 use abi::ProxyExample;
 use alloy::primitives::{Address, U256};

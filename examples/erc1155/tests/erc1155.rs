@@ -2,9 +2,7 @@
 
 #[path = "../../test-support/mod.rs"]
 mod test_support;
-use crate::test_support::{
-    receipt, send, watch, Account, EventExt, PanicCode, Revert,
-};
+use crate::test_support::{receipt, send, watch, EventExt, PanicCode, Revert};
 use abi::Erc1155;
 use alloy::{
     primitives::{uint, Address, U256},

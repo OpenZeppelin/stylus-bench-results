@@ -2,7 +2,7 @@
 
 #[path = "../../test-support/mod.rs"]
 mod test_support;
-use crate::test_support::{receipt, send, watch, Account, EventExt, Revert};
+use crate::test_support::{receipt, send, watch, EventExt, Revert};
 use abi::Erc20Permit;
 use alloy::{
     primitives::{keccak256, Address, B256, U256},
@@ -30,12 +30,12 @@ type PermitStructHashTuple = sol! {
 
 macro_rules! domain_separator {
     ($contract:expr) => {{
-        let domainSeparator = $contract
+        let domain_separator = $contract
             .DOMAIN_SEPARATOR()
             .call()
             .await
             .expect("should return `DOMAIN_SEPARATOR`");
-        B256::from_slice(domainSeparator.as_slice())
+        B256::from_slice(domain_separator.as_slice())
     }};
 }
 

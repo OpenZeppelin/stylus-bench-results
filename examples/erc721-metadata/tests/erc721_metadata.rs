@@ -4,7 +4,7 @@
 #[path = "../../test-support/mod.rs"]
 mod test_support;
 use crate::test_support::{
-    constructor, receipt, watch, Account, Constructor, EventExt, Revert,
+    constructor, receipt, watch, Constructor, EventExt, Revert,
 };
 use abi::Erc721;
 use alloy::primitives::{aliases::B32, Address, U256};
@@ -107,9 +107,9 @@ async fn return_empty_token_uri_when_without_base_uri_and_token_uri(
 
     watch!(contract.mint(alice.address(), token_id))?;
 
-    let tokenURI = contract.tokenURI(token_id).call().await?;
+    let token_uri = contract.tokenURI(token_id).call().await?;
 
-    assert_eq!("", tokenURI);
+    assert_eq!("", token_uri);
 
     Ok(())
 }
@@ -135,9 +135,9 @@ async fn return_token_uri_with_base_uri_and_without_token_uri(
 
     watch!(contract.mint(alice.address(), token_id))?;
 
-    let tokenURI = contract.tokenURI(token_id).call().await?;
+    let token_uri = contract.tokenURI(token_id).call().await?;
 
-    assert_eq!(base_uri.to_owned() + &token_id.to_string(), tokenURI);
+    assert_eq!(base_uri.to_owned() + &token_id.to_string(), token_uri);
     Ok(())
 }
 
@@ -169,9 +169,9 @@ async fn return_token_uri_with_base_uri_and_token_uri() -> eyre::Result<()> {
 
     assert!(receipt.emits(Erc721::MetadataUpdate { tokenId: token_id }));
 
-    let tokenURI = contract.tokenURI(token_id).call().await?;
+    let token_uri = contract.tokenURI(token_id).call().await?;
 
-    assert_eq!(base_uri.to_owned() + &token_uri, tokenURI);
+    assert_eq!(base_uri.to_owned() + &token_uri, token_uri);
 
     Ok(())
 }
@@ -214,9 +214,9 @@ async fn set_token_uri_before_mint() -> eyre::Result<()> {
 
     watch!(contract.mint(alice.address(), token_id))?;
 
-    let tokenURI = contract.tokenURI(token_id).call().await?;
+    let token_uri = contract.tokenURI(token_id).call().await?;
 
-    assert_eq!(base_uri.to_owned() + &token_uri, tokenURI);
+    assert_eq!(base_uri.to_owned() + &token_uri, token_uri);
 
     Ok(())
 }
@@ -272,9 +272,9 @@ async fn return_token_uri_after_burn_and_remint() -> eyre::Result<()> {
     let owner_of = contract.ownerOf(token_id).call().await?;
     assert_eq!(alice_addr, owner_of);
 
-    let tokenURI = contract.tokenURI(token_id).call().await?;
+    let token_uri = contract.tokenURI(token_id).call().await?;
 
-    assert_eq!(base_uri.to_owned() + &token_id.to_string(), tokenURI);
+    assert_eq!(base_uri.to_owned() + &token_id.to_string(), token_uri);
     Ok(())
 }
 

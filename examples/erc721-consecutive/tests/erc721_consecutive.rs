@@ -3,8 +3,7 @@
 #[path = "../../test-support/mod.rs"]
 mod test_support;
 use crate::test_support::{
-    receipt, watch, Account, Constructor, ContractInitializationError,
-    EventExt, Revert,
+    receipt, watch, Constructor, ContractInitializationError, EventExt, Revert,
 };
 use alloy::primitives::{Address, U256};
 use alloy_primitives::{aliases::U96, uint};
@@ -170,8 +169,8 @@ async fn transfers_from() -> eyre::Result<()> {
         first_consecutive_token_id
     ))?;
 
-    let ownerOf = contract.ownerOf(first_consecutive_token_id).call().await?;
-    assert_eq!(ownerOf, bob.address());
+    let owner_of = contract.ownerOf(first_consecutive_token_id).call().await?;
+    assert_eq!(owner_of, bob.address());
 
     // Check that balances changed.
     let alice_balance = contract.balanceOf(alice.address()).call().await?;
@@ -234,8 +233,8 @@ async fn burns() -> eyre::Result<()> {
     // Check non-consecutive token burn.
     let non_consecutive_token_id = random_token_id();
     watch!(contract.mint(alice.address(), non_consecutive_token_id))?;
-    let ownerOf = contract.ownerOf(non_consecutive_token_id).call().await?;
-    assert_eq!(ownerOf, alice.address());
+    let owner_of = contract.ownerOf(non_consecutive_token_id).call().await?;
+    assert_eq!(owner_of, alice.address());
     let alice_balance = contract.balanceOf(alice.address()).call().await?;
     assert_eq!(alice_balance, uint!(1000_U256));
 

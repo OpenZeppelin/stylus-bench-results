@@ -2,9 +2,7 @@
 
 #[path = "../../test-support/mod.rs"]
 mod test_support;
-use crate::test_support::{
-    constructor, receipt, watch, Account, Constructor, EventExt,
-};
+use crate::test_support::{constructor, receipt, watch, Constructor, EventExt};
 use abi::Erc1155;
 use alloy::primitives::U256;
 

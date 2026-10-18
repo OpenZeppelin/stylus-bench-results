@@ -3,8 +3,8 @@
 #[path = "../../test-support/mod.rs"]
 mod test_support;
 use crate::test_support::{
-    constructor, receipt, send, Account, Constructor,
-    ContractInitializationError, EventExt, Revert,
+    constructor, receipt, send, Constructor, ContractInitializationError,
+    EventExt, Revert,
 };
 use abi::{Ownable, Ownable::OwnershipTransferred};
 use alloy::primitives::Address;

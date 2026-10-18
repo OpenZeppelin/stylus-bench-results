@@ -2,7 +2,6 @@
 
 #[path = "../../test-support/mod.rs"]
 mod test_support;
-use crate::test_support::Account;
 use abi::Erc721HolderExample;
 use alloy::primitives::{Bytes, U256};
 use eyre::Result;

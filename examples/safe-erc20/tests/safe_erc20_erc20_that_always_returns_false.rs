@@ -2,7 +2,7 @@
 
 #[path = "../../test-support/mod.rs"]
 mod test_support;
-use crate::test_support::{receipt, send, watch, Account, EventExt, Revert};
+use crate::test_support::{receipt, send, watch, EventExt, Revert};
 use abi::SafeErc20;
 use alloy::primitives::{uint, U256};
 use mock::{erc20_return_false, erc20_return_false::ERC20ReturnFalseMock};

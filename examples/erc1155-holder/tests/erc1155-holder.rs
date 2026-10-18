@@ -3,7 +3,6 @@
 
 #[path = "../../test-support/mod.rs"]
 mod test_support;
-use crate::test_support::Account;
 use abi::Erc1155HolderExample;
 use alloy::primitives::{aliases::B32, Bytes, U256};
 use eyre::Result;

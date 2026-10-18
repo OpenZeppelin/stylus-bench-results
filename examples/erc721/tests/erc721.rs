@@ -3,9 +3,7 @@
 
 #[path = "../../test-support/mod.rs"]
 mod test_support;
-use crate::test_support::{
-    receipt, send, watch, Account, EventExt, PanicCode, Revert,
-};
+use crate::test_support::{receipt, send, watch, EventExt, PanicCode, Revert};
 use abi::Erc721;
 use alloy::{
     primitives::{aliases::B32, fixed_bytes, uint, Address, Bytes, U256},
@@ -187,8 +185,8 @@ async fn transfers_from() -> eyre::Result<()> {
         tokenId: token_id,
     }));
 
-    let ownerOf = contract.ownerOf(token_id).call().await?;
-    assert_eq!(bob_addr, ownerOf);
+    let owner_of = contract.ownerOf(token_id).call().await?;
+    assert_eq!(bob_addr, owner_of);
 
     let alice_balance = contract.balanceOf(alice_addr).call().await?;
 
@@ -232,8 +230,8 @@ async fn transfers_from_approved_token() -> eyre::Result<()> {
         tokenId: token_id,
     }));
 
-    let ownerOf = contract_alice.ownerOf(token_id).call().await?;
-    assert_eq!(bob_addr, ownerOf);
+    let owner_of = contract_alice.ownerOf(token_id).call().await?;
+    assert_eq!(bob_addr, owner_of);
 
     let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
 
@@ -277,8 +275,8 @@ async fn transfers_from_approved_for_all() -> eyre::Result<()> {
         tokenId: token_id,
     }));
 
-    let ownerOf = contract_alice.ownerOf(token_id).call().await?;
-    assert_eq!(bob_addr, ownerOf);
+    let owner_of = contract_alice.ownerOf(token_id).call().await?;
+    assert_eq!(bob_addr, owner_of);
 
     let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
 
@@ -313,8 +311,8 @@ async fn error_when_transfer_to_invalid_receiver() -> eyre::Result<()> {
         receiver: invalid_receiver
     }));
 
-    let ownerOf = contract.ownerOf(token_id).call().await?;
-    assert_eq!(alice_addr, ownerOf);
+    let owner_of = contract.ownerOf(token_id).call().await?;
+    assert_eq!(alice_addr, owner_of);
 
     Ok(())
 }
@@ -346,8 +344,8 @@ async fn error_when_transfer_from_incorrect_owner() -> eyre::Result<()> {
         tokenId: token_id
     }));
 
-    let ownerOf = contract.ownerOf(token_id).call().await?;
-    assert_eq!(alice_addr, ownerOf);
+    let owner_of = contract.ownerOf(token_id).call().await?;
+    assert_eq!(alice_addr, owner_of);
 
     Ok(())
 }
@@ -375,8 +373,8 @@ async fn error_when_transfer_with_insufficient_approval() -> eyre::Result<()> {
         tokenId: token_id,
     }));
 
-    let ownerOf = contract.ownerOf(token_id).call().await?;
-    assert_eq!(alice_addr, ownerOf);
+    let owner_of = contract.ownerOf(token_id).call().await?;
+    assert_eq!(alice_addr, owner_of);
 
     Ok(())
 }
@@ -439,8 +437,8 @@ async fn safe_transfers_from() -> eyre::Result<()> {
         tokenId: token_id,
     }));
 
-    let ownerOf = contract.ownerOf(token_id).call().await?;
-    assert_eq!(bob_addr, ownerOf);
+    let owner_of = contract.ownerOf(token_id).call().await?;
+    assert_eq!(bob_addr, owner_of);
 
     let alice_balance = contract.balanceOf(alice_addr).call().await?;
 
@@ -494,8 +492,8 @@ async fn safe_transfers_to_receiver_contract() -> eyre::Result<()> {
         data: fixed_bytes!("").into(),
     }));
 
-    let ownerOf = contract.ownerOf(token_id).call().await?;
-    assert_eq!(receiver_address, ownerOf);
+    let owner_of = contract.ownerOf(token_id).call().await?;
+    assert_eq!(receiver_address, owner_of);
 
     let alice_balance = contract.balanceOf(alice_addr).call().await?;
 
@@ -540,8 +538,8 @@ async fn safe_transfers_from_approved_token() -> eyre::Result<()> {
         tokenId: token_id,
     }));
 
-    let ownerOf = contract_alice.ownerOf(token_id).call().await?;
-    assert_eq!(bob_addr, ownerOf);
+    let owner_of = contract_alice.ownerOf(token_id).call().await?;
+    assert_eq!(bob_addr, owner_of);
 
     let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
 
@@ -586,8 +584,8 @@ async fn safe_transfers_from_approved_for_all() -> eyre::Result<()> {
         tokenId: token_id,
     }));
 
-    let ownerOf = contract_alice.ownerOf(token_id).call().await?;
-    assert_eq!(bob_addr, ownerOf);
+    let owner_of = contract_alice.ownerOf(token_id).call().await?;
+    assert_eq!(bob_addr, owner_of);
 
     let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
 
@@ -624,8 +622,8 @@ async fn error_when_safe_transfer_to_invalid_receiver() -> eyre::Result<()> {
         receiver: invalid_receiver
     }));
 
-    let ownerOf = contract.ownerOf(token_id).call().await?;
-    assert_eq!(alice_addr, ownerOf);
+    let owner_of = contract.ownerOf(token_id).call().await?;
+    assert_eq!(alice_addr, owner_of);
 
     Ok(())
 }
@@ -657,8 +655,8 @@ async fn error_when_safe_transfer_from_incorrect_owner() -> eyre::Result<()> {
         tokenId: token_id
     }));
 
-    let ownerOf = contract.ownerOf(token_id).call().await?;
-    assert_eq!(alice_addr, ownerOf);
+    let owner_of = contract.ownerOf(token_id).call().await?;
+    assert_eq!(alice_addr, owner_of);
 
     Ok(())
 }
@@ -689,8 +687,8 @@ async fn error_when_safe_transfer_with_insufficient_approval(
         tokenId: token_id,
     }));
 
-    let ownerOf = contract.ownerOf(token_id).call().await?;
-    assert_eq!(alice_addr, ownerOf);
+    let owner_of = contract.ownerOf(token_id).call().await?;
+    assert_eq!(alice_addr, owner_of);
 
     Ok(())
 }
@@ -758,8 +756,8 @@ async fn safe_transfers_from_with_data() -> eyre::Result<()> {
         tokenId: token_id,
     }));
 
-    let ownerOf = contract.ownerOf(token_id).call().await?;
-    assert_eq!(bob_addr, ownerOf);
+    let owner_of = contract.ownerOf(token_id).call().await?;
+    assert_eq!(bob_addr, owner_of);
 
     let alice_balance = contract.balanceOf(alice_addr).call().await?;
 
@@ -815,8 +813,8 @@ async fn safe_transfers_with_data_to_receiver_contract() -> eyre::Result<()> {
         data,
     }));
 
-    let ownerOf = contract.ownerOf(token_id).call().await?;
-    assert_eq!(receiver_address, ownerOf);
+    let owner_of = contract.ownerOf(token_id).call().await?;
+    assert_eq!(receiver_address, owner_of);
 
     let alice_balance = contract.balanceOf(alice_addr).call().await?;
 
@@ -864,8 +862,8 @@ async fn safe_transfers_from_with_data_approved_token() -> eyre::Result<()> {
         tokenId: token_id,
     }));
 
-    let ownerOf = contract_alice.ownerOf(token_id).call().await?;
-    assert_eq!(bob_addr, ownerOf);
+    let owner_of = contract_alice.ownerOf(token_id).call().await?;
+    assert_eq!(bob_addr, owner_of);
 
     let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
 
@@ -913,8 +911,8 @@ async fn safe_transfers_from_with_data_approved_for_all() -> eyre::Result<()> {
         tokenId: token_id,
     }));
 
-    let ownerOf = contract_alice.ownerOf(token_id).call().await?;
-    assert_eq!(bob_addr, ownerOf);
+    let owner_of = contract_alice.ownerOf(token_id).call().await?;
+    assert_eq!(bob_addr, owner_of);
 
     let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
 
@@ -953,8 +951,8 @@ async fn error_when_safe_transfer_with_data_to_invalid_receiver(
         receiver: invalid_receiver
     }));
 
-    let ownerOf = contract.ownerOf(token_id).call().await?;
-    assert_eq!(alice_addr, ownerOf);
+    let owner_of = contract.ownerOf(token_id).call().await?;
+    assert_eq!(alice_addr, owner_of);
 
     Ok(())
 }
@@ -992,8 +990,8 @@ async fn error_when_safe_transfer_with_data_from_incorrect_owner(
         tokenId: token_id
     }));
 
-    let ownerOf = contract.ownerOf(token_id).call().await?;
-    assert_eq!(alice_addr, ownerOf);
+    let owner_of = contract.ownerOf(token_id).call().await?;
+    assert_eq!(alice_addr, owner_of);
 
     Ok(())
 }
@@ -1028,8 +1026,8 @@ async fn error_when_safe_transfer_with_data_with_insufficient_approval(
         tokenId: token_id,
     }));
 
-    let ownerOf = contract.ownerOf(token_id).call().await?;
-    assert_eq!(alice_addr, ownerOf);
+    let owner_of = contract.ownerOf(token_id).call().await?;
+    assert_eq!(alice_addr, owner_of);
 
     Ok(())
 }
@@ -1837,9 +1835,9 @@ async fn totally_supply_works() -> eyre::Result<()> {
     let token_2 = random_token_id();
     watch!(contract.mint(alice_addr, token_2))?;
 
-    let totalSupply = contract.totalSupply().call().await?;
+    let total_supply = contract.totalSupply().call().await?;
 
-    assert_eq!(uint!(2_U256), totalSupply);
+    assert_eq!(uint!(2_U256), total_supply);
 
     Ok(())
 }
@@ -1917,13 +1915,13 @@ async fn token_of_owner_by_index_works() -> eyre::Result<()> {
     let token_1 = random_token_id();
     watch!(contract.mint(alice_addr, token_1))?;
 
-    let tokenId =
+    let token_id =
         contract.tokenOfOwnerByIndex(alice_addr, uint!(0_U256)).call().await?;
-    assert_eq!(token_0, tokenId);
+    assert_eq!(token_0, token_id);
 
-    let tokenId =
+    let token_id =
         contract.tokenOfOwnerByIndex(alice_addr, uint!(1_U256)).call().await?;
-    assert_eq!(token_1, tokenId);
+    assert_eq!(token_1, token_id);
 
     Ok(())
 }
@@ -1952,8 +1950,8 @@ async fn token_of_owner_by_index_after_transfer_to_another_account(
 
     // should be in reverse order
     let index = uint!(0_U256);
-    let tokenId = contract.tokenOfOwnerByIndex(bob_addr, index).call().await?;
-    assert_eq!(token_1, tokenId);
+    let token_id = contract.tokenOfOwnerByIndex(bob_addr, index).call().await?;
+    assert_eq!(token_1, token_id);
     let err = contract
         .tokenOfOwnerByIndex(alice_addr, index)
         .call()
@@ -1965,8 +1963,8 @@ async fn token_of_owner_by_index_after_transfer_to_another_account(
     }));
 
     let index = uint!(1_U256);
-    let tokenId = contract.tokenOfOwnerByIndex(bob_addr, index).call().await?;
-    assert_eq!(token_0, tokenId);
+    let token_id = contract.tokenOfOwnerByIndex(bob_addr, index).call().await?;
+    assert_eq!(token_0, token_id);
     let err = contract
         .tokenOfOwnerByIndex(alice_addr, index)
         .call()
@@ -1977,9 +1975,9 @@ async fn token_of_owner_by_index_after_transfer_to_another_account(
         index
     }));
 
-    let totalSupply = contract.totalSupply().call().await?;
+    let total_supply = contract.totalSupply().call().await?;
 
-    assert_eq!(uint!(2_U256), totalSupply);
+    assert_eq!(uint!(2_U256), total_supply);
 
     Ok(())
 }
@@ -2054,11 +2052,11 @@ async fn token_by_index_works() -> eyre::Result<()> {
     let token_1 = random_token_id();
     watch!(contract.mint(alice_addr, token_1))?;
 
-    let tokenId = contract.tokenByIndex(uint!(0_U256)).call().await?;
-    assert_eq!(token_0, tokenId);
+    let token_id = contract.tokenByIndex(uint!(0_U256)).call().await?;
+    assert_eq!(token_0, token_id);
 
-    let tokenId = contract.tokenByIndex(uint!(1_U256)).call().await?;
-    assert_eq!(token_1, tokenId);
+    let token_id = contract.tokenByIndex(uint!(1_U256)).call().await?;
+    assert_eq!(token_1, token_id);
 
     Ok(())
 }
@@ -2081,8 +2079,8 @@ async fn token_by_index_after_burn() -> eyre::Result<()> {
 
     watch!(contract.burn(token_1))?;
 
-    let tokenId = contract.tokenByIndex(uint!(0_U256)).call().await?;
-    assert_eq!(token_0, tokenId);
+    let token_id = contract.tokenByIndex(uint!(0_U256)).call().await?;
+    assert_eq!(token_0, token_id);
 
     let index_of_burnt_token = uint!(1_U256);
     let err = contract
@@ -2096,9 +2094,9 @@ async fn token_by_index_after_burn() -> eyre::Result<()> {
         index: index_of_burnt_token
     }));
 
-    let totalSupply = contract.totalSupply().call().await?;
+    let total_supply = contract.totalSupply().call().await?;
 
-    assert_eq!(uint!(1_U256), totalSupply);
+    assert_eq!(uint!(1_U256), total_supply);
 
     Ok(())
 }
@@ -2127,14 +2125,14 @@ async fn token_by_index_after_burn_and_some_mints() -> eyre::Result<()> {
     let token_3 = random_token_id();
     watch!(contract.mint(alice_addr, token_3))?;
 
-    let tokenId = contract.tokenByIndex(uint!(0_U256)).call().await?;
-    assert_eq!(token_0, tokenId);
+    let token_id = contract.tokenByIndex(uint!(0_U256)).call().await?;
+    assert_eq!(token_0, token_id);
 
-    let tokenId = contract.tokenByIndex(uint!(1_U256)).call().await?;
-    assert_eq!(token_2, tokenId);
+    let token_id = contract.tokenByIndex(uint!(1_U256)).call().await?;
+    assert_eq!(token_2, token_id);
 
-    let tokenId = contract.tokenByIndex(uint!(2_U256)).call().await?;
-    assert_eq!(token_3, tokenId);
+    let token_id = contract.tokenByIndex(uint!(2_U256)).call().await?;
+    assert_eq!(token_3, token_id);
 
     Ok(())
 }

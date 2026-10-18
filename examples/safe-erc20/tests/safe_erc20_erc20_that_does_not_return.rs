@@ -3,7 +3,7 @@
 #[path = "../../test-support/mod.rs"]
 mod test_support;
 use crate::test_support::{
-    receipt, send, watch, Account, EventExt, Panic, PanicCode, Revert,
+    receipt, send, watch, EventExt, Panic, PanicCode, Revert,
 };
 use abi::{Erc20, SafeErc20};
 use alloy::primitives::uint;

@@ -3,9 +3,7 @@
 
 #[path = "../../test-support/mod.rs"]
 mod test_support;
-use crate::test_support::{
-    receipt, send, watch, Account, EventExt, Panic, PanicCode,
-};
+use crate::test_support::{receipt, send, watch, EventExt, Panic, PanicCode};
 use abi::Erc1155Supply;
 use alloy::primitives::{aliases::B32, Address, U256};
 use mock::{receiver, receiver::ERC1155ReceiverMock};
@@ -740,7 +738,7 @@ async fn is_approved_for_all_zero_address() -> eyre::Result<()> {
         .call()
         .await?;
 
-    assert_eq!(false, approved);
+    assert!(!approved);
 
     Ok(())
 }

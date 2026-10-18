@@ -2,7 +2,6 @@
 
 #[path = "../../test-support/mod.rs"]
 mod test_support;
-use crate::test_support::Account;
 use alloy_primitives::{hex, uint, U256};
 use eyre::Result;
 

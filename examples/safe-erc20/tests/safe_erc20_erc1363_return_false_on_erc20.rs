@@ -2,7 +2,7 @@
 
 #[path = "../../test-support/mod.rs"]
 mod test_support;
-use crate::test_support::{send, watch, Account, Revert};
+use crate::test_support::{send, watch, Revert};
 use abi::SafeErc20;
 use alloy::primitives::uint;
 use alloy_primitives::{Bytes, U256};

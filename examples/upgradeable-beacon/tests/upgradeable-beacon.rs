@@ -2,9 +2,7 @@
 
 #[path = "../../test-support/mod.rs"]
 mod test_support;
-use crate::test_support::{
-    constructor, receipt, send, Account, EventExt, Revert,
-};
+use crate::test_support::{constructor, receipt, send, EventExt, Revert};
 use abi::UpgradeableBeaconExample;
 use alloy::primitives::Address;
 use eyre::Result;
