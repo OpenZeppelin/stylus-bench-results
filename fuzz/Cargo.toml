@@ -8,6 +8,9 @@ edition = "2021"
 cargo-fuzz = true
 
 [dependencies]
+alloy-primitives = { version = "=1.5.7", default-features = false, features = [
+  "tiny-keccak",
+] }
 libfuzzer-sys = "0.4.9"
 
 [dependencies.openzeppelin-crypto]
