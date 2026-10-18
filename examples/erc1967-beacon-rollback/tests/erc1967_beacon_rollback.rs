@@ -51,6 +51,7 @@ async fn invalid_beacon_implementation_reverts_and_preserves_beacon_slot(
         Erc1967BeaconRollbackExample::new(target_address, &alice.wallet);
     let attacker_target =
         Erc1967BeaconRollbackExample::new(target_address, &bob.wallet);
+    assert_eq!(target.owner().call().await?, alice.address());
     assert_eq!(target.implementation().call().await?, implementation);
     assert_eq!(target.getBeacon().call().await?, Address::ZERO);
     assert_eq!(valid_beacon.implementation().call().await?, implementation);
@@ -63,6 +64,14 @@ async fn invalid_beacon_implementation_reverts_and_preserves_beacon_slot(
             account: bob.address(),
         }
     ));
+    let error = send!(attacker_target.initializeOwner(bob.address()))
+        .expect_err("an initialized deployment must reject owner replay");
+    assert!(error.reverted_with(
+        Erc1967BeaconRollbackExample::OwnableUnauthorizedAccount {
+            account: bob.address(),
+        }
+    ));
+    assert_eq!(target.owner().call().await?, alice.address());
 
     receipt!(target.upgradeBeaconToAndCall(valid_beacon_address, Bytes::new()))?;
     assert_eq!(target.getBeacon().call().await?, valid_beacon_address);
