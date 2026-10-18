@@ -210,3 +210,36 @@ impl IErc1822Proxiable for UUPSProxyErc20Example {
         self.uups.proxiable_uuid()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use stylus_test::{TestVM, TestVMBuilder};
+
+    use super::*;
+
+    fn proxy_storage(tag: u8) -> (TestVM, UUPSProxyErc20Example) {
+        let vm = TestVMBuilder::new()
+            .contract_address(Address::repeat_byte(tag))
+            .build();
+        let contract = UUPSProxyErc20Example::from(&vm);
+        (vm, contract)
+    }
+
+    #[test]
+    fn initializer_rejects_reinitialization() {
+        let alice = Address::repeat_byte(1);
+        let bob = Address::repeat_byte(2);
+        let (vm, mut contract) = proxy_storage(101);
+
+        vm.set_sender(alice);
+        contract.initialize(alice).expect("initialization should succeed");
+
+        vm.set_sender(bob);
+        let error = contract
+            .initialize(bob)
+            .expect_err("reinitialization should revert");
+
+        assert!(matches!(error, Error::InvalidInitialization(_)));
+        assert_eq!(alice, contract.owner());
+    }
+}

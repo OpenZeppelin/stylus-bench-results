@@ -248,6 +248,46 @@ impl UUPSProxyErc20ExampleNewVersion {
         }
     }
 }
+#[cfg(test)]
+mod tests {
+    use stylus_test::{TestVM, TestVMBuilder};
+
+    use super::*;
+
+    fn proxy_storage(
+        tag: u8,
+    ) -> (TestVM, UUPSProxyErc20ExampleNewVersion) {
+        let vm = TestVMBuilder::new()
+            .contract_address(Address::repeat_byte(tag))
+            .build();
+        let contract = UUPSProxyErc20ExampleNewVersion::from(&vm);
+        (vm, contract)
+    }
+
+    #[test]
+    fn initializer_rejects_reinitialization_after_upgrade() {
+        let alice = Address::repeat_byte(1);
+        let bob = Address::repeat_byte(2);
+        let (vm, mut contract) = proxy_storage(102);
+
+        // Model the proxy state after v1 initialization and the v2 upgrade
+        // hook, which advances the stored version while preserving its owner.
+        vm.set_sender(alice);
+        contract.ownable.constructor(alice).expect("valid owner");
+        contract.version.set(uups_upgradeable::VERSION_NUMBER);
+        contract.set_version().expect("upgrade hook should advance version");
+        assert_eq!(VERSION_NUMBER, contract.version.get());
+
+        vm.set_sender(bob);
+        let error = contract
+            .initialize(bob)
+            .expect_err("reinitialization should revert");
+
+        assert!(matches!(error, Error::InvalidInitialization(_)));
+        assert_eq!(alice, contract.owner());
+    }
+}
+
 
 #[public]
 impl IErc20 for UUPSProxyErc20ExampleNewVersion {
