@@ -8,7 +8,6 @@
 //! [curve25519-dalek]: https://github.com/dalek-cryptography/curve25519-dalek
 
 #![allow(non_snake_case)]
-use num_traits::Zero;
 use sha2::{digest::Digest, Sha512};
 use static_assertions::const_assert;
 use zeroize::ZeroizeOnDrop;
@@ -346,11 +345,29 @@ impl VerifyingKey {
     /// Verify a signature on a message with this keypair's public key.
     #[must_use]
     pub fn is_valid(&self, message: &[u8], signature: &Signature) -> bool {
-        if self.point.is_zero() || signature.R.is_zero() {
+        if self.point.z.is_zero() || signature.R.z.is_zero() {
             return false;
         }
 
-        let expected_r = self.compute_R(signature, message);
+        let public_key = self.point.into_affine();
+        let R = signature.R.into_affine();
+
+        if public_key.is_zero()
+            || R.is_zero()
+            || !public_key.is_on_curve()
+            || !R.is_on_curve()
+            || !public_key.is_in_prime_order_subgroup()
+            || !R.is_in_prime_order_subgroup()
+        {
+            return false;
+        }
+
+        // Rebuild projective points from their validated affine coordinates.
+        // This discards any inconsistent T coordinate supplied by callers.
+        let verifying_key = Self::from_affine(public_key);
+        let signature = Signature::from_affine_R_s(R, signature.s);
+
+        let expected_r = verifying_key.compute_R(&signature, message);
         expected_r == signature.R
     }
 
@@ -454,6 +471,29 @@ mod test {
         );
 
         assert!(!verifying_key.is_valid(&[1u8, 0, 0, 0], &signature));
+    }
+
+    #[test]
+    fn rejects_off_curve_points_and_zero_projective_z() {
+        use crate::curve::te::instance::curve25519::Curve25519FqParam;
+
+        let field_zero = Fp256::<Curve25519FqParam>::ZERO;
+        let off_curve = AffinePoint::new_unchecked(field_zero, field_zero);
+        let signature = Signature::from_affine_R_s(
+            ProjectivePoint::generator().into_affine(),
+            Scalar::from_bigint(U256::ZERO),
+        );
+        assert!(!VerifyingKey::from_affine(off_curve)
+            .is_valid(b"message", &signature));
+
+        let malformed_R = ProjectivePoint::new_unchecked(
+            field_zero, field_zero, field_zero, field_zero,
+        );
+        let signature = Signature { R: malformed_R, s: signature.s };
+        assert!(!VerifyingKey::from_affine(
+            ProjectivePoint::generator().into_affine()
+        )
+        .is_valid(b"message", &signature));
     }
 
     #[test]
