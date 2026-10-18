@@ -1,0 +1,12 @@
+[package]
+name = "stylus-devnet-node"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+version.workspace = true
+
+[dependencies]
+eyre.workspace = true
+stylus-tools = { version = "=0.10.10", features = ["integration-tests"] }
+tokio.workspace = true

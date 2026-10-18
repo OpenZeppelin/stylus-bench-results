@@ -40,7 +40,7 @@ impl ContractReport {
         let reports = run(Opt::None).await?;
         let report = reports
             .into_iter()
-            .try_fold(ContractReport::new(name), ContractReport::add)?;
+            .try_fold(ContractReport::new(name), ContractReport::push)?;
 
         let cached_reports = run(Opt::Cache).await?;
         let report = cached_reports
@@ -58,7 +58,7 @@ impl ContractReport {
         }
     }
 
-    pub fn add(mut self, fn_report: FunctionReport) -> eyre::Result<Self> {
+    pub fn push(mut self, fn_report: FunctionReport) -> eyre::Result<Self> {
         self.functions.push(fn_report);
         Ok(self)
     }

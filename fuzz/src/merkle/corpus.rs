@@ -126,14 +126,8 @@ fn main() -> std::io::Result<()> {
         //
         // Taken from https://github.com/advisories/GHSA-wprv-93r4-jj2p
         //
-        // ```js
-        // const { MerkleTree } = require('merkletreejs'); // v0.2.32
-        // const keccak256 = require('keccak256'); // v1.0.6
-        //
-        // const leaves = [keccak256('real leaf'), Buffer.alloc(32, 0)];
-        // const merkleTree = new MerkleTree(leaves, keccak256, { sortPairs: true });
-        // const root = merkleTree.getRoot();
-        // ```
+        // The known-answer vector is derived from the advisory's vulnerable
+        // tree construction: a real leaf paired with a zero-value node.
         TestCase {
             name: "manipulated_multi_proof",
             input: Input {
@@ -152,19 +146,8 @@ fn main() -> std::io::Result<()> {
                 proof_flags: vec![true, true, false],
             },
         },
-        // ```js
-        // const merkleTree = StandardMerkleTree.of(toElements('abcd'), ['string']);
-        //
-        // const root = merkleTree.root;
-        // const hashA = merkleTree.leafHash(['a']);
-        // const hashB = merkleTree.leafHash(['b']);
-        // const hashCD = hashPair(
-        //   ethers.toBeArray(merkleTree.leafHash(['c'])),
-        //   ethers.toBeArray(merkleTree.leafHash(['d'])),
-        // );
-        // const hashE = merkleTree.leafHash(['e']); // incorrect (not part of the tree)
-        // const fill = ethers.randomBytes(32);
-        // ```
+        // These values use a valid tree root, one leaf absent from the tree,
+        // and an arbitrary proof node.
         TestCase {
             name: "invalid_leaf",
             input: Input {

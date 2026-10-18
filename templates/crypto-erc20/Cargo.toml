@@ -16,11 +16,13 @@ alloy-primitives = { version = "=1.5.7", default-features = false, features = [
 stylus-sdk = "=0.10.10"
 
 [dev-dependencies]
+stylus-sdk = { version = "=0.10.10", features = ["stylus-test"] }
 stylus-test = "=0.10.10"
 arbitrary = { version = "1.4.1", features = ["derive"] }
 
 [features]
 default = ["mini-alloc"]
+contract-client-gen = []
 # stylus-sdk/export-abi will be enabled automatically.
 export-abi = ["openzeppelin-stylus/export-abi"]
 debug = ["stylus-sdk/debug"]

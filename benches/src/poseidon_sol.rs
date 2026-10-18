@@ -23,7 +23,7 @@ pub async fn bench() -> eyre::Result<ContractReport> {
     let reports = run().await?;
     let report = reports
         .into_iter()
-        .try_fold(ContractReport::new("Sol:Poseidon"), ContractReport::add)?;
+        .try_fold(ContractReport::new("Sol:Poseidon"), ContractReport::push)?;
 
     Ok(report)
 }
