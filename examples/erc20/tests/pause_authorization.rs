@@ -3,7 +3,7 @@
 #[path = "../../devnet_test_support.rs"]
 mod devnet_test_support;
 
-use crate::devnet_test_support::{constructor, send, watch, Account};
+use crate::devnet_test_support::{Account, constructor, send, watch};
 use abi::Erc20;
 use alloy::primitives::U256;
 use eyre::Result;
@@ -16,10 +16,11 @@ fn deploy_args() -> devnet_test_support::Constructor {
 
 #[tokio::test]
 async fn non_admin_cannot_pause() -> Result<()> {
-    let alice = Account::new().await?;
+    let admin = Account::new().await?;
     let bob = Account::new().await?;
-    let contract_address = alice
+    let contract_address = admin
         .as_deployer()
+        .with_signer(&admin)
         .with_constructor(deploy_args())
         .deploy()
         .await?
@@ -34,23 +35,24 @@ async fn non_admin_cannot_pause() -> Result<()> {
 
 #[tokio::test]
 async fn non_admin_cannot_unpause() -> Result<()> {
-    let alice = Account::new().await?;
+    let admin = Account::new().await?;
     let bob = Account::new().await?;
-    let contract_address = alice
+    let contract_address = admin
         .as_deployer()
+        .with_signer(&admin)
         .with_constructor(deploy_args())
         .deploy()
         .await?
         .contract_address;
-    let alice_contract = Erc20::new(contract_address, &alice.wallet);
+    let admin_contract = Erc20::new(contract_address, &admin.wallet);
     let bob_contract = Erc20::new(contract_address, &bob.wallet);
 
-    watch!(alice_contract.pause())?;
-    assert!(alice_contract.paused().call().await?);
+    watch!(admin_contract.pause())?;
+    assert!(admin_contract.paused().call().await?);
 
     send!(bob_contract.unpause())
         .expect_err("a non-admin must not unpause the token");
-    assert!(alice_contract.paused().call().await?);
+    assert!(admin_contract.paused().call().await?);
 
     Ok(())
 }

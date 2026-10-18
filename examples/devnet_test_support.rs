@@ -133,6 +133,7 @@ impl Account {
             rpc_url: self.rpc_url.clone(),
             constructor: None,
             example_name: None,
+            signer: None,
         }
     }
 }
@@ -371,6 +372,7 @@ pub struct Deployer {
     rpc_url: String,
     constructor: Option<Constructor>,
     example_name: Option<String>,
+    signer: Option<PrivateKeySigner>,
 }
 
 impl Deployer {
@@ -385,6 +387,14 @@ impl Deployer {
     #[must_use]
     pub fn with_example_name(mut self, example_name: &str) -> Self {
         self.example_name = Some(format!("{example_name}-example"));
+        self
+    }
+
+    /// Deploy using this account's signer, for tests that initialize an
+    /// administrator from the deployment sender.
+    #[must_use]
+    pub fn with_signer(mut self, account: &Account) -> Self {
+        self.signer = Some(account.signer.clone());
         self
     }
 
@@ -403,10 +413,12 @@ impl Deployer {
     ) -> eyre::Result<Receipt> {
         static NEXT_SALT: AtomicU64 = AtomicU64::new(1);
 
-        // cargo-stylus runs in a separate process and cannot invalidate the
-        // Alloy provider's cached nonce. Use a one-shot signer for deployment
-        // transactions so later calls through the test account stay in sync.
-        let deployer = PrivateKeySigner::random();
+        // By default, cargo-stylus uses a fresh signer so its transaction
+        // cannot desynchronize a test account's cached nonce. Tests may opt
+        // into an account signer when ownership derives from msg.sender; that
+        // account must not have sent transactions through its wallet yet.
+        let deployer =
+            self.signer.clone().unwrap_or_else(PrivateKeySigner::random);
         fund_address(&self.rpc_url, deployer.address(), DEPLOYER_FUNDING_WEI)
             .await?;
         let private_key = alloy::hex::encode(deployer.to_bytes());

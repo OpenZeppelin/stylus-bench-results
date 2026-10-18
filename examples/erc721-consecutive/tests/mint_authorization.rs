@@ -3,19 +3,32 @@
 #[path = "../../devnet_test_support.rs"]
 mod devnet_test_support;
 
-use crate::devnet_test_support::{send, Account, Constructor, Revert};
+use crate::devnet_test_support::{Account, Constructor, Revert, send};
 use abi::Erc721;
-use alloy::primitives::{Address, U256};
+use alloy::primitives::{Address, U256, aliases::U96, uint};
 use eyre::Result;
 
 mod abi;
 
-fn constructor_for(receiver: Address) -> Constructor {
+const FIRST_CONSECUTIVE_ID: U96 = U96::ZERO;
+const MAX_BATCH_SIZE: U96 = uint!(5000_U96);
+
+fn ctr(receivers: &[Address], amounts: &[U96]) -> Constructor {
+    let receivers = receivers
+        .iter()
+        .map(|receiver| format!("{receiver}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let amounts = amounts
+        .iter()
+        .map(|amount| format!("{amount}"))
+        .collect::<Vec<_>>()
+        .join(",");
     Constructor::new(vec![
-        format!("[{receiver}]"),
-        "[1]".to_owned(),
-        "0".to_owned(),
-        "5000".to_owned(),
+        format!("[{receivers}]"),
+        format!("[{amounts}]"),
+        FIRST_CONSECUTIVE_ID.to_string(),
+        MAX_BATCH_SIZE.to_string(),
     ])
 }
 
@@ -23,9 +36,11 @@ fn constructor_for(receiver: Address) -> Constructor {
 async fn non_owner_cannot_mint() -> Result<()> {
     let alice = Account::new().await?;
     let bob = Account::new().await?;
+    let receivers = vec![alice.address()];
+    let amounts = vec![uint!(1_U96)];
     let contract_address = alice
         .as_deployer()
-        .with_constructor(constructor_for(alice.address()))
+        .with_constructor(ctr(&receivers, &amounts))
         .deploy()
         .await?
         .contract_address;
