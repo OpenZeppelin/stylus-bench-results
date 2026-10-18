@@ -105,9 +105,9 @@ all = "warn"
 
 [workspace.dependencies]
 # Stylus SDK related
-stylus-sdk = "=0.9.0"
+stylus-sdk = "=0.10.10"
 
-alloy = { version = "=0.7.3", features = [
+alloy = { version = "=1.0.41", features = [
   "contract",
   "network",
   "providers",
@@ -117,18 +117,17 @@ alloy = { version = "=0.7.3", features = [
   "signer-local",
   "getrandom",
 ] }
-# Even though `alloy` includes `alloy-primitives` and `alloy-sol-types` we need
-# to keep both versions for compatibility with the Stylus SDK. Once they start
-# using `alloy` we can remove these.
-alloy-primitives = { version = "=0.8.20", default-features = false, features = [
+# Keep the direct Alloy core versions aligned with the Stylus SDK: contract
+# interfaces and the SDK must share the same primitive and ABI types.
+alloy-primitives = { version = "=1.5.7", default-features = false, features = [
   "tiny-keccak",
 ] }
-alloy-sol-types = { version = "=0.8.20", default-features = false }
-alloy-sol-macro = { version = "=0.8.20", default-features = false }
-alloy-sol-macro-expander = { version = "=0.8.20", default-features = false }
-alloy-sol-macro-input = { version = "=0.8.20", default-features = false }
+alloy-sol-types = { version = "=1.5.7", default-features = false }
+alloy-sol-macro = { version = "=1.5.7", default-features = false }
+alloy-sol-macro-expander = { version = "=1.5.7", default-features = false }
+alloy-sol-macro-input = { version = "=1.5.7", default-features = false }
 
-ruint = "^1.12.3"
+ruint = "^1.17.1"
 
 eyre = "0.6.8"
 keccak-const = "0.2.0"
@@ -150,7 +149,7 @@ syn = { version = "2.0.58", features = ["full"] }
 proc-macro2 = "1.0.79"
 quote = "1.0.35"
 
-motsu = "=0.10.0"
+stylus-test = "=0.10.10"
 
 # members
 openzeppelin-stylus = { path = "contracts" }
