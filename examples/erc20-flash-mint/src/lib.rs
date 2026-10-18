@@ -57,12 +57,9 @@ impl Erc20FlashMintExample {
         Ok(())
     }
 
-    fn mint(
-        &mut self,
-        to: Address,
-        value: U256,
-    ) -> Result<(), flash_mint::Error> {
-        Ok(self.erc20._mint(to, value)?)
+    fn mint(&mut self, to: Address, value: U256) -> Result<(), Vec<u8>> {
+        self.ownable.only_owner()?;
+        self.erc20._mint(to, value).map_err(Into::into)
     }
 
     /// Sets the account that receives flash-loan fees. The owner controls this

@@ -22,7 +22,12 @@ const FLASH_FEE_VALUE: U256 = uint!(100_U256);
 async fn constructs() -> Result<()> {
     let alice = Account::new().await?;
 
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+    let contract_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let contract = Erc20FlashMint::new(contract_addr, &alice.wallet);
     watch!(contract.setFlashFeeReceiver(FEE_RECEIVER))?;
     watch!(contract.setFlashFeeValue(FLASH_FEE_VALUE))?;
@@ -42,7 +47,12 @@ async fn unauthorized_account_cannot_change_flash_fee_configuration(
     let alice = Account::new().await?;
     let bob = Account::new().await?;
 
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+    let contract_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let contract_alice = Erc20FlashMint::new(contract_addr, &alice.wallet);
     let contract_bob = Erc20FlashMint::new(contract_addr, &bob.wallet);
     watch!(contract_alice.setFlashFeeReceiver(FEE_RECEIVER))?;
@@ -105,7 +115,12 @@ async fn unauthorized_account_cannot_mint_flash_mint_tokens() -> Result<()> {
 async fn max_flash_loan() -> Result<()> {
     let alice = Account::new().await?;
 
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+    let contract_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let contract = Erc20FlashMint::new(contract_addr, &alice.wallet);
     watch!(contract.setFlashFeeReceiver(FEE_RECEIVER))?;
     watch!(contract.setFlashFeeValue(FLASH_FEE_VALUE))?;
@@ -124,7 +139,12 @@ async fn max_flash_loan() -> Result<()> {
 async fn max_flash_loan_return_zero_if_no_more_tokens_to_mint() -> Result<()> {
     let alice = Account::new().await?;
 
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+    let contract_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let contract = Erc20FlashMint::new(contract_addr, &alice.wallet);
     watch!(contract.setFlashFeeReceiver(FEE_RECEIVER))?;
     watch!(contract.setFlashFeeValue(FLASH_FEE_VALUE))?;
@@ -142,7 +162,12 @@ async fn max_flash_loan_return_zero_if_no_more_tokens_to_mint() -> Result<()> {
 async fn max_flash_loan_returns_zero_on_invalid_address() -> Result<()> {
     let alice = Account::new().await?;
 
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+    let contract_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let contract = Erc20FlashMint::new(contract_addr, &alice.wallet);
     watch!(contract.setFlashFeeReceiver(FEE_RECEIVER))?;
     watch!(contract.setFlashFeeValue(FLASH_FEE_VALUE))?;
@@ -169,7 +194,12 @@ async fn max_flash_loan_returns_zero_on_invalid_address() -> Result<()> {
 async fn flash_fee_returns_same_value_regardless_of_amount() -> Result<()> {
     let alice = Account::new().await?;
 
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+    let contract_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let contract = Erc20FlashMint::new(contract_addr, &alice.wallet);
     watch!(contract.setFlashFeeReceiver(FEE_RECEIVER))?;
     watch!(contract.setFlashFeeValue(FLASH_FEE_VALUE))?;
@@ -187,7 +217,12 @@ async fn flash_fee_returns_same_value_regardless_of_amount() -> Result<()> {
 async fn flash_fee_reverts_on_unsupported_token() -> Result<()> {
     let alice = Account::new().await?;
 
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+    let contract_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let contract = Erc20FlashMint::new(contract_addr, &alice.wallet);
     watch!(contract.setFlashFeeReceiver(FEE_RECEIVER))?;
     watch!(contract.setFlashFeeValue(FLASH_FEE_VALUE))?;
@@ -221,7 +256,12 @@ async fn flash_fee_reverts_on_unsupported_token() -> Result<()> {
 async fn flash_loan_with_fee() -> Result<()> {
     let alice = Account::new().await?;
 
-    let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let erc20_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(Address::ZERO))?;
     _ = watch!(erc20.setFlashFeeValue(FLASH_FEE_VALUE))?;
@@ -276,7 +316,12 @@ async fn flash_loan_with_fee() -> Result<()> {
 async fn flash_loan_with_fee_receiver() -> Result<()> {
     let alice = Account::new().await?;
 
-    let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let erc20_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
     _ = watch!(erc20.setFlashFeeValue(U256::ZERO))?;
@@ -334,7 +379,12 @@ async fn flash_loan_with_fee_receiver() -> Result<()> {
 async fn flash_loan_with_fee_and_fee_receiver() -> Result<()> {
     let alice = Account::new().await?;
 
-    let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let erc20_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
     _ = watch!(erc20.setFlashFeeValue(FLASH_FEE_VALUE))?;
@@ -399,7 +449,12 @@ async fn flash_loan_reverts_when_loan_amount_greater_than_max_loan(
 ) -> Result<()> {
     let alice = Account::new().await?;
 
-    let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let erc20_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
     _ = watch!(erc20.setFlashFeeValue(FLASH_FEE_VALUE))?;
@@ -430,7 +485,12 @@ async fn flash_loan_reverts_with_exceeded_max_with_unsupported_token(
 ) -> Result<()> {
     let alice = Account::new().await?;
 
-    let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let erc20_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
     _ = watch!(erc20.setFlashFeeValue(FLASH_FEE_VALUE))?;
@@ -459,7 +519,12 @@ async fn flash_loan_reverts_with_unsupported_token_with_zero_loan_amount_and_uns
 ) -> Result<()> {
     let alice = Account::new().await?;
 
-    let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let erc20_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
     _ = watch!(erc20.setFlashFeeValue(FLASH_FEE_VALUE))?;
@@ -487,7 +552,12 @@ async fn flash_loan_reverts_with_unsupported_token_with_zero_loan_amount_and_uns
 async fn flash_loan_reverts_when_invalid_receiver() -> Result<()> {
     let alice = Account::new().await?;
 
-    let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let erc20_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
     _ = watch!(erc20.setFlashFeeValue(FLASH_FEE_VALUE))?;
@@ -519,7 +589,12 @@ async fn flash_loan_reverts_when_invalid_receiver() -> Result<()> {
 async fn flash_loan_reverts_when_receiver_callback_reverts() -> Result<()> {
     let alice = Account::new().await?;
 
-    let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let erc20_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
     _ = watch!(erc20.setFlashFeeValue(FLASH_FEE_VALUE))?;
@@ -548,7 +623,12 @@ async fn flash_loan_reverts_when_receiver_returns_invalid_callback_value(
 ) -> Result<()> {
     let alice = Account::new().await?;
 
-    let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let erc20_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
     _ = watch!(erc20.setFlashFeeValue(FLASH_FEE_VALUE))?;
@@ -577,7 +657,12 @@ async fn flash_loan_reverts_when_receiver_doesnt_approve_allowance(
 ) -> Result<()> {
     let alice = Account::new().await?;
 
-    let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let erc20_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
     _ = watch!(erc20.setFlashFeeValue(FLASH_FEE_VALUE))?;
@@ -607,7 +692,12 @@ async fn flash_loan_reverts_when_receiver_doesnt_approve_allowance(
 async fn flash_loan_reverts_when_allowance_overflows() -> Result<()> {
     let alice = Account::new().await?;
 
-    let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let erc20_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
     _ = watch!(erc20.setFlashFeeValue(FLASH_FEE_VALUE))?;
@@ -633,7 +723,12 @@ async fn flash_loan_reverts_when_receiver_doesnt_have_enough_tokens(
 ) -> Result<()> {
     let alice = Account::new().await?;
 
-    let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let erc20_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
     _ = watch!(erc20.setFlashFeeValue(FLASH_FEE_VALUE))?;
@@ -684,7 +779,12 @@ async fn flash_loan_reverts_when_receiver_doesnt_have_enough_tokens_and_fee_is_z
 ) -> Result<()> {
     let alice = Account::new().await?;
 
-    let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let erc20_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(FEE_RECEIVER))?;
     _ = watch!(erc20.setFlashFeeValue(U256::ZERO))?;
@@ -719,7 +819,12 @@ async fn flash_loan_reverts_when_receiver_doesnt_have_enough_tokens_and_fee_rece
 ) -> Result<()> {
     let alice = Account::new().await?;
 
-    let erc20_addr = alice.as_deployer().deploy().await?.contract_address;
+    let erc20_addr = alice
+        .as_deployer()
+        .with_signer(&alice)
+        .deploy()
+        .await?
+        .contract_address;
     let erc20 = Erc20FlashMint::new(erc20_addr, &alice.wallet);
     _ = watch!(erc20.setFlashFeeReceiver(Address::ZERO))?;
     _ = watch!(erc20.setFlashFeeValue(FLASH_FEE_VALUE))?;
