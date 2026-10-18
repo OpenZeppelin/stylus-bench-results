@@ -152,3 +152,41 @@ impl AddressUtils {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{Contract, TransactionResultExt};
+
+    #[storage]
+    struct AddressUtilsExample;
+
+    unsafe impl TopLevelStorage for AddressUtilsExample {}
+
+    #[public]
+    impl AddressUtilsExample {
+        fn verify_empty_code(&self, target: Address) -> Result<Vec<u8>, Error> {
+            AddressUtils::verify_call_result_from_target(
+                self,
+                target,
+                Ok::<Vec<u8>, CallError>(Vec::new()),
+            )
+        }
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn rejects_empty_success_from_an_address_without_code(
+        contract: Contract<AddressUtilsExample>,
+        alice: Address,
+    ) {
+        let error = contract
+            .sender(alice)
+            .verify_empty_code(alice)
+            .expect_error("an empty call from an EOA should fail");
+
+        assert!(matches!(
+            error,
+            Error::EmptyCode(AddressEmptyCode { target }) if target == alice
+        ));
+    }
+}

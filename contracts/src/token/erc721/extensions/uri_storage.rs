@@ -179,6 +179,21 @@ mod tests {
         let fake_interface_id: B32 = 0x12345678_u32.into();
         assert!(!contract.sender(alice).supports_interface(fake_interface_id));
     }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn constructor_initializes_name_and_symbol(
+        contract: Contract<Erc721MetadataExample>,
+        alice: Address,
+    ) {
+        let name = String::from("Example Collection");
+        let symbol = String::from("EX");
+
+        contract.sender(alice).constructor(name.clone(), symbol.clone());
+
+        assert_eq!(contract.sender(alice).name(), name);
+        assert_eq!(contract.sender(alice).symbol(), symbol);
+    }
+
     #[openzeppelin_stylus_proc::vm_test]
     fn token_uri_works(
         contract: Contract<Erc721MetadataExample>,

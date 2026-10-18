@@ -1339,6 +1339,75 @@ mod tests {
     }
 
     #[openzeppelin_stylus_proc::vm_test]
+    fn internal_safe_transfer_checks_eoa_recipient(
+        contract: Contract<Erc721Consecutive>,
+        alice: Address,
+        bob: Address,
+    ) {
+        contract
+            .sender(alice)
+            ._mint(alice, TOKEN_ID)
+            .expect("should mint a token for Alice");
+
+        contract
+            .sender(alice)
+            ._safe_transfer(alice, bob, TOKEN_ID, &vec![].into())
+            .expect("should safely transfer a token to an EOA");
+
+        assert_eq!(contract.sender(alice).owner_of(TOKEN_ID).unwrap(), bob);
+    }
+
+    #[test]
+    fn converts_all_erc721_and_checkpoint_errors() {
+        let owner = Address::from([0x11; 20]);
+        let operator = Address::from([0x22; 20]);
+        let token_id = U256::from(42);
+
+        assert!(matches!(
+            Error::from(erc721::Error::InvalidOwner(ERC721InvalidOwner {
+                owner,
+            })),
+            Error::InvalidOwner(ERC721InvalidOwner { owner: actual })
+                if actual == owner
+        ));
+        assert!(matches!(
+            Error::from(erc721::Error::InvalidReceiverWithReason(
+                InvalidReceiverWithReason {
+                    reason: String::from("receiver rejected"),
+                },
+            )),
+            Error::InvalidReceiverWithReason(InvalidReceiverWithReason {
+                reason,
+            }) if reason == "receiver rejected"
+        ));
+        assert!(matches!(
+            Error::from(erc721::Error::InsufficientApproval(
+                ERC721InsufficientApproval { operator, token_id },
+            )),
+            Error::InsufficientApproval(ERC721InsufficientApproval {
+                operator: actual_operator,
+                token_id: actual_token_id,
+            }) if actual_operator == operator && actual_token_id == token_id
+        ));
+        assert!(matches!(
+            Error::from(erc721::Error::InvalidOperator(ERC721InvalidOperator {
+                operator,
+            })),
+            Error::InvalidOperator(ERC721InvalidOperator {
+                operator: actual,
+            }) if actual == operator
+        ));
+        assert!(matches!(
+            Error::from(checkpoints::Error::CheckpointUnorderedInsertion(
+                checkpoints::CheckpointUnorderedInsertion {},
+            )),
+            Error::CheckpointUnorderedInsertion(
+                checkpoints::CheckpointUnorderedInsertion {}
+            )
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn error_when_internal_safe_transfer_to_invalid_receiver(
         contract: Contract<Erc721Consecutive>,
         alice: Address,

@@ -518,4 +518,50 @@ mod tests {
             vec![alice]
         );
     }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn renouncing_role_requires_self_confirmation_and_updates_enumeration(
+        contract: Contract<AccessControlEnumerableExample>,
+        admin: Address,
+        alice: Address,
+        bob: Address,
+    ) {
+        contract
+            .sender(admin)
+            .access_control
+            ._grant_role(AccessControl::DEFAULT_ADMIN_ROLE.into(), admin);
+        contract
+            .sender(admin)
+            .grant_role(ROLE.into(), alice)
+            .expect("should grant alice");
+
+        assert!(contract.sender(admin).has_role(ROLE.into(), alice));
+
+        let error = contract
+            .sender(alice)
+            .renounce_role(ROLE.into(), bob)
+            .expect_error("renouncing for another account should fail");
+        assert!(matches!(
+            error,
+            control::Error::BadConfirmation(
+                control::AccessControlBadConfirmation {}
+            )
+        ));
+        assert!(contract.sender(admin).has_role(ROLE.into(), alice));
+
+        contract
+            .sender(alice)
+            .renounce_role(ROLE.into(), alice)
+            .expect("should allow alice to renounce her role");
+
+        assert!(!contract.sender(admin).has_role(ROLE.into(), alice));
+        assert_eq!(
+            contract.sender(admin).get_role_member_count(ROLE.into()),
+            U256::ZERO
+        );
+        assert!(contract
+            .sender(admin)
+            .get_role_members(ROLE.into())
+            .is_empty());
+    }
 }

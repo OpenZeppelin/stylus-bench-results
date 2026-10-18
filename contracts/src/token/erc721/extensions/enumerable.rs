@@ -793,6 +793,73 @@ mod tests {
     }
 
     #[openzeppelin_stylus_proc::vm_test]
+    fn removing_non_last_owned_token_moves_the_last_entry(
+        contract: Contract<Erc721EnumerableTestExample>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let first_token = uint!(1_U256);
+        let last_token = uint!(2_U256);
+
+        contract
+            .sender(alice)
+            .erc721
+            ._mint(alice, first_token)
+            .expect("should mint the first token");
+        contract
+            .sender(alice)
+            .enumerable
+            ._add_token_to_owner_enumeration(
+                alice,
+                first_token,
+                &contract.sender(alice).erc721,
+            )
+            .expect("should enumerate the first token");
+
+        contract
+            .sender(alice)
+            .erc721
+            ._mint(alice, last_token)
+            .expect("should mint the last token");
+        contract
+            .sender(alice)
+            .enumerable
+            ._add_token_to_owner_enumeration(
+                alice,
+                last_token,
+                &contract.sender(alice).erc721,
+            )
+            .expect("should enumerate the last token");
+
+        contract
+            .sender(alice)
+            .erc721
+            .transfer_from(alice, bob, first_token)
+            .expect("should transfer the first token");
+        contract
+            .sender(alice)
+            .enumerable
+            ._remove_token_from_owner_enumeration(
+                alice,
+                first_token,
+                &contract.sender(alice).erc721,
+            )
+            .expect("should remove the transferred token");
+
+        assert_eq!(
+            contract
+                .sender(alice)
+                .token_of_owner_by_index(alice, U256::ZERO)
+                .expect("should return the moved last token"),
+            last_token
+        );
+        assert_eq!(
+            contract.sender(alice).erc721.balance_of(alice).unwrap(),
+            U256::ONE
+        );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn interface_id() {
         let actual =
             <Erc721EnumerableTestExample as IErc721Enumerable>::interface_id();
