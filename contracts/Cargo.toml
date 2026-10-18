@@ -20,6 +20,7 @@ openzeppelin-stylus-proc.workspace = true
 
 [dev-dependencies]
 alloy-primitives = { workspace = true, features = ["arbitrary"] }
+stylus-sdk = { workspace = true, features = ["stylus-test"] }
 stylus-test.workspace = true
 
 [features]
