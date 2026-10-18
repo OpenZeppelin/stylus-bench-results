@@ -21,6 +21,9 @@ use stylus_sdk::{
     storage::{StorageMap, StorageU256},
 };
 
+#[cfg(feature = "export-abi")]
+use super::burnable::IErc1155BurnableStylusAbiStruct;
+use super::IErc1155Burnable;
 use crate::{
     token::erc1155::{self, Erc1155, Error, IErc1155},
     utils::{
@@ -69,7 +72,7 @@ pub trait IErc1155Supply: IErc165 {
 }
 
 #[public]
-#[implements(IErc1155<Error = Error>, IErc1155Supply, IErc165)]
+#[implements(IErc1155<Error = Error>, IErc1155Burnable<Error = Error>, IErc1155Supply, IErc165)]
 impl Erc1155Supply {}
 
 #[public]
@@ -144,6 +147,7 @@ impl IErc1155 for Erc1155Supply {
 impl IErc165 for Erc1155Supply {
     fn supports_interface(&self, interface_id: B32) -> bool {
         <Self as IErc1155Supply>::interface_id() == interface_id
+            || <Self as IErc1155Burnable>::interface_id() == interface_id
             || self.erc1155.supports_interface(interface_id)
     }
 }
@@ -382,6 +386,7 @@ mod tests {
     use crate::token::erc1155::{
         tests::{random_token_ids, random_values},
         ERC1155InvalidReceiver, ERC1155InvalidSender,
+        ERC1155MissingApprovalForAll,
     };
 
     unsafe impl TopLevelStorage for Erc1155Supply {}
@@ -596,6 +601,84 @@ mod tests {
     }
 
     #[test]
+    fn burnable_single_requires_owner_or_approval() {
+        let contract =
+            TestVMContract::<Erc1155Supply>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+        let (token_ids, values) = contract.sender(alice).init(alice, 1);
+        let token_id = token_ids[0];
+        let value = values[0];
+
+        let error = contract
+            .sender(bob)
+            .burn(alice, token_id, value)
+            .expect_err("unapproved operator must not burn");
+        assert!(matches!(
+            error,
+            Error::MissingApprovalForAll(ERC1155MissingApprovalForAll {
+                operator,
+                owner,
+            }) if operator == bob && owner == alice
+        ));
+        assert_eq!(value, contract.sender(alice).balance_of(alice, token_id));
+        assert_eq!(value, contract.sender(alice).total_supply(token_id));
+
+        contract
+            .sender(alice)
+            .set_approval_for_all(bob, true)
+            .expect("should approve operator");
+        contract
+            .sender(bob)
+            .burn(alice, token_id, value)
+            .expect("approved operator may burn");
+        assert_eq!(U256::ZERO, contract.sender(alice).total_supply(token_id));
+    }
+
+    #[test]
+    fn burnable_batch_requires_owner_or_approval() {
+        let contract =
+            TestVMContract::<Erc1155Supply>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+        let (token_ids, values) = contract.sender(alice).init(alice, 2);
+
+        let error = contract
+            .sender(bob)
+            .burn_batch(alice, token_ids.clone(), values.clone())
+            .expect_err("unapproved operator must not burn a batch");
+        assert!(matches!(
+            error,
+            Error::MissingApprovalForAll(ERC1155MissingApprovalForAll {
+                operator,
+                owner,
+            }) if operator == bob && owner == alice
+        ));
+        for (&token_id, &value) in token_ids.iter().zip(values.iter()) {
+            assert_eq!(
+                value,
+                contract.sender(alice).balance_of(alice, token_id)
+            );
+            assert_eq!(value, contract.sender(alice).total_supply(token_id));
+        }
+
+        contract
+            .sender(alice)
+            .set_approval_for_all(bob, true)
+            .expect("should approve operator");
+        contract
+            .sender(bob)
+            .burn_batch(alice, token_ids.clone(), values)
+            .expect("approved operator may burn a batch");
+        for token_id in token_ids {
+            assert_eq!(
+                U256::ZERO,
+                contract.sender(alice).total_supply(token_id)
+            );
+        }
+    }
+
+    #[test]
     fn supply_unaffected_by_no_op() {
         let contract =
             TestVMContract::<Erc1155Supply>::new(stringify!(contract));
@@ -631,6 +714,9 @@ mod tests {
 
         assert!(contract.sender(alice).supports_interface(
             <Erc1155Supply as IErc1155Supply>::interface_id()
+        ));
+        assert!(contract.sender(alice).supports_interface(
+            <Erc1155Supply as IErc1155Burnable>::interface_id()
         ));
         assert!(contract
             .sender(alice)

@@ -4,8 +4,9 @@ use alloc::vec::Vec;
 
 use alloy_primitives::{Address, U256};
 use openzeppelin_stylus_proc::interface_id;
-use stylus_sdk::prelude::{HostAccess, MessageAccess};
+use stylus_sdk::prelude::{public, HostAccess, MessageAccess};
 
+use super::supply::Erc1155Supply;
 use crate::token::erc1155::{
     self, ERC1155MissingApprovalForAll, Erc1155, IErc1155,
 };
@@ -96,8 +97,33 @@ impl IErc1155Burnable for Erc1155 {
     }
 }
 
+#[public]
+impl IErc1155Burnable for Erc1155Supply {
+    type Error = erc1155::Error;
+
+    fn burn(
+        &mut self,
+        account: Address,
+        token_id: U256,
+        value: U256,
+    ) -> Result<(), erc1155::Error> {
+        self.erc1155.ensure_approved_or_owner(account)?;
+        self._burn(account, token_id, value)
+    }
+
+    fn burn_batch(
+        &mut self,
+        account: Address,
+        token_ids: Vec<U256>,
+        values: Vec<U256>,
+    ) -> Result<(), erc1155::Error> {
+        self.erc1155.ensure_approved_or_owner(account)?;
+        self._burn_batch(account, token_ids, values)
+    }
+}
+
 impl Erc1155 {
-    fn ensure_approved_or_owner(
+    pub(super) fn ensure_approved_or_owner(
         &self,
         account: Address,
     ) -> Result<(), erc1155::Error> {

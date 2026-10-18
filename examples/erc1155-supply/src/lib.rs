@@ -113,7 +113,7 @@ impl IErc1155Burnable for Erc1155Example {
         token_id: U256,
         value: U256,
     ) -> Result<(), erc1155::Error> {
-        self.erc1155_supply._burn(account, token_id, value)
+        self.erc1155_supply.burn(account, token_id, value)
     }
 
     fn burn_batch(
@@ -122,7 +122,7 @@ impl IErc1155Burnable for Erc1155Example {
         token_ids: Vec<U256>,
         values: Vec<U256>,
     ) -> Result<(), erc1155::Error> {
-        self.erc1155_supply._burn_batch(account, token_ids, values)
+        self.erc1155_supply.burn_batch(account, token_ids, values)
     }
 }
 
