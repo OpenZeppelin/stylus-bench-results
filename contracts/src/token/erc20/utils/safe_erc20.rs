@@ -670,12 +670,23 @@ impl IErc165 for SafeErc20 {
 #[cfg(test)]
 mod tests {
     use crate::test_support::*;
-    use alloy_primitives::{uint, Address};
+    use alloy_primitives::{aliases::B32, uint, Address};
     use alloy_sol_types::{SolCall, SolValue};
     use stylus_sdk::testing::TestVM;
 
     use super::*;
-    use crate::token::erc20::{Erc20, IErc20};
+    use crate::{
+        token::erc20::{Erc20, IErc20},
+        utils::introspection::erc165::IErc165,
+    };
+
+    alloy_sol_types::sol! {
+        interface Erc1363CallMock {
+            function transferAndCall(address to, uint256 value, bytes calldata data) external returns (bool);
+            function transferFromAndCall(address from, address to, uint256 value, bytes calldata data) external returns (bool);
+            function approveAndCall(address spender, uint256 value, bytes calldata data) external returns (bool);
+        }
+    }
 
     #[storage]
     #[entrypoint]
@@ -850,6 +861,17 @@ mod tests {
         vm.mock_call(token, call.abi_encode(), U256::ZERO, result);
     }
 
+    #[allow(clippy::needless_pass_by_value)]
+    fn mock_erc1363_call(
+        vm: TestVM,
+        token: Address,
+        calldata: Vec<u8>,
+        result: Result<Vec<u8>, Vec<u8>>,
+    ) {
+        vm.set_code(token, vec![0x00]);
+        vm.mock_call(token, calldata, U256::ZERO, result);
+    }
+
     #[openzeppelin_stylus_proc::vm_test]
     fn try_safe_transfer(
         contract: Contract<SafeErc20Example>,
@@ -932,6 +954,34 @@ mod tests {
             SafeErc20FailedOperation {
                 token,
             }) if token == no_code_addr
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn safe_increase_allowance_rejects_failed_allowance_read(
+        contract: Contract<SafeErc20Example>,
+        erc20: Contract<Erc20>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let token = erc20.address();
+        let allowance =
+            IERC20::allowanceCall { owner: contract.address(), spender: bob };
+        contract.vm().mock_static_call(
+            token,
+            allowance.abi_encode(),
+            Err(vec![1]),
+        );
+
+        let err = contract
+            .sender(alice)
+            .safe_increase_allowance(token, bob, U256::from(1))
+            .expect_error("allowance read failure must stop the increase");
+
+        assert!(matches!(
+            err,
+            Error::SafeErc20FailedOperation(SafeErc20FailedOperation { token: failed })
+                if failed == token
         ));
     }
 
@@ -1099,6 +1149,36 @@ mod tests {
     }
 
     #[openzeppelin_stylus_proc::vm_test]
+    fn force_approve_reports_failure_when_zero_reset_fails(
+        contract: Contract<SafeErc20Example>,
+        erc20: Contract<Erc20>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let token = erc20.address();
+        let value = U256::from(9);
+        mock_approve(contract.vm(), token, bob, value, Ok(false.abi_encode()));
+        mock_approve(
+            contract.vm(),
+            token,
+            bob,
+            U256::ZERO,
+            Ok(false.abi_encode()),
+        );
+
+        let err = contract
+            .sender(alice)
+            .force_approve(token, bob, value)
+            .expect_error("a rejected zero reset must stop forceApprove");
+
+        assert!(matches!(
+            err,
+            Error::SafeErc20FailedOperation(SafeErc20FailedOperation { token: failed })
+                if failed == token
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn decrease_allowance_approves_current_minus_value(
         contract: Contract<SafeErc20Example>,
         erc20: Contract<Erc20>,
@@ -1189,6 +1269,190 @@ mod tests {
             .expect("EOA spender should use forceApprove");
     }
 
+    #[openzeppelin_stylus_proc::vm_test]
+    fn relaxed_callbacks_accept_erc1363_success(
+        contract: Contract<SafeErc20Example>,
+        erc20: Contract<Erc20>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let token = erc20.address();
+        let value = U256::from(6);
+        let data = Bytes::from(vec![1, 2]);
+        contract.vm().set_code(alice, vec![0x00]);
+        contract.vm().set_code(bob, vec![0x00]);
+
+        mock_erc1363_call(
+            contract.vm(),
+            token,
+            Erc1363CallMock::transferAndCallCall {
+                to: alice,
+                value,
+                data: data.clone(),
+            }
+            .abi_encode(),
+            Ok(true.abi_encode()),
+        );
+        mock_erc1363_call(
+            contract.vm(),
+            token,
+            Erc1363CallMock::transferFromAndCallCall {
+                from: alice,
+                to: bob,
+                value,
+                data: data.clone(),
+            }
+            .abi_encode(),
+            Ok(true.abi_encode()),
+        );
+        mock_erc1363_call(
+            contract.vm(),
+            token,
+            Erc1363CallMock::approveAndCallCall {
+                spender: bob,
+                value,
+                data: data.clone(),
+            }
+            .abi_encode(),
+            Ok(true.abi_encode()),
+        );
+
+        contract
+            .sender(alice)
+            .transfer_and_call_relaxed(token, alice, value, data.clone())
+            .expect("contract recipient should use transferAndCall");
+        contract
+            .sender(alice)
+            .transfer_from_and_call_relaxed(
+                token,
+                alice,
+                bob,
+                value,
+                data.clone(),
+            )
+            .expect("contract recipient should use transferFromAndCall");
+        contract
+            .sender(alice)
+            .approve_and_call_relaxed(token, bob, value, data)
+            .expect("contract spender should use approveAndCall");
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn relaxed_callbacks_reject_erc1363_false_returns(
+        contract: Contract<SafeErc20Example>,
+        erc20: Contract<Erc20>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let token = erc20.address();
+        let value = U256::from(6);
+        let data = Bytes::from(vec![3, 4]);
+        contract.vm().set_code(alice, vec![0x00]);
+        contract.vm().set_code(bob, vec![0x00]);
+
+        mock_erc1363_call(
+            contract.vm(),
+            token,
+            Erc1363CallMock::transferAndCallCall {
+                to: alice,
+                value,
+                data: data.clone(),
+            }
+            .abi_encode(),
+            Ok(false.abi_encode()),
+        );
+        mock_erc1363_call(
+            contract.vm(),
+            token,
+            Erc1363CallMock::transferFromAndCallCall {
+                from: alice,
+                to: bob,
+                value,
+                data: data.clone(),
+            }
+            .abi_encode(),
+            Ok(false.abi_encode()),
+        );
+        mock_erc1363_call(
+            contract.vm(),
+            token,
+            Erc1363CallMock::approveAndCallCall {
+                spender: bob,
+                value,
+                data: data.clone(),
+            }
+            .abi_encode(),
+            Ok(false.abi_encode()),
+        );
+
+        assert!(contract
+            .sender(alice)
+            .transfer_and_call_relaxed(token, alice, value, data.clone())
+            .is_err());
+        assert!(contract
+            .sender(alice)
+            .transfer_from_and_call_relaxed(
+                token,
+                alice,
+                bob,
+                value,
+                data.clone(),
+            )
+            .is_err());
+        assert!(contract
+            .sender(alice)
+            .approve_and_call_relaxed(token, bob, value, data)
+            .is_err());
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn relaxed_callbacks_reject_tokens_without_code_for_contract_targets(
+        contract: Contract<SafeErc20Example>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let token = alice;
+        let value = U256::from(6);
+        let data = Bytes::from(vec![5, 6]);
+        contract.vm().set_code(bob, vec![0x00]);
+
+        let transfer_error = contract
+            .sender(alice)
+            .transfer_and_call_relaxed(token, bob, value, data.clone())
+            .expect_error("contract recipient requires a token contract");
+        assert!(matches!(
+            transfer_error,
+            Error::SafeErc20FailedOperation(SafeErc20FailedOperation { token: failed })
+                if failed == token
+        ));
+
+        let transfer_from_error = contract
+            .sender(alice)
+            .transfer_from_and_call_relaxed(
+                token,
+                alice,
+                bob,
+                value,
+                data.clone(),
+            )
+            .expect_error("contract recipient requires a token contract");
+        assert!(matches!(
+            transfer_from_error,
+            Error::SafeErc20FailedOperation(SafeErc20FailedOperation { token: failed })
+                if failed == token
+        ));
+
+        let approve_error = contract
+            .sender(alice)
+            .approve_and_call_relaxed(token, bob, value, data)
+            .expect_error("contract spender requires a token contract");
+        assert!(matches!(
+            approve_error,
+            Error::SafeErc20FailedOperation(SafeErc20FailedOperation { token: failed })
+                if failed == token
+        ));
+    }
+
     #[test]
     fn canonical_true_requires_the_abi_word_one() {
         let canonical_true = true.abi_encode();
@@ -1202,5 +1466,24 @@ mod tests {
         assert!(!is_canonical_true(&canonical_true[..31]));
         assert!(!is_canonical_true(&noncanonical_true));
         assert!(!is_canonical_true(&noncanonical_word));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn supports_interface_reports_safe_erc20_and_erc165_ids(
+        contract: Contract<SafeErc20Example>,
+        alice: Address,
+    ) {
+        assert!(contract
+            .sender(alice)
+            .safe_erc20
+            .supports_interface(<SafeErc20 as ISafeErc20>::interface_id()));
+        assert!(contract
+            .sender(alice)
+            .safe_erc20
+            .supports_interface(<SafeErc20 as IErc165>::interface_id()));
+        assert!(!contract
+            .sender(alice)
+            .safe_erc20
+            .supports_interface(B32::ZERO));
     }
 }

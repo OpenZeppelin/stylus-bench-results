@@ -412,6 +412,81 @@ mod tests {
     }
 
     #[openzeppelin_stylus_proc::vm_test]
+    fn interface_methods_forward_owner_transfer_and_renounce(
+        contract: Contract<Ownable>,
+        alice: Address,
+        bob: Address,
+    ) {
+        contract.sender(alice).constructor(alice).unwrap();
+
+        let mut owner_call = contract.sender(alice);
+        assert_eq!(<Ownable as IOwnable>::owner(&owner_call), alice);
+        <Ownable as IOwnable>::transfer_ownership(&mut owner_call, bob)
+            .expect("interface transfer should forward to Ownable");
+        assert_eq!(contract.sender(alice).owner(), bob);
+
+        let mut new_owner_call = contract.sender(bob);
+        <Ownable as IOwnable>::renounce_ownership(&mut new_owner_call)
+            .expect("interface renounce should forward to Ownable");
+        assert_eq!(contract.sender(alice).owner(), Address::ZERO);
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn interface_transfer_returns_encoded_unauthorized_error(
+        contract: Contract<Ownable>,
+        alice: Address,
+        bob: Address,
+    ) {
+        contract.sender(bob).constructor(bob).unwrap();
+
+        let mut non_owner_call = contract.sender(alice);
+        let error = <Ownable as IOwnable>::transfer_ownership(
+            &mut non_owner_call,
+            alice,
+        )
+        .expect_err("interface transfer must preserve access control");
+
+        assert_eq!(
+            error,
+            <Error as MethodError>::encode(Error::UnauthorizedAccount(
+                OwnableUnauthorizedAccount { account: alice },
+            ))
+        );
+
+        let error =
+            <Ownable as IOwnable>::renounce_ownership(&mut non_owner_call)
+                .expect_err("interface renounce must preserve access control");
+        assert_eq!(
+            error,
+            <Error as MethodError>::encode(Error::UnauthorizedAccount(
+                OwnableUnauthorizedAccount { account: alice },
+            ))
+        );
+        assert_eq!(contract.sender(alice).owner(), bob);
+    }
+
+    #[test]
+    fn method_errors_encode_as_their_solidity_errors() {
+        use alloy_sol_types::SolError;
+        use stylus_sdk::stylus_core::calls::errors::MethodError;
+
+        let account = Address::from([0x11; 20]);
+        assert_eq!(
+            <Error as MethodError>::encode(Error::UnauthorizedAccount(
+                OwnableUnauthorizedAccount { account },
+            )),
+            OwnableUnauthorizedAccount { account }.abi_encode()
+        );
+
+        assert_eq!(
+            <Error as MethodError>::encode(Error::InvalidOwner(
+                OwnableInvalidOwner { owner: Address::ZERO },
+            )),
+            OwnableInvalidOwner { owner: Address::ZERO }.abi_encode()
+        );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn interface_id() {
         let actual = <Ownable as IOwnable>::interface_id();
         let expected: B32 = 0xe083076_u32.into();
