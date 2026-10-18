@@ -6,6 +6,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 use openzeppelin_stylus::{
+    access::ownable::{self, IOwnable, Ownable},
     token::erc721::{
         self,
         extensions::{
@@ -19,6 +20,7 @@ use stylus_sdk::{
     abi::Bytes,
     alloy_primitives::{aliases::B32, Address, U256},
     prelude::*,
+    storage::StorageBool,
 };
 
 #[derive(SolidityError, Debug)]
@@ -36,6 +38,8 @@ enum Error {
     InsufficientApproval(erc721::ERC721InsufficientApproval),
     InvalidApprover(erc721::ERC721InvalidApprover),
     InvalidOperator(erc721::ERC721InvalidOperator),
+    UnauthorizedAccount(ownable::OwnableUnauthorizedAccount),
+    OwnableInvalidOwner(ownable::OwnableInvalidOwner),
 }
 
 impl From<enumerable::Error> for Error {
@@ -47,6 +51,17 @@ impl From<enumerable::Error> for Error {
             enumerable::Error::EnumerableForbiddenBatchMint(e) => {
                 Error::EnumerableForbiddenBatchMint(e)
             }
+        }
+    }
+}
+
+impl From<ownable::Error> for Error {
+    fn from(value: ownable::Error) -> Self {
+        match value {
+            ownable::Error::UnauthorizedAccount(e) => {
+                Error::UnauthorizedAccount(e)
+            }
+            ownable::Error::InvalidOwner(e) => Error::OwnableInvalidOwner(e),
         }
     }
 }
@@ -76,12 +91,41 @@ impl From<erc721::Error> for Error {
 struct Erc721Example {
     erc721: Erc721,
     enumerable: Erc721Enumerable,
+    ownable: Ownable,
+    owner_initialized: StorageBool,
 }
 
 #[public]
-#[implements(IErc721<Error = Error>, IErc721Burnable<Error = Error>, IErc721Enumerable<Error = Error>, IErc165)]
+#[implements(IErc721<Error = Error>, IErc721Burnable<Error = Error>, IErc721Enumerable<Error = Error>, IErc165, IOwnable)]
 impl Erc721Example {
+    #[constructor]
+    fn constructor(&mut self) -> Result<(), Vec<u8>> {
+        self.ownable.constructor(self.vm().msg_sender())?;
+        self.owner_initialized.set(true);
+        Ok(())
+    }
+
+    /// Initializes ownership when upgrading a proxy deployed by the previous
+    /// version. Call this atomically with the implementation upgrade.
+    fn initialize_owner(
+        &mut self,
+        initial_owner: Address,
+    ) -> Result<(), Vec<u8>> {
+        if self.owner_initialized.get() {
+            return Err(ownable::Error::UnauthorizedAccount(
+                ownable::OwnableUnauthorizedAccount {
+                    account: self.vm().msg_sender(),
+                },
+            )
+            .into());
+        }
+        self.ownable.constructor(initial_owner)?;
+        self.owner_initialized.set(true);
+        Ok(())
+    }
+
     fn mint(&mut self, to: Address, token_id: U256) -> Result<(), Error> {
+        self.ownable.only_owner()?;
         self.erc721._mint(to, token_id)?;
 
         // Update the extension's state.
@@ -101,6 +145,7 @@ impl Erc721Example {
         token_id: U256,
         data: Bytes,
     ) -> Result<(), Error> {
+        self.ownable.only_owner()?;
         self.erc721._mint(to, token_id)?;
 
         // Update the extension's state before calling the receiver. A receiver
@@ -121,6 +166,24 @@ impl Erc721Example {
         )?;
 
         Ok(())
+    }
+}
+
+#[public]
+impl IOwnable for Erc721Example {
+    fn owner(&self) -> Address {
+        self.ownable.owner()
+    }
+
+    fn transfer_ownership(
+        &mut self,
+        new_owner: Address,
+    ) -> Result<(), Vec<u8>> {
+        Ok(self.ownable.transfer_ownership(new_owner)?)
+    }
+
+    fn renounce_ownership(&mut self) -> Result<(), Vec<u8>> {
+        Ok(self.ownable.renounce_ownership()?)
     }
 }
 
@@ -283,7 +346,8 @@ impl IErc721Enumerable for Erc721Example {
 #[public]
 impl IErc165 for Erc721Example {
     fn supports_interface(&self, interface_id: B32) -> bool {
-        self.erc721.supports_interface(interface_id)
+        <Self as IOwnable>::interface_id() == interface_id
+            || self.erc721.supports_interface(interface_id)
             || self.enumerable.supports_interface(interface_id)
     }
 }
