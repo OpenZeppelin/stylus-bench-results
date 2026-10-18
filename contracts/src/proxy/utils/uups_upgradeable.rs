@@ -9,14 +9,6 @@
 //!
 //! [`Erc1967Proxy`]: crate::proxy::erc1967::Erc1967Proxy
 
-// The contract is covered 100% via e2e tests, but this cannot be displayed due
-// to the inability llvm-cov to display e2e coverage. Marking this with
-// coverage(off) to avoid a false negative.
-//
-// TODO: remove this attribute when 100% coverage can be achieved through unit
-// tests.
-#![cfg_attr(coverage_nightly, coverage(off))]
-
 pub use alloc::{string::String, vec, vec::Vec};
 
 use alloy_primitives::{aliases::B256, uint, Address, U256, U32};
@@ -776,6 +768,10 @@ mod tests {
                 function upgradeToAndCall(address newImplementation, bytes calldata data) external payable;
             }
 
+            interface ProxiableUUIDInterface {
+                function proxiableUUID() external view returns (bytes32);
+            }
+
         }
     }
 
@@ -787,6 +783,22 @@ mod tests {
             logic,
             ERC20Interface::setVersionCall {}.abi_encode(),
             Ok(vec![]),
+        );
+    }
+
+    fn encoded_implementation(implementation: Address) -> B256 {
+        let mut encoded = [0; 32];
+        encoded[12..].copy_from_slice(implementation.as_slice());
+        B256::from(encoded)
+    }
+
+    fn set_implementation_slot(
+        vm: &stylus_sdk::testing::TestVM,
+        implementation: Address,
+    ) {
+        vm.set_storage(
+            U256::from_be_bytes(IMPLEMENTATION_SLOT.0),
+            encoded_implementation(implementation),
         );
     }
 
@@ -945,5 +957,195 @@ mod tests {
     fn get_version_number_v2(uups: Contract<UUPSUpgradeable>, alice: Address) {
         uups.sender(alice).constructor();
         assert_eq!(VERSION_NUMBER, uups.sender(alice).get_version());
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn constructor_sets_implementation_flag(
+        uups: Contract<UUPSUpgradeable>,
+        alice: Address,
+    ) {
+        assert!(!uups.sender(alice).is_logic());
+
+        uups.sender(alice).constructor();
+
+        assert!(uups.sender(alice).logic_flag().get());
+        assert!(uups.sender(alice).is_logic());
+        assert!(uups.sender(alice).not_delegated().is_ok());
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn delegated_context_rejects_implementation_only_calls(
+        uups: Contract<UUPSUpgradeable>,
+        alice: Address,
+    ) {
+        let context_error = UUPSUnauthorizedCallContext {}.abi_encode();
+
+        assert!(matches!(
+            uups.sender(alice)
+                .not_delegated()
+                .expect_error("proxy context must be rejected"),
+            Error::UnauthorizedCallContext(_)
+        ));
+        assert_eq!(
+            uups.sender(alice).proxiable_uuid().expect_error(
+                "proxiable UUID must be unavailable through a proxy"
+            ),
+            context_error
+        );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn set_version_requires_proxy_context_and_monotonic_version(
+        uups: Contract<UUPSUpgradeable>,
+        alice: Address,
+    ) {
+        uups.sender(alice).constructor();
+        assert!(matches!(
+            uups.sender(alice)
+                .set_version()
+                .expect_error("implementation cannot initialize proxy version"),
+            Error::UnauthorizedCallContext(_)
+        ));
+
+        let proxy_context = Contract::<UUPSUpgradeable>::new();
+        proxy_context.sender(alice).version.set(VERSION_NUMBER + uint!(1_U32));
+        assert!(matches!(
+            proxy_context
+                .sender(alice)
+                .set_version()
+                .expect_error("older logic cannot downgrade proxy version"),
+            Error::InvalidVersion(InvalidVersion { current_version })
+                if current_version
+                    == (VERSION_NUMBER + uint!(1_U32)).to::<u32>()
+        ));
+
+        let current = Contract::<UUPSUpgradeable>::new();
+        current.sender(alice).set_version().unwrap();
+        assert_eq!(current.sender(alice).version.get(), VERSION_NUMBER);
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn only_proxy_checks_logic_flag_implementation_and_version(
+        uups: Contract<UUPSUpgradeable>,
+        alice: Address,
+        implementation: Address,
+    ) {
+        let direct = Contract::<UUPSUpgradeable>::new();
+        direct.sender(alice).constructor();
+        direct.sender(alice).version.set(VERSION_NUMBER);
+        set_implementation_slot(&direct.vm(), implementation);
+        assert!(direct.sender(alice).only_proxy().is_err());
+
+        assert!(uups.sender(alice).only_proxy().is_err());
+        set_implementation_slot(&uups.vm(), implementation);
+        assert!(uups.sender(alice).only_proxy().is_err());
+
+        uups.sender(alice).version.set(VERSION_NUMBER + uint!(1_U32));
+        assert!(uups.sender(alice).only_proxy().is_err());
+
+        uups.sender(alice).version.set(VERSION_NUMBER);
+        assert!(uups.sender(alice).only_proxy().is_ok());
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn uups_upgrade_rejects_invalid_and_unsupported_implementations(
+        uups: Contract<UUPSUpgradeable>,
+        invalid: Contract<FakeImplementation>,
+        alice: Address,
+    ) {
+        let calldata =
+            ProxiableUUIDInterface::proxiableUUIDCall {}.abi_encode();
+        let data: Bytes = vec![].into();
+        uups.vm().mock_static_call(
+            invalid.address(),
+            calldata.clone(),
+            Err(vec![]),
+        );
+        assert!(matches!(
+            uups.sender(alice)
+                ._upgrade_to_and_call_uups(invalid.address(), &data),
+            Err(Error::InvalidImplementation(_))
+        ));
+
+        uups.vm().mock_static_call(
+            invalid.address(),
+            calldata,
+            Ok(B256::from([0xFF; 32]).abi_encode()),
+        );
+        assert!(matches!(
+            uups.sender(alice)
+                ._upgrade_to_and_call_uups(invalid.address(), &data)
+                .unwrap_err(),
+            Error::UnsupportedProxiableUUID(UUPSUnsupportedProxiableUUID { slot })
+                if slot == B256::from([0xFF; 32])
+        ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn uups_upgrade_sets_the_erc1967_implementation(
+        uups: Contract<UUPSUpgradeable>,
+        logic: Contract<UUPSErc20Example>,
+        alice: Address,
+    ) {
+        let calldata =
+            ProxiableUUIDInterface::proxiableUUIDCall {}.abi_encode();
+        uups.vm().mock_static_call(
+            logic.address(),
+            calldata,
+            Ok(IMPLEMENTATION_SLOT.abi_encode()),
+        );
+        let data: Bytes = vec![].into();
+
+        uups.sender(alice)
+            ._upgrade_to_and_call_uups(logic.address(), &data)
+            .expect("valid UUPS implementation should be accepted");
+
+        assert_eq!(
+            uups.vm().get_storage(U256::from_be_bytes(IMPLEMENTATION_SLOT.0)),
+            encoded_implementation(logic.address())
+        );
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn upgrade_to_and_call_updates_implementation_and_runs_setup_calls(
+        logic: Contract<UUPSErc20Example>,
+        next_logic: Contract<UUPSErc20Example>,
+        alice: Address,
+    ) {
+        // This fixture is intentionally in proxy context: no constructor has
+        // set its implementation-only logic flag.
+        logic.sender(alice).set_version().unwrap();
+        set_implementation_slot(&logic.vm(), logic.address());
+
+        let setup = ERC20Interface::totalSupplyCall {}.abi_encode();
+        let initialize = ERC20Interface::setVersionCall {}.abi_encode();
+        logic.vm().mock_static_call(
+            next_logic.address(),
+            ProxiableUUIDInterface::proxiableUUIDCall {}.abi_encode(),
+            Ok(IMPLEMENTATION_SLOT.abi_encode()),
+        );
+        logic.vm().mock_delegate_call(
+            next_logic.address(),
+            setup.clone(),
+            Ok(U256::from(42).abi_encode()),
+        );
+        logic.vm().mock_delegate_call(
+            next_logic.address(),
+            initialize,
+            Ok(vec![]),
+        );
+
+        logic
+            .sender(alice)
+            .upgrade_to_and_call(next_logic.address(), setup.into())
+            .expect("authorized upgrade and setup should succeed");
+
+        assert_eq!(
+            logic.vm().get_storage(U256::from_be_bytes(IMPLEMENTATION_SLOT.0)),
+            encoded_implementation(next_logic.address())
+        );
+        logic.assert_emitted(&crate::proxy::erc1967::Upgraded {
+            implementation: next_logic.address(),
+        });
     }
 }
