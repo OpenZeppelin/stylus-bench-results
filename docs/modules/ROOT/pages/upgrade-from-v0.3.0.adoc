@@ -1,0 +1,190 @@
+= Upgrading from v0.3.0
+
+This guide covers the Rust API, testing, build, and storage changes required to
+move a v0.3.0 contract to Stylus SDK 0.10.10. Review the storage and initializer
+sections before upgrading a live proxy.
+
+== Toolchain and dependencies
+
+Use stable Rust 1.91.0, the `wasm32-unknown-unknown` target, and Stylus SDK
+0.10.10. Keep Alloy primitive and Solidity ABI crates aligned with the SDK's
+Alloy 1.5.7 types; mixing versions can make ABI and storage types incompatible.
+
+Add a workspace-level `Stylus.toml` and pin the optimizer recipe so local builds,
+deployment, and verification use the same artifact:
+
+[source,toml]
+----
+[workspace]
+
+[wasm-opt]
+version = "116"
+flags = ["--enable-bulk-memory", "-O3"]
+----
+
+SDK 0.10.9 and later include this recipe in the project hash. Use the same
+configuration for every crate in a Cargo workspace.
+
+== SDK changes from 0.9.0 to 0.10.10
+
+The migration adopts the SDK changes that affect contract composition, host
+access, testing, and deployment:
+
+* Cargo Stylus is workspace-aware. Put shared dependencies and `Stylus.toml`
+  at the workspace root, and use `--contract` when selecting among contracts.
+  The pinned optimizer recipe is included in the project hash so verification
+  uses the same build inputs.
+* The host I/O API is VM-based. Read context and emit logs through `self.vm()`;
+  use the SDK call contexts for calls and deployment. This library and its
+  examples no longer use global host accessors.
+* Public routing traits use `#[public]`. The SDK now supports pure trait
+  methods, nested structs and tuples in return values, associated types in ABI
+  export, and compile-time selector and constructor collision checks. Use
+  concrete error types in public implementation signatures where ABI
+  generation requires them.
+* ABI decoding validates input and rejects malformed encodings. Callers should
+  encode canonical Solidity ABI values rather than depend on permissive
+  decoding of malformed data.
+* Large Wasm modules can deploy in fragments, including constructor execution.
+  `cargo stylus deploy --wasm-file` can deploy a prebuilt artifact. The SDK
+  tooling also fixes verification of fragmented deployments and supports
+  reproducible workspace builds in Docker.
+* `contract-client-gen` can generate typed clients from a public contract.
+  Enable a feature with that name on the contract crate and on the dependency
+  in the consumer crate when generated clients are useful.
+* Storage cache flushing around high-level external calls provides storage
+  coherence across reentrancy. SDK 0.10.5 deprecated the `reentrant` feature
+  and `deny_reentrant` entrypoint guard. Remove the guard from consumer
+  contracts; it is not a replacement for checks-effects-interactions or
+  application-specific reentrancy protection.
+* Mini-alloc is maintained as a separate crate. Keep the SDK's default
+  allocator unless the contract deliberately supplies a different allocator.
+* The toolchain baseline is Rust 1.91.0. Keep `ruint` at 1.17.1 or later and
+  align Alloy primitive and ABI types with the SDK.
+
+The SDK changelog has the release-by-release list, including storage-slot and
+codehash-keepalive tooling added in 0.10.0. Those features do not change this
+library's existing storage layout or runtime behavior. See the
+https://github.com/OffchainLabs/stylus-sdk-rs/blob/v0.10.10/CHANGELOG.md[SDK
+0.10.10 changelog] for the complete release history.
+
+== VM access and external calls
+
+The SDK now exposes execution context through the contract's VM host. Replace
+global calls such as `msg::sender()` and `evm::log(event)` with
+`self.vm().msg_sender()` and `self.vm().log(event)`. Other context reads, such as
+timestamp, chain ID, code size, and contract address, also come from `self.vm()`.
+This makes host access explicit in methods and keeps it available to the SDK
+TestVM.
+
+Use the 0.10 call context constructors for external calls. Mutating calls use
+`Call::new_mutating(self)`; static calls use the static call context. Pass the
+VM reference required by the generated interface call. For example, a receiver
+call follows this shape:
+
+[source,rust]
+----
+let vm = self.vm().clone();
+let call = Call::new_mutating(self);
+receiver.on_erc_721_received(&vm, call, operator, from, token_id, data)
+----
+
+Code-presence checks now use `self.vm().code_size(address) != 0` instead of the
+old address helper. Events are emitted through the same VM instance that owns
+the contract call.
+
+== Public implementations and ABI errors
+
+SDK 0.10 requires `#[public]` on traits used for trait-based contract routing.
+Add it to consumer-defined routing traits and their implementations. The SDK
+also adds compile-time selector-collision checks to `#[public]` blocks.
+
+In an implementation block, use a concrete error type in method signatures when
+the SDK must export the ABI, for example `Result<bool, erc20::Error>`. Keep the
+associated type on the trait implementation (`type Error = erc20::Error`) and
+keep generic associated error types in public trait definitions. This avoids
+the old `Self::Error` expansion trouble in generated router and ABI code.
+
+`IProxy` is now an `unsafe trait`; implement it with `unsafe impl` and keep
+delegation calls in explicit `unsafe` blocks. The implementation must guarantee
+that the storage context and implementation address passed to `delegate_call`
+are valid. Do not expose delegation to an untrusted implementation address.
+
+== Testing
+
+Replace `motsu` tests with the SDK's `stylus-test` `TestVM`. Create contracts
+with `TestVMContract::<Contract>::new(...)`, set callers with `.sender(...)`,
+and use `.vm()` to configure host results, code, call mocks, and block values.
+Add `stylus-test = "=0.10.10"` as a development dependency when tests use it.
+
+TestVM does not execute implementation bytecode through a delegate call. Keep
+unit tests for component logic, but test proxy fallback, UUPS upgrade, and
+constructor behavior against a Nitro devnode. The old `lib/e2e` and
+`lib/e2e-proc` crates have been removed. The examples use Tokio, Alloy, and
+`cargo stylus deploy` against the SDK devnet started by `scripts/devnet.sh`.
+
+== Storage and proxy upgrades
+
+The migration keeps the existing contract storage fields, field order, mapping
+derivations, and ERC-1967 slots. Do not reorder or replace those fields while
+upgrading. Compare the generated storage layout of the implementation you
+intend to deploy before submitting a proxy upgrade.
+
+`Erc721Enumerable` now records each owner's token count at the reserved inner
+mapping key `U256::MAX`; valid owner indices are always smaller than this key.
+This avoids adding a storage field that would change the surrounding contract's
+layout. The original zero-token sentinel bug is fixed. If a live v0.3.0
+enumerable proxy already owns token ID zero, its old mapping does not contain
+the new count metadata. Reconcile that owner's count during your application
+migration before relying on owner-index enumeration for token ID zero. Other
+stored token IDs remain readable without this count.
+
+UUPS example initializers reject repeat initialization while `set_version()`
+remains idempotent for existing upgrade flows. Consumer initializers must guard
+their own privileged state initialization: do not assume that calling
+`set_version()` alone prevents a second call from replacing the owner or other
+application state. For a new implementation version, permit its initializer
+once when the proxy still stores the previous version, then reject calls once
+the proxy version reaches the new implementation's version.
+
+== Consecutive ERC-721 minting
+
+`_mint_consecutive` is restricted to construction by checking that the current
+contract has no deployed code. A runtime call returns
+`ERC721ForbiddenBatchMint`. For proxy deployments, construction means the proxy
+constructor; upgrades are runtime calls and cannot use this mint path. Use
+ordinary `_mint` after deployment.
+
+== Build, deploy, and verify
+
+Use the pinned SDK tools and the workspace scripts:
+
+[source,shell]
+----
+cargo +1.91.0 test --workspace --all-targets --locked
+./scripts/devnet.sh run -- ./scripts/e2e-tests.sh
+./scripts/devnet.sh run -- ./scripts/check-wasm.sh
+cargo stylus export-abi --contract <contract-package>
+----
+
+The local devnode rejects a Binaryen `DataCount` section even when a module has
+no `memory.init` or `data.drop` instructions. The repository optimizer wrapper
+validates the optimized module, removes that unneeded section, and validates
+the deployable module again. Source the wrapper environment in custom deploy
+or verification scripts with `scripts/wasm-opt-wrapper/env.sh`.
+
+== Design notes
+
+Extensions remain storage components with internal helper methods and
+explicitly composed public interfaces. Keep authorization and entrypoint
+exposure in the consuming contract, and route token policy through the shared
+update path. Like Solidity's `_update` hooks and Cairo's composable components,
+this keeps balance changes in one path. Rust consumers choose which storage
+components and public traits to compose; pause and mint permissions remain
+explicit application decisions. The SDK's `contract-client-gen` feature can
+generate typed clients from public contract crates.
+
+As in Solidity, pause and unpause methods are not exposed by the Pausable
+component itself. A consumer must expose them and add its own authorization.
+Likewise, including `Capped` does not secure a custom mint function by itself;
+the mint path must check the cap before minting.
