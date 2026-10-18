@@ -299,7 +299,7 @@ pub trait IErc4626: IErc20Metadata {
     fn max_deposit(&self, receiver: Address) -> U256;
 
     /// Allows an on-chain or off-chain user to simulate the effects of their
-    /// deposit at the current  given current on-chain conditions.
+    /// deposit at the current block, given current on-chain conditions.
     ///
     /// NOTE:
     /// - Any unfavorable discrepancy between [`IErc4626::convert_to_shares`]
@@ -380,7 +380,7 @@ pub trait IErc4626: IErc20Metadata {
     fn max_mint(&self, receiver: Address) -> U256;
 
     /// Allows an on-chain or off-chain user to simulate the effects of their
-    /// mint at the current  given current on-chain conditions.
+    /// mint at the current block, given current on-chain conditions.
     ///
     /// NOTE:
     /// - Any unfavorable discrepancy between [`IErc4626::convert_to_assets`]
@@ -479,7 +479,7 @@ pub trait IErc4626: IErc20Metadata {
     fn max_withdraw(&self, owner: Address) -> Result<U256, Self::Error>;
 
     /// Allows an on-chain or off-chain user to simulate the effects of their
-    /// withdrawal at the current  given current on-chain conditions.
+    /// withdrawal at the current block, given current on-chain conditions.
     ///
     /// NOTE: To expose this function in your contract's ABI, implement it as
     /// shown in the Examples section below, accepting only the `assets`
@@ -570,7 +570,7 @@ pub trait IErc4626: IErc20Metadata {
     fn max_redeem(&self, owner: Address) -> U256;
 
     /// Allows an on-chain or off-chain user to simulate the effects of their
-    /// redemption at the current  given current on-chain conditions.
+    /// redemption at the current block, given current on-chain conditions.
     ///
     /// NOTE: To expose this function in your contract's ABI, implement it as
     /// shown in the Examples section below, accepting only the `shares`

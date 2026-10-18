@@ -338,8 +338,8 @@ pub trait IUUPSUpgradeable: IErc1822Proxiable {
 ///     // initializer so the authority and version are set atomically.
 ///     // Initialize `ownable` before this function can be called.
 ///     pub fn set_version(&mut self) -> Result<(), Vec<u8>> {
-///         self.ownable.only_owner().map_err(Into::into)?;
-///         self.uups.set_version().map_err(Into::into)
+///         self.ownable.only_owner()?;
+///         Ok(self.uups.set_version()?)
 ///     }
 ///
 ///     // Your contract's functions
