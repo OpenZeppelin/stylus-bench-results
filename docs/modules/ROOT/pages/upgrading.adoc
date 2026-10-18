@@ -289,6 +289,13 @@ The following observable behavior changes are intentional:
   address in its argument. The error selector is unchanged.
 * EdDSA verification rejects identity or otherwise invalid public keys. Review
   any consumer that accepted those keys under the old behavior.
+* `BabyJubjubConfig::GENERATOR` now returns EIP-2494's `Base8` point, which
+  generates the prime-order subgroup of order `l`. The previous value was the
+  full-curve generator `G` of order `8l`, inconsistent with the scalar field.
+  Consumers using the Rust `PrimeGroup` API should rebuild against the
+  subgroup generator; this changes crypto behavior but no contract ABI or
+  storage. See the https://eips.ethereum.org/EIPS/eip-2494[EIP-2494 generator
+  and base point definitions].
 * `_mint_consecutive` after deployment now returns
   `ERC721ForbiddenBatchMint`, as described above.
 * ERC-4626 conversions continue to follow the standard rounding direction and
@@ -296,7 +303,9 @@ The following observable behavior changes are intentional:
   quotation; applications that require a minimum output must check a
   caller-supplied share bound atomically with the deposit.
 
-The enumerable length tracking is internal storage and does not change ERC-721
-ABI. Test wrapper and proxy integrations against the deployed implementation
-before upgrading, especially if application contracts override public methods
-or rely on malformed external ABI responses.
+The ERC-721 enumerable correction keeps its external ABI and storage layout
+unchanged. Its Rust component method now takes an `Erc721` reference, so
+forward it from the composed contract as shown above. Test wrapper and proxy
+integrations against the deployed implementation before upgrading, especially
+if application contracts override public methods or rely on malformed
+external ABI responses.

@@ -17,6 +17,7 @@ Preflight passed before repository work began. The environment reported:
 | `stylus-sdk` / `stylus-tools` | 0.10.10 |
 | `cargo-fuzz` | 0.13.2 |
 | `cargo-llvm-cov` | 0.9.1 |
+| `ripgrep` | 15.2.0 |
 | Docker client / server | 29.2.1 / 29.2.1, daemon running |
 | Nitro devnet image | `offchainlabs/nitro-node:v3.11.1-8512b8c` |
 | `wasm-opt` | 116 |
@@ -97,6 +98,12 @@ actions. The notable behavior changes are:
 * ERC-2981 uses the standard 10,000 denominator when fresh storage reads zero
   and uses full-precision royalty arithmetic. Vesting schedule arithmetic also
   uses full-precision multiplication/division.
+* `BabyJubjubConfig::GENERATOR` now returns EIP-2494's `Base8` point, the
+  generator of the scalar field's prime-order subgroup. The old point `G`
+  generated the full curve of order `8l`; code that depended on that mismatched
+  point must update to the subgroup generator or implement full-curve
+  arithmetic explicitly. This changes the Rust crypto API behavior, not any
+  contract ABI or storage.
 * Safe ERC-20 accepts empty return data or a canonical true word; false and
   malformed words fail. Trailing bytes after the first word remain ignored.
 * ERC721Wrapper rejects no-code underlying addresses. ERC20Wrapper and ERC-4626
@@ -111,8 +118,8 @@ actions. The notable behavior changes are:
   enabling token-moving methods.
 
 The complete breaking-change inventory and upgrade instructions are in the
-upgrade guide. No other production storage field was added or reordered in the
-SDK migration.
+upgrade guide. No production storage field was added or reordered in the SDK
+migration; the SafeERC20 example's appended owner field is described above.
 
 ## E2E scenario inventory
 
@@ -204,7 +211,7 @@ otherwise noted:
 
 | Check | Result |
 |---|---|
-| `cargo test --jobs 1 --workspace --all-targets --locked` | Passed: 724 tests across the workspace. |
+| `cargo llvm-cov --workspace --all-targets --locked` (also executes the all-target test suite) | Passed: 884 tests across 118 test binaries; zero failures. |
 | `cargo test --jobs 1 --workspace --doc --locked` | Passed; rustdoc examples compile and run. |
 | `cargo clippy --jobs 1 --workspace --all-targets --locked -- -D warnings` | Passed. |
 | Strict Clippy with `--features e2e` for all 30 E2E packages | Passed. |
@@ -218,7 +225,7 @@ otherwise noted:
 | SDK devnet E2E replay | All 496 unique example scenarios passed, including every retained v0.3.0 success/failure scenario; final SafeERC20 package 85/85 and final ERC721 package 64/64. The crypto ERC-20 template activation smoke test passed 1/1. |
 | `scripts/bench.sh` and matched v0.3.0/current benchmark replay | Passed: 49 contract operations compared in cached and uncached modes. Mean measured gas change was -0.60%. |
 | `scripts/check-wasm.sh` against SDK-managed local Nitro | Passed all 33 configurations: 32 examples and the crypto ERC-20 template; all activated and fit within SDK/Nitro code limits. |
-| Coverage (`cargo llvm-cov clean --workspace` followed by `cargo llvm-cov --workspace --all-targets --locked`) | Passed and exceeded v0.3.0: lines 86.91% vs 82.61%; regions 88.30% vs 83.60%; functions 79.92% vs 74.85%. The 100% target was not reached. Largest remaining line gaps are ERC4626, SafeERC20, UUPS, vesting, and crypto arithmetic/curve paths. |
+| Coverage (`cargo llvm-cov clean --workspace` followed by `cargo llvm-cov --workspace --all-targets --locked`) | Passed and exceeded v0.3.0: lines 98.18% vs 82.61%; regions 98.18% vs 83.60%; functions 96.71% vs 74.85%. The 100% target was not reached. Remaining gaps are concentrated in crypto const/inline arithmetic that LLVM does not attribute despite runtime assertions; Poseidon2 and projective branches that constructors or available field types make unreachable; macro-generated declaration lines; and impossible-state error conversions in ERC4626, ERC721, and vesting. `EnumerableSet`'s U256 fallback cannot be reached because `StorageVec::len()` is `usize`. |
 
 The default macOS AddressSanitizer runtime stalled during initialization
 before entering the Merkle target. The fuzz runs above therefore used

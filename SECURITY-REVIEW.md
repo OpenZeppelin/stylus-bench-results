@@ -18,7 +18,7 @@ The three audit PDFs under `audits/` were reviewed for their findings and stated
 |---|---|---|
 | `audits/2024-10-v0.1.0.pdf` | 12 issues; 9 reported resolved. L-05 (burnable-extension visibility), L-06 (implementation style), and N-02 (error-type consistency) were acknowledged rather than fixed. | Source cross-check confirms the nine resolved claims: ERC721 reports ERC165; checkpoints use the audited bounded key/value sizes; ERC20 validates approval/burn paths; Pausable exposes `paused` while pause mutators stay internal; TODOs were removed at cited sites; Merkle pair ordering is documented/handled; Pausable docs describe internal helpers; and the unused ECDSA error is absent. L-05’s original SDK limitation is removed for supported extension traits in this checkout via `#[public]`; L-06 remains a stylistic observation; N-02 remains an acknowledged consistency issue. |
 | `audits/Stylus Contracts Library v0.2.0 Audit.pdf` | 22 issues; 20 reported resolved. M-02 (custom selectors not checked against implementations) and N-10 (coverage) remain acknowledged/open. | Source cross-check confirms checked arithmetic shifts, `ct_rem` borrow handling, `ct_num_bits(0)`, bounded hex parsing, wrapper decimals, immutable ERC4626 reads, generated trait components, and revised comparison ordering. L-07 rejects textual duplicate signatures but did not catch distinct signatures with colliding four-byte selectors (C-06); that collision now fails at compile time. M-02 remains open in `contracts-proc/src/interface_id.rs` (C-05). Measured coverage exceeds the v0.3 baseline, though that does not establish 100% line coverage. Poseidon2 recommendations are partially addressed; further custom-parameter constraints remain open (C-07). |
-| `audits/Stylus Contracts Library v0.3.0 Audit.pdf` | 17 findings/notes; all 17 marked resolved in the report. | Source cross-check confirms H-01’s curve parameters; M-01/M-02 conversions; M-03 zeroization derive; M-04 P256 low-s rejection; L-01 event shape; L-02 zero-Z normalization guard; L-03 UUPS context/version checks; L-04 code-aware allowance reads; L-05 strict versus relaxed ERC1363 helper behavior; and N-01–N-07 conversion guards, ranged values, EdDSA public-key consistency, scalar aliases, gas warnings, error text, and compressed-y spare-bit assertion. These findings remain resolved in current source. v0.2 L-09 does not establish constant-time EdDSA scalar multiplication (C-08).
+| `audits/Stylus Contracts Library v0.3.0 Audit.pdf` | 17 findings/notes; all 17 marked resolved in the report. | Source cross-check confirms H-01’s Bandersnatch and Jubjub parameters; M-01/M-02 conversions; M-03 zeroization derive; M-04 P256 low-s rejection; L-01 event shape; L-02 zero-Z normalization guard; L-03 UUPS context/version checks; L-04 code-aware allowance reads; L-05 strict versus relaxed ERC1363 helper behavior; and N-01–N-07 conversion guards, ranged values, EdDSA public-key consistency, scalar aliases, gas warnings, error text, and compressed-y spare-bit assertion. These findings remain resolved in current source. H-01 did not cover BabyJubjub (C-19). v0.2 L-09 does not establish constant-time EdDSA scalar multiplication (C-08).
 
 The finding names and dispositions recorded by the reports are:
 
@@ -72,7 +72,7 @@ These are review targets inferred from the library’s APIs, implementation, and
 
 ## Candidate findings from committed v0.3.0 source
 
-Findings C-01–C-11 were present in v0.3.0; C-12 and C-18 are migration compatibility/test-infrastructure issues; C-13 is an example authorization defect found during review; C-14–C-17 are preexisting correctness defects. Every confirmed defect has a red regression test committed before its fix. C-04 is a documented asset compatibility constraint. C-05, C-07 beyond structural dimensions, and C-08 remain open review items.
+Findings C-01–C-11 and C-14–C-17, C-19 were present in v0.3.0; C-12 and C-18 are migration compatibility/test-infrastructure issues; C-13 is an example authorization defect found during review. Every confirmed defect has a red regression test committed before its fix. C-04 is a documented asset compatibility constraint. C-05, C-07 beyond structural dimensions, and C-08 remain open review items.
 
 | ID | Severity | Candidate and trigger | Impact / audit relation |
 |---|---|---|---|
@@ -94,6 +94,7 @@ Findings C-01–C-11 were present in v0.3.0; C-12 and C-18 are migration compati
 | C-16 | Medium, proxy integrity — fixed | **BeaconProxy's ordinary slot could collide with delegated implementation storage.** Implementation code writing slot zero could overwrite the proxy's cached beacon address, causing later calls to resolve a different beacon. | Preexisting, not in the audits. Red TestVM PoC `14e8570`; fix `77b79dc` resolves the beacon from the canonical ERC-1967 slot and retains the old ordinary field as reserved storage. The beacon-proxy devnet scenarios pass. |
 | C-17 | Low, event/indexer consistency — fixed | **ERC721 consecutive mint was callable after deployment.** A consumer could emit `ConsecutiveTransfer` after construction, while indexers that assume the event is constructor-only diverged from owner queries. | Preexisting, not in the audits. Red TestVM PoC `ab81b5a`; fix `d56f17c` rejects calls when deployed code exists, with the SDK `StylusDeployer` constructor exception. Constructor and post-deployment devnet scenarios pass. |
 | C-18 | Low, test reliability — fixed | **SDK TestVM leaked the last registered mock response into earlier calls.** With two call mocks registered, invoking the first matched target could return the second mock's bytes, causing false failures or false confidence in tests. | Migration-introduced test infrastructure issue, not a deployed-contract vulnerability. Red test `4494fed`; pinned test-only vendor fix `2c2be29` publishes each matched call's own response. The production SDK dependency and contract code are unchanged by the patch. |
+| C-19 | Medium, cryptographic correctness — fixed | **BabyJubjub configured its full-curve generator as a prime-order subgroup generator.** `Affine::<BabyJubjubConfig>::generator()` returned EIP-2494 point G of order 8l, although `TECurveConfig::GENERATOR` promises an order-l point. A checked constructor using those coordinates panicked at the subgroup check; arithmetic through the `PrimeGroup` API also violated its scalar-order assumptions. | Preexisting v0.3.0 issue, not reported by the audits. The v0.3 audit H-01 addressed Bandersnatch and Jubjub, not BabyJubjub. Red regression commit `c1e743e` failed on the subgroup assertion; fix commit `154d9ff` configures EIP-2494 Base8 (= 8G), which is annihilated by scalar order l. The focused regression now passes. |
 
 ## Migration security review
 
@@ -107,6 +108,7 @@ The SDK migration production diff was compared against v0.3.0. No confirmed migr
 - UUPS `only_proxy` retains the logic flag, nonzero implementation slot, and stored-version checks. Upgrade implementation/beacon paths validate code and propagate call failures.
 - ERC721/1155 safe receiver checks still skip EOAs and validate the receiver selector; state changes precede callbacks and callback failure returns an error for transaction rollback. Consecutive ERC721 batch mint now uses VM code size to enforce constructor-only behavior.
 - The EdDSA verifier adds explicit rejection of identity/out-of-subgroup public keys and `R` points. No regression was found against the audited zeroization, curve, conversion, P256 low-s, or EIP-712 paths.
+- BabyJubjub's configured generator now uses the EIP-2494 Base8 point, which belongs to the prime-order subgroup and matches the scalar field. The prior full-curve generator remains part of EIP-2494's parameter definition but is no longer exposed as the `PrimeGroup` generator.
 - No production storage fields were added by the SDK migration. The ERC721 token-zero fix also preserves its original layout by deriving bounds from core balances; the preexisting `BeaconProxy::beacon` field remains present and is explicitly reserved. Unrelated arithmetic and no-code wrapper fixes are separately documented above.
 
 ### Test and storage notes
@@ -127,13 +129,13 @@ enumerable unit tests and a 64/64 devnet E2E package rerun.
 
 | Evidence | Result |
 |---|---|
-| Workspace all-target tests | Passed: 724 tests. |
+| Workspace all-target tests | Passed: 884 tests across 118 test binaries; zero failures. |
 | Workspace rustdoc tests | Passed. |
 | Strict Clippy and E2E-feature Clippy | Passed for the workspace and all 30 E2E packages. |
 | SDK devnet E2E | 496 unique example scenarios passed; final ERC721 64/64, SafeERC20 85/85, flash-mint 20/20. Template activation smoke passed 1/1. |
 | Fuzz/property evidence | Merkle: 4,265,900 executions; Keccak: 20,926,798 executions; no crashes. Runs used libFuzzer without ASan because macOS ASan stalled before target initialization. |
 | v0.3.0 crypto differential vectors | Passed. |
-| Coverage | 86.91% lines / 88.30% regions / 79.92% functions, above v0.3.0's 82.61% / 83.60% / 74.85%; 100% was not reached. |
+| Coverage | 98.18% lines / 98.18% regions / 96.71% functions, above v0.3.0's 82.61% / 83.60% / 74.85%; 100% was not reached. Remaining gaps are itemized in [`MIGRATION.md`](MIGRATION.md) and consist largely of LLVM attribution gaps for const/inlined crypto arithmetic, unsupported/private crypto branches, macro-generated declaration lines, and impossible-state error conversions. |
 | Proxy/storage and activation checks | All 33 example/template Wasm configurations passed SDK-managed local Nitro activation and size checks; proxy, beacon, and upgrade E2E scenarios passed. |
 
 Full command output, gas and Wasm measurements, scenario inventory, and
