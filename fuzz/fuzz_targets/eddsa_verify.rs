@@ -2,7 +2,7 @@
 
 use libfuzzer_sys::fuzz_target;
 use openzeppelin_crypto::{
-    arithmetic::uint::U256,
+    arithmetic::{uint::U256, BigInteger},
     curve::te::{
         instance::curve25519::{Curve25519Config, Fq, Fr},
         Projective,
