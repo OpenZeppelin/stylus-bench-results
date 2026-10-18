@@ -9,6 +9,7 @@ sol!(
         function setTokenURI(uint256 tokenId, string memory tokenURI) external;
         function setBaseURI(string memory tokenURI) external;
         function owner() external view returns (address);
+        function initializeOwner(address initialOwner) external;
         function transferOwnership(address newOwner) external;
         function renounceOwnership() external;
 
