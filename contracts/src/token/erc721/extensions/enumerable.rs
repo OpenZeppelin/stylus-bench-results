@@ -77,6 +77,8 @@ pub struct Erc721Enumerable {
     pub(crate) all_tokens: StorageVec<StorageU256>,
     /// Maps indices at `all_tokens` to tokens ids.
     pub(crate) all_tokens_index: StorageMap<U256, StorageU256>,
+    /// Stores the number of tokens owned by each account.
+    pub(crate) owned_tokens_count: StorageMap<Address, StorageU256>,
 }
 
 /// This is the interface of the optional `Enumerable` extension
@@ -149,7 +151,7 @@ impl IErc721Enumerable for Erc721Enumerable {
     ) -> Result<U256, Self::Error> {
         let token = self.owned_tokens.getter(owner).get(index);
 
-        if token.is_zero() {
+        if token.is_zero() && index >= self.owned_tokens_count.get(owner) {
             Err(ERC721OutOfBoundsIndex { owner, index }.into())
         } else {
             Ok(token)
@@ -198,9 +200,11 @@ impl Erc721Enumerable {
         token_id: U256,
         erc721: &impl IErc721<Error = erc721::Error>,
     ) -> Result<(), erc721::Error> {
-        let length = erc721.balance_of(to)? - uint!(1_U256);
+        let balance = erc721.balance_of(to)?;
+        let length = balance - uint!(1_U256);
         self.owned_tokens.setter(to).setter(length).set(token_id);
         self.owned_tokens_index.setter(token_id).set(length);
+        self.owned_tokens_count.setter(to).set(balance);
 
         Ok(())
     }
@@ -271,6 +275,7 @@ impl Erc721Enumerable {
         // This also deletes the contents at the last position of the array.
         self.owned_tokens_index.delete(token_id);
         owned_tokens_by_owner.delete(last_token_index);
+        self.owned_tokens_count.setter(from).set(last_token_index);
 
         Ok(())
     }
