@@ -1461,6 +1461,52 @@ async fn safe_mint_to_receiver_contract_with_data() -> eyre::Result<()> {
 }
 
 #[tokio::test]
+async fn safe_mint_preserves_owner_enumeration_during_reentrancy(
+) -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
+    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+    let contract = Erc721::new(contract_addr, &alice.wallet);
+    let outer_token_id = uint!(100_U256);
+    let reentrant_token_id = uint!(200_U256);
+    let receiver_address = receiver::deploy_reentrant(
+        &alice.wallet,
+        contract_addr,
+        reentrant_token_id,
+    )
+    .await?;
+
+    receipt!(contract.safeMint(
+        receiver_address,
+        outer_token_id,
+        Bytes::new()
+    ))?;
+
+    let receiver_contract =
+        receiver::ReentrantReceiver::new(receiver_address, &alice.wallet);
+    assert!(receiver_contract.nestedCallSucceeded().call().await?);
+
+    assert_eq!(
+        uint!(2_U256),
+        contract.balanceOf(receiver_address).call().await?,
+    );
+    let mut owned_token_ids = vec![
+        contract
+            .tokenOfOwnerByIndex(receiver_address, uint!(0_U256))
+            .call()
+            .await?,
+        contract
+            .tokenOfOwnerByIndex(receiver_address, uint!(1_U256))
+            .call()
+            .await?,
+    ];
+    owned_token_ids.sort();
+    assert_eq!(vec![outer_token_id, reentrant_token_id], owned_token_ids);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn error_when_safe_mint_to_invalid_receiver_contract() -> eyre::Result<()>
 {
     let alice = Account::new().await?;
