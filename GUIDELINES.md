@@ -209,13 +209,13 @@ Some other examples of automation are:
 Always check your code with the linter (`clippy`), by running:
 
 ```shell
-    cargo clippy --tests --all-features
+    cargo clippy --workspace --all-targets --all-features
 ```
 
 And make sure your code is formatted with, using:
 
 ```shell
-    cargo +nightly fmt
+    cargo +nightly-2025-08-01 fmt --all --check
 ```
 
 Finally, ensure there is no trailing whitespace anywhere.
@@ -225,22 +225,16 @@ Finally, ensure there is no trailing whitespace anywhere.
 Make sure all tests are passing with:
 
 ```shell
-    cargo test --all-features
+    cargo test --workspace --all-features
 ```
 
 ### Running end-to-end tests
 
-To run e2e tests, you need to have a local nitro test node up and running.
-Run the following command and wait till script exit successfully:
+The SDK devnet runner starts and stops a local Nitro devnet through Docker and
+Testcontainers. With Docker running, run:
 
 ```shell
-./scripts/nitro-testnode.sh -i -d
-```
-
-Then you will be able to run e2e tests:
-
-```shell
-./scripts/e2e-tests.sh "*"
+./scripts/e2e-tests.sh
 ```
 
 ### Running fuzz tests

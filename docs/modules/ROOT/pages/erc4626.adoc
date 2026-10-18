@@ -9,10 +9,18 @@ This extension allows the minting and burning of "shares" (represented using the
 == Security concern: Inflation attack
 To read more about the security concerns associated with the ERC-4626, check the https://docs.openzeppelin.com/contracts/5.x/erc4626#inflation-attack[Inflation attack] description.
 
+== Composition and asset requirements
+
+The vault assumes successful asset transfers move the requested amount. Fee-on-transfer and deflationary assets are unsupported because share accounting uses the requested amount, not the vault's balance delta. Use an exact-transfer ERC-20 asset.
+
+Do not combine the vault with `Erc20FlashMint` shares. Conversion math uses the share token's total supply; flash-minted shares can temporarily change that supply during a callback without a corresponding change in vault assets.
+
+The default `deposit`, `mint`, `withdraw`, and `redeem` methods use the extension's built-in max and preview calculations. If a contract customizes a public max, preview, or conversion method, it must also implement the related operation so the reported values and executed values stay consistent. The `_deposit` and `_withdraw` helpers support custom workflows while preserving transfer, allowance, mint/burn, and event handling.
+
 [[usage]]
 == Usage
 
-In order to make https://docs.rs/openzeppelin-stylus/0.3.0/openzeppelin_stylus/token/erc20/extensions/erc4626/index.html[`ERC-4626`] methods “external” so that other contracts can call them, you need to implement them by yourself for your final contract as follows:
+In order to make https://docs.rs/openzeppelin-stylus/latest/openzeppelin_stylus/token/erc20/extensions/erc4626/index.html[`ERC-4626`] methods “external” so that other contracts can call them, you need to implement them by yourself for your final contract as follows:
 
 [source,rust]
 ----
