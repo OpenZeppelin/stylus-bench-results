@@ -69,7 +69,8 @@ impl MethodError for Error {
 /// State of an [`Erc721Enumerable`] contract.
 #[storage]
 pub struct Erc721Enumerable {
-    /// Maps owners to a mapping of indices to tokens ids.
+    /// Maps owners to a mapping of indices to token IDs. The maximum index
+    /// stores the owner's token count.
     pub(crate) owned_tokens: StorageMap<Address, StorageMap<U256, StorageU256>>,
     /// Maps tokens ids to indices in `owned_tokens`.
     pub(crate) owned_tokens_index: StorageMap<U256, StorageU256>,
@@ -77,8 +78,6 @@ pub struct Erc721Enumerable {
     pub(crate) all_tokens: StorageVec<StorageU256>,
     /// Maps indices at `all_tokens` to tokens ids.
     pub(crate) all_tokens_index: StorageMap<U256, StorageU256>,
-    /// Stores the number of tokens owned by each account.
-    pub(crate) owned_tokens_count: StorageMap<Address, StorageU256>,
 }
 
 /// This is the interface of the optional `Enumerable` extension
@@ -149,9 +148,11 @@ impl IErc721Enumerable for Erc721Enumerable {
         owner: Address,
         index: U256,
     ) -> Result<U256, Self::Error> {
-        let token = self.owned_tokens.getter(owner).get(index);
+        let owned_tokens = self.owned_tokens.getter(owner);
+        let token = owned_tokens.get(index);
+        let owner_token_count = owned_tokens.get(U256::MAX);
 
-        if token.is_zero() && index >= self.owned_tokens_count.get(owner) {
+        if token.is_zero() && index >= owner_token_count {
             Err(ERC721OutOfBoundsIndex { owner, index }.into())
         } else {
             Ok(token)
@@ -204,7 +205,7 @@ impl Erc721Enumerable {
         let length = balance - uint!(1_U256);
         self.owned_tokens.setter(to).setter(length).set(token_id);
         self.owned_tokens_index.setter(token_id).set(length);
-        self.owned_tokens_count.setter(to).set(balance);
+        self.owned_tokens.setter(to).setter(U256::MAX).set(balance);
 
         Ok(())
     }
@@ -275,7 +276,7 @@ impl Erc721Enumerable {
         // This also deletes the contents at the last position of the array.
         self.owned_tokens_index.delete(token_id);
         owned_tokens_by_owner.delete(last_token_index);
-        self.owned_tokens_count.setter(from).set(last_token_index);
+        owned_tokens_by_owner.setter(U256::MAX).set(last_token_index);
 
         Ok(())
     }
