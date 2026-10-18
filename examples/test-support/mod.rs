@@ -139,6 +139,8 @@ impl Account {
             private_key: format!("0x{}", self.pk()),
             directory: PathBuf::from(env!("CARGO_MANIFEST_DIR")),
             constructor_args: None,
+            constructor_signature: None,
+            wasm_file: None,
         }
     }
 
@@ -168,6 +170,8 @@ pub struct TestDeployer {
     private_key: String,
     directory: PathBuf,
     constructor_args: Option<Vec<String>>,
+    constructor_signature: Option<String>,
+    wasm_file: Option<PathBuf>,
 }
 
 impl TestDeployer {
@@ -176,6 +180,14 @@ impl TestDeployer {
     #[must_use]
     pub fn with_constructor(mut self, constructor: Constructor) -> Self {
         self.constructor_args = Some(constructor.args);
+        self.constructor_signature = Some(constructor.signature);
+        self
+    }
+
+    /// Deploy a prebuilt Wasm artifact from `directory`.
+    #[must_use]
+    pub fn with_wasm_file(mut self, wasm_file: impl Into<PathBuf>) -> Self {
+        self.wasm_file = Some(wasm_file.into());
         self
     }
 
@@ -220,12 +232,26 @@ impl TestDeployer {
             "--private-key".to_owned(),
             self.private_key.clone(),
         ];
+        if let Some(wasm_file) = &self.wasm_file {
+            deploy_args.extend([
+                "--wasm-file".to_owned(),
+                wasm_file.to_string_lossy().into_owned(),
+            ]);
+        }
         if let Some(args) = self.constructor_args {
             deploy_args.extend([
                 "--deployer-address".to_owned(),
                 addresses::STYLUS_DEPLOYER.to_string(),
-                "--constructor-args".to_owned(),
             ]);
+            if let Some(signature) = self.constructor_signature {
+                if self.wasm_file.is_some() {
+                    deploy_args.extend([
+                        "--constructor-signature".to_owned(),
+                        signature,
+                    ]);
+                }
+            }
+            deploy_args.push("--constructor-args".to_owned());
             deploy_args.extend(args);
         }
         let command_output = Command::new("cargo")

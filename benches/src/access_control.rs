@@ -68,6 +68,9 @@ pub async fn run(cache_opt: Opt) -> eyre::Result<Vec<FunctionReport>> {
     let contract_bob = AccessControl::new(contract_addr, &bob_wallet);
 
     // IMPORTANT: Order matters!
+    // `revokeRole` is benchmarked against a member so the measured call
+    // exercises the successful revoke path instead of reverting.
+    let _setup_receipt = receipt!(contract.grantRole(ROLE.into(), alice_addr))?;
 
     #[rustfmt::skip]
     let receipts = vec![
