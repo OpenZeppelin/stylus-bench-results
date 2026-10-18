@@ -796,3 +796,7 @@ mod tests {
         assert!(!contract.sender(alice).supports_interface(fake_interface_id));
     }
 }
+
+#[cfg(test)]
+#[path = "enumerable_sentinel_test.rs"]
+mod enumerable_sentinel_test;
