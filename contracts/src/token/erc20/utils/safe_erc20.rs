@@ -648,10 +648,11 @@ impl SafeErc20 {
     }
 }
 
-/// Whether return data is the canonical ABI encoding of `true`.
+/// Whether the bounded return-data buffer contains canonical ABI `true`.
 ///
 /// ABI boolean decoding may treat any nonzero word as `true`; token calls must
-/// return exactly the ABI word `1` to be accepted.
+/// return the ABI word `1` to be accepted. The raw call caps captured return
+/// data at one word, so trailing bytes are ignored.
 fn is_canonical_true(data: &[u8]) -> bool {
     data.len() == BOOL_TYPE_SIZE
         && data[..BOOL_TYPE_SIZE - 1].iter().all(|byte| *byte == 0)

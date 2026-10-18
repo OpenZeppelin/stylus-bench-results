@@ -12,7 +12,7 @@ pub mod erc1967;
 pub mod utils;
 
 /// This trait provides a fallback function that delegates all calls to another
-/// contract using the Stylus [`delegate_call`][delegate_call] function. We
+/// contract using the Stylus [`stylus_sdk::call::delegate_call`] function. We
 /// refer to the second contract as the _implementation_ behind the proxy, and
 /// it has to be specified by overriding the virtual [`IProxy::implementation`]
 /// function.
@@ -27,14 +27,13 @@ pub mod utils;
 /// # Safety
 ///
 /// This trait is unsafe to implement because it uses the `unsafe`
-/// [`delegate_call`][delegate_call] function.
+/// [`stylus_sdk::call::delegate_call`] function.
 ///
 /// The caller must ensure that `self` is a valid contract storage context.
 ///
 /// The caller must ensure that the implementation contract is a valid contract
 /// address.
 ///
-/// [delegate_call]: stylus_sdk::call::delegate_call
 pub unsafe trait IProxy:
     TopLevelStorage + HostAccess<Host = VM> + Sized
 {
@@ -51,7 +50,7 @@ pub unsafe trait IProxy:
     ///
     /// # Errors
     ///
-    /// Returns a [`stylus_sdk::call::Error`] if the delegate call fails. This
+    /// Returns an [`Error`] if the delegate call fails. This
     /// error may represent:
     /// * A revert from the implementation contract, containing the revert data.
     /// * Failure to decode the return data from the implementation contract.

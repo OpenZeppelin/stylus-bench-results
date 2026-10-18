@@ -3,8 +3,8 @@
 ## Setup
 
 1. Install [Docker].
-1. Install toolchain providing `cargo` using [rustup].
-1. Install the cargo stylus tool with `cargo install --force cargo-stylus`.
+1. Install stable Rust 1.91.0 with [rustup].
+1. Install `cargo-stylus` 0.10.10 with `cargo install --locked --version 0.10.10 cargo-stylus`.
 
 Note: If you are using Linux and encounter the `linker 'cc' not found` error during
 stylus installation, make to sure to first install the necessary build tools with
@@ -46,7 +46,8 @@ In some cases unit tests may be insufficient and complementary techniques
 should be used:
 
 1. Property-based tests (aka. fuzzing) for math-heavy code.
-2. Formal verification for state machines.
+2. Differential tests against a known implementation for behavior-sensitive
+   migrations.
 
 [Moloch Testing Guide]: https://github.com/MolochVentures/moloch/tree/master/test#readme
 
@@ -128,7 +129,7 @@ use crate::storage::refs::Refs;
 use crate::storage::RemoteId;
 ```
 
-This is enforced by `rustfmt`. Note that this is a `nightly` feature.
+Keep imports in this order; stable `rustfmt` formats each group.
 
 ### Variable naming
 
@@ -209,13 +210,14 @@ Some other examples of automation are:
 Always check your code with the linter (`clippy`), by running:
 
 ```shell
-    cargo clippy --workspace --all-targets --all-features
+    cargo clippy --workspace --all-targets --locked -- \
+        -D warnings -D clippy::all -D clippy::pedantic
 ```
 
 And make sure your code is formatted with, using:
 
 ```shell
-    cargo +nightly-2025-08-01 fmt --all --check
+    cargo fmt --all -- --check
 ```
 
 Finally, ensure there is no trailing whitespace anywhere.
@@ -225,7 +227,7 @@ Finally, ensure there is no trailing whitespace anywhere.
 Make sure all tests are passing with:
 
 ```shell
-    cargo test --workspace --all-features
+    cargo test --workspace --all-targets --locked
 ```
 
 ### Running end-to-end tests
@@ -337,6 +339,6 @@ conventions that must be followed.
         2. Use the name of the underlying component where it belongs (eg.
            `Governor`, `ECDSA`, or `Timelock`).
 
-[The Rust Style Guide]: https://doc.rust-lang.org/nightly/style-guide/
+[The Rust Style Guide]: https://doc.rust-lang.org/stable/style-guide/
 
 [EIP-6093]: https://eips.ethereum.org/EIPS/eip-6093

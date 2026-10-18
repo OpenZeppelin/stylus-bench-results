@@ -4,7 +4,7 @@ The stylus-test crate makes it easy to unit test all the storage types and contr
 
 The mock implementation, named `TestVM`, can be used to unit test Stylus contracts in native Rust without the need for a real EVM or Arbitrum chain environment. The TestVM allows for mocking of all host functions, including storage, gas, and external calls to assert contract behavior.
 
-To be able to unit test Stylus contracts, contracts must access host methods through the [HostAccess](https://docs.rs/stylus-core/latest/stylus_core/host/trait.HostAccess.html) trait, which gives all contracts access to a `.vm()` method. That is, instead of calling `stylus_sdk::msg::value()` directly, contracts should do `self.vm().msg_value()`.
+To unit test Stylus contracts, access host methods through the [HostAccess](https://docs.rs/stylus-core/latest/stylus_core/host/trait.HostAccess.html) trait, which gives contracts a `.vm()` method. Contract code should use `self.vm().msg_value()` for the current call's value.
 
 ## Getting Started
 

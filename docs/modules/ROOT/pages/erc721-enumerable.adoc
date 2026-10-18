@@ -5,7 +5,7 @@ The OpenZeppelin xref:erc721.adoc[ERC-721] Enumerable extension is used to provi
 [[usage]]
 == Usage
 
-In order to make an xref:erc721.adoc[ERC-721] token with https://docs.rs/openzeppelin-stylus/0.3.0/openzeppelin_stylus/token/erc721/extensions/enumerable/index.html[Enumerable] flavour,
+In order to make an xref:erc721.adoc[ERC-721] token with https://docs.rs/openzeppelin-stylus/latest/openzeppelin_stylus/token/erc721/extensions/enumerable/index.html[Enumerable] flavour,
 you need to create a specified contract as follows:
 
 [source,rust]
@@ -250,7 +250,11 @@ impl IErc721Enumerable for Erc721Example {
         owner: Address,
         index: U256,
     ) -> Result<U256, Self::Error> {
-        Ok(self.enumerable.token_of_owner_by_index(owner, index)?)
+        Ok(self.enumerable.token_of_owner_by_index(
+            &self.erc721,
+            owner,
+            index,
+        )?)
     }
 }
 
@@ -258,7 +262,13 @@ impl IErc721Enumerable for Erc721Example {
 impl IErc165 for Erc721Example {
     fn supports_interface(&self, interface_id: B32) -> bool {
         self.erc721.supports_interface(interface_id)
-            || self.enumerable.supports_interface(interface_id)
+            || <Self as IErc721Enumerable>::interface_id() == interface_id
     }
 }
 ----
+
+`Erc721Enumerable` stores index mappings, while the composed contract owns the
+ERC-721 balances. Forward `token_of_owner_by_index` from the top-level contract
+and pass its `Erc721` component so the query can use `balance_of(owner)` as its
+bounds check. This keeps token ID zero enumerable without a second owner-count
+mapping or extra storage writes on transfers.

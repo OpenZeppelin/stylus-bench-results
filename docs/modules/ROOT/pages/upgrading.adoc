@@ -132,7 +132,11 @@ including inherited traits, to carry `#[public]`. Add the attribute to those
 traits before compiling. The SDK also checks for selector collisions in public
 implementations. Resolve collisions before deployment while preserving the
 selectors expected by existing clients; use an explicit selector rename only
-when the ABI change is intended.
+when the ABI change is intended. If an interface trait uses
+`#[selector(name = "...")]`, apply the same selector to its public
+implementation; `#[interface_id]` computes the advertised ERC-165 id from the
+trait but does not currently verify that a separate public implementation uses
+the same selector (the open v0.2 audit item M-02).
 
 The SDK's ABI decoder rejects malformed encodings that older versions could
 accept. Return canonical ABI data from external contracts and update mocks that
@@ -141,7 +145,7 @@ returned truncated or otherwise noncanonical values.
 == Unit and integration tests
 
 The library's unit tests now use `stylus_sdk::testing::TestVM` and its explicit
-storage, host, call, and log controls. Replace `motsu::prelude::*` fixtures with
+storage, host, call, and log controls. Replace legacy fixture macros with
 `TestVM` fixtures. Mock calls to external contracts with the matching calldata
 and return data; TestVM does not execute a second Rust fixture as if it were an
 on-chain contract.
@@ -157,6 +161,11 @@ to build, activate, and exercise the scenarios against the local devnet:
 
 The SDK runner starts a Nitro devnet through Docker/Testcontainers and may need
 to download its container image. Keep Docker running and allow image access.
+The repository test support deploys compiled test contracts with
+`cargo stylus deploy --no-verify` because these artifacts are exercised only on
+the local devnet. For a real deployment, use the SDK's default reproducible
+build and verification path; do not copy this test-only flag into a release
+script.
 When porting a consumer's own E2E tests, preserve both success and revert cases
 and deploy all participating contracts to the same devnet. The test projects
 declare `contract-client-gen = []` so the SDK's generated-client feature cfg is
@@ -198,15 +207,28 @@ authorization.
 
 == Storage layout changes
 
-The ERC-721 enumerable extension appends an `owned_tokens_count` mapping to
-track owner enumeration length. Its existing fields stay in the same order, and
-the fallback read preserves the old zero-value behavior for entries written by
-0.3.0. The extension's storage footprint grows by one slot. If a proxy
-implementation stores other fields after `Erc721Enumerable`, those fields move
-by one slot when compiled against the new type. Before upgrading, compare the
-old and new layouts. Keep the extension at the end of the containing storage
-struct, or reserve and consume a storage gap using the same slot order as your
-existing deployment. Do not reorder or remove existing fields.
+ERC-721 enumerable keeps its v0.3.0 storage layout. Owner-index bounds now come
+from the composed contract's core ERC-721 balance, so token ID zero is
+distinguishable from an unset mapping entry without adding storage or requiring
+a proxy data migration. The Solidity ABI of `IErc721Enumerable` is unchanged.
+When forwarding its Rust method, pass the core component explicitly:
+
+[source,rust]
+----
+fn token_of_owner_by_index(
+    &self,
+    owner: Address,
+    index: U256,
+) -> Result<U256, Error> {
+    self.enumerable
+        .token_of_owner_by_index(&self.erc721, owner, index)
+}
+----
+
+If a contract relied on `Erc721Enumerable` implementing the public interface
+directly, move that forwarding implementation to the containing contract so it
+can supply the matching `Erc721` component. Existing proxy deployments need no
+enumeration storage migration.
 
 `BeaconProxy` keeps its ordinary beacon field in place as reserved storage, so
 that field does not shift subsequent proxy storage. ERC-1967 implementation,
@@ -246,10 +268,22 @@ The following observable behavior changes are intentional:
 * ERC-4626 construction now rejects decimal offsets when `10^offset` exceeds
   `U256` or when asset decimals plus the offset exceeds `U8`, returning
   `ERC4626InvalidDecimalsOffset`. Offsets above 77 are always invalid. This
-  guard applies when a constructor runs; it does not rewrite or validate the
-  stored offset of an existing proxy. Check existing vault storage before an
-  upgrade, and add a project-specific migration if it contains an invalid
-  offset.
+  also changes the Rust `Erc4626::constructor` helper to return `Result`; the
+  constructor's external ABI remains unchanged. The guard applies when a
+  constructor runs; it does not rewrite or validate the stored offset of an
+  existing proxy. Check existing vault storage before an upgrade, and add a
+  project-specific migration if it contains an invalid offset.
+* Safe ERC-20 helpers accept no return data or a canonical `true` bool in the
+  first return word. A malformed word such as `2`, which older decoding could
+  treat as `true`, now returns `SafeErc20FailedOperation`. The bounded host
+  read still ignores any return bytes after that first word. Tokens returning
+  canonical `true` or no data keep their success behavior; `false` remains a
+  failed operation.
+* The SafeERC20 example now takes an explicit initial owner and gates every
+  helper with `Ownable`. It appends the owner component after the existing
+  SafeERC20 storage. Existing proxy instances of this example do not gain an
+  initialized owner; redeploy them or initialize equivalent authorization in a
+  migration before enabling token-moving methods.
 * When `Erc20Wrapper::_recover` cannot query the underlying token, the
   `ERC20InvalidUnderlying` error now identifies the configured underlying
   address in its argument. The error selector is unchanged.

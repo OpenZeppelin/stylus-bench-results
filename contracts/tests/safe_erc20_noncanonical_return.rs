@@ -1,4 +1,4 @@
-//! SafeERC20 must reject noncanonical ABI boolean return data.
+//! `SafeERC20` must reject noncanonical ABI boolean return data.
 
 use alloy_primitives::{Address, U256};
 use alloy_sol_types::{sol, SolCall, SolValue};

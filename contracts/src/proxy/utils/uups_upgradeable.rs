@@ -54,7 +54,7 @@ pub const UPGRADE_INTERFACE_VERSION: &str = "5.0.0";
 pub const VERSION_NUMBER: U32 = uint!(1_U32);
 
 /// A sentinel storage slot used by the implementation to distinguish
-/// implementation vs. proxy ([`delegate_call`][delegate_call]) execution
+/// implementation vs. proxy ([`stylus_sdk::call::delegate_call`])
 /// contexts.
 ///
 /// The slot key is derived from `keccak256("Stylus.uups.logic.flag") - 1`,
@@ -62,14 +62,13 @@ pub const VERSION_NUMBER: U32 = uint!(1_U32);
 ///
 /// Behavior:
 /// - When called directly on the implementation, `logic_flag == true`.
-/// - When called via a proxy ([`delegate_call`][delegate_call]), `logic_flag ==
+/// - When called via a proxy ([`stylus_sdk::call::delegate_call`]), `logic_flag ==
 ///   false` (i.e., the proxy’s storage does not contain this
 ///   implementation-only flag).
 ///
 /// Security notes:
 /// - This boolean flag replaces Solidity’s `immutable __self` pattern.
 ///
-/// [delegate_call]: stylus_sdk::call::delegate_call
 pub const LOGIC_FLAG_SLOT: B256 = {
     const HASH: [u8; 32] = keccak_const::Keccak256::new()
         .update(b"Stylus.uups.logic.flag")
@@ -226,10 +225,10 @@ pub trait IUUPSUpgradeable: IErc1822Proxiable {
     ///   not designed to handle it.
     /// * [`Error::EmptyCode`] - If there's no code at the new implementation
     ///   address.
-    /// * [`Error::FailedCall`] - If the [`delegate_call`][delegate_call] to the
+    /// * [`Error::FailedCall`] - If the [`stylus_sdk::call::delegate_call`] to the
     ///   new implementation fails.
     /// * [`Error::FailedCallWithReason`] - If the
-    ///   [`delegate_call`][delegate_call] fails with a specific reason.
+    ///   [`stylus_sdk::call::delegate_call`] fails with a specific reason.
     ///
     /// # Events
     ///
@@ -267,7 +266,7 @@ pub trait IUUPSUpgradeable: IErc1822Proxiable {
 /// slot:
 /// - When executing directly on the implementation, the constructor has set
 ///   `logic_flag = true` in the implementation’s storage.
-/// - When executing via proxy ([`delegate_call`][delegate_call]), the proxy’s
+/// - When executing via proxy ([`stylus_sdk::call::delegate_call`]), the proxy’s
 ///   storage does not have this flag, so the check reads as `false`.
 ///
 /// ## Initialization Pattern
@@ -282,7 +281,7 @@ pub trait IUUPSUpgradeable: IErc1822Proxiable {
 ///
 /// The [`UUPSUpgradeable::only_proxy`] function ensures that:
 ///
-/// 1. The call is being made through a `[`delegate_call`][delegate_call]`.
+/// 1. The call is being made through a [`stylus_sdk::call::delegate_call`].
 /// 2. The caller is a valid [ERC-1967] proxy.
 /// 3. The `VERSION_NUMBER` in implementation equals to the version stored in
 ///    the proxy.
@@ -340,7 +339,6 @@ pub trait IUUPSUpgradeable: IErc1822Proxiable {
 ///
 /// [EIP-1822]: https://eips.ethereum.org/EIPS/eip-1822
 /// [ERC-1967]: https://eips.ethereum.org/EIPS/eip-1967
-/// [delegate_call]: stylus_sdk::call::delegate_call
 #[storage]
 pub struct UUPSUpgradeable {
     /// Logic version number stored in the proxy contract.
@@ -366,7 +364,7 @@ impl UUPSUpgradeable {
     /// Sets the proxy-stored runtime `version` for this logic
     /// (initializer-like).
     ///
-    /// Intended to be called via a proxy ([`delegate_call`][delegate_call]) to
+    /// Intended to be called via a proxy ([`stylus_sdk::call::delegate_call`]) to
     /// record `VERSION_NUMBER` in the proxy’s storage.
     ///
     /// # Arguments
@@ -376,7 +374,7 @@ impl UUPSUpgradeable {
     /// # Errors
     ///
     /// * [`Error::UnauthorizedCallContext`] - If not called via proxy
-    ///   `[`delegate_call`][delegate_call]`.
+    ///   [`stylus_sdk::call::delegate_call`].
     /// * [`Error::InvalidVersion`] - If the proxy's stored `version` is greater
     ///   than this logic's `VERSION_NUMBER`.
     ///
@@ -462,7 +460,7 @@ impl UUPSUpgradeable {
     /// Ensures the call is being made through a valid [ERC-1967] proxy.
     ///
     /// Checks:
-    /// 1. Execution is happening via [`delegate_call`][delegate_call] (checked
+    /// 1. Execution is happening via [`stylus_sdk::call::delegate_call`] (checked
     ///    via `!self.is_logic()`).
     /// 2. The caller is a valid [ERC-1967] proxy (implementation slot is
     ///    non-zero).
@@ -508,7 +506,7 @@ impl UUPSUpgradeable {
     }
 
     /// Check that the execution is not being performed through a
-    /// [`delegate_call`].
+    /// [`stylus_sdk::call::delegate_call`].
     ///
     /// This allows a function to be callable on the implementing contract
     /// but not through proxies.
@@ -520,9 +518,9 @@ impl UUPSUpgradeable {
     /// # Errors
     ///
     /// * [`Error::UnauthorizedCallContext`] - If the execution is performed via
-    ///   [`delegate_call`].
+    ///   [`stylus_sdk::call::delegate_call`].
     ///
-    /// [`delegate_call`]: stylus_sdk::call::delegate_call
+    /// [`stylus_sdk::call::delegate_call`]: stylus_sdk::call::delegate_call
     pub fn not_delegated(&self) -> Result<(), Error> {
         if self.is_logic() {
             Ok(())
@@ -564,7 +562,7 @@ impl UUPSUpgradeable {
     ///   not designed to handle it.
     /// * [`Error::EmptyCode`] - If there's no code at the new implementation
     ///   address.
-    /// * [`Error::FailedCall`] - If the [`delegate_call`][delegate_call] to the
+    /// * [`Error::FailedCall`] - If the [`stylus_sdk::call::delegate_call`] to the
     ///   new implementation fails.
     /// * [`Error::FailedCallWithReason`] - If the
     ///   [`stylus_sdk::call::delegate_call`] fails with a specific reason.
