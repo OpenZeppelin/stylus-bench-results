@@ -1705,4 +1705,71 @@ mod test {
         assert_eq!(format!("{one_limb}"), "0000000000000ABC");
         assert_eq!(format!("{one_limb:?}"), "0000000000000ABC");
     }
+
+    #[test]
+    fn runtime_comparisons_and_assignments_cover_carry_paths() {
+        use std::hint::black_box;
+
+        let greater = black_box(Uint::<2>::new([0, 1]));
+        let lesser = black_box(Uint::<2>::new([u64::MAX, 0]));
+        let ge: fn(&Uint<2>, &Uint<2>) -> bool = black_box(Uint::<2>::ge);
+        let gt: fn(&Uint<2>, &Uint<2>) -> bool = black_box(Uint::<2>::gt);
+        let le: fn(&Uint<2>, &Uint<2>) -> bool = black_box(Uint::<2>::le);
+        let lt: fn(&Uint<2>, &Uint<2>) -> bool = black_box(Uint::<2>::lt);
+        assert!(ge(&greater, &lesser));
+        assert!(gt(&greater, &lesser));
+        assert!(!le(&greater, &lesser));
+        assert!(!lt(&greater, &lesser));
+
+        let lesser = black_box(Uint::<2>::new([u64::MAX, 0]));
+        let greater = black_box(Uint::<2>::new([0, 1]));
+        assert!(!ge(&lesser, &greater));
+        assert!(!gt(&lesser, &greater));
+        assert!(le(&lesser, &greater));
+        assert!(lt(&lesser, &greater));
+        let cmp: fn(&Uint<2>, &Uint<2>) -> core::cmp::Ordering =
+            black_box(<Uint<2> as Ord>::cmp);
+        assert_eq!(cmp(&greater, &greater), core::cmp::Ordering::Equal);
+
+        let mut add = black_box(U256::new([u64::MAX, u64::MAX, 0, 0]));
+        let checked_add_assign: fn(&mut U256, &U256) -> bool =
+            black_box(U256::checked_add_assign);
+        assert!(!checked_add_assign(&mut add, &U256::ONE));
+        assert_eq!(add, U256::new([0, 0, 1, 0]));
+        let mut add_overflow = black_box(U256::MAX);
+        assert!(checked_add_assign(&mut add_overflow, &U256::ONE));
+        assert_eq!(add_overflow, U256::ZERO);
+
+        let mut subtract = black_box(U256::new([0, 1, 0, 0]));
+        let checked_sub_assign: fn(&mut U256, &U256) -> bool =
+            black_box(U256::checked_sub_assign);
+        assert!(!checked_sub_assign(&mut subtract, &U256::ONE));
+        assert_eq!(subtract, U256::new([u64::MAX, 0, 0, 0]));
+        let mut subtract_underflow = black_box(U256::ZERO);
+        assert!(checked_sub_assign(&mut subtract_underflow, &U256::ONE));
+        assert_eq!(subtract_underflow, U256::MAX);
+
+        let mut shifted = black_box(U256::new([0, 1, 0, 0]));
+        let checked_mul2_assign: fn(&mut U256) -> bool =
+            black_box(U256::checked_mul2_assign);
+        assert!(!checked_mul2_assign(&mut shifted));
+        assert_eq!(shifted, U256::new([0, 2, 0, 0]));
+        let mut shift_overflow = black_box(U256::MAX);
+        assert!(checked_mul2_assign(&mut shift_overflow));
+        assert_eq!(
+            shift_overflow,
+            U256::new([u64::MAX - 1, u64::MAX, u64::MAX, u64::MAX])
+        );
+
+        let lhs = black_box(U256::new([u64::MAX, u64::MAX, 1, 0]));
+        let rhs = black_box(U256::new([3, 2, 0, 0]));
+        let widening_mul: fn(&U256, &U256) -> (U256, U256) =
+            black_box(U256::widening_mul);
+        let (low, high) = widening_mul(&lhs, &rhs);
+        let expected: AlloyU512 = AlloyU256::from_limbs(lhs.into_limbs())
+            .widening_mul(AlloyU256::from_limbs(rhs.into_limbs()));
+        let limbs: [u64; 8] = expected.into_limbs();
+        assert_eq!(low.into_limbs(), limbs[..4]);
+        assert_eq!(high.into_limbs(), limbs[4..]);
+    }
 }

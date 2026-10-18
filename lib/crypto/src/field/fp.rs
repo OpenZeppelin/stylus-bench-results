@@ -1384,4 +1384,37 @@ mod tests {
         },))
         .is_err());
     }
+
+    #[test]
+    fn runtime_montgomery_and_negation_paths_match_field_arithmetic() {
+        use std::hint::black_box;
+
+        // Calling the const helper through a function pointer exercises the
+        // runtime implementation as well as the associated-constant use.
+        let inverse_fn: fn() -> u64 = black_box(inv::<Fp64Param, LIMBS_64>);
+        let inverse = inverse_fn();
+        assert_eq!(
+            Fp64Param::MODULUS.as_limbs()[0].wrapping_mul(inverse),
+            u64::MAX,
+        );
+
+        let nonzero = black_box(Field64::from(7u64));
+        assert_eq!(nonzero.neg(), Field64::from(999_996u64));
+        let zero = black_box(Field64::zero());
+        assert_eq!(zero.neg(), Field64::zero());
+
+        // A two-limb field executes both sides of the inner-limb selection in
+        // Montgomery reduction and checks the result against simple integers.
+        let lhs = black_box(Field128::from(123u64));
+        let rhs = black_box(Field128::from(456u64));
+        assert_eq!(lhs.mul(&rhs), Field128::from(56_088u64));
+
+        let (low, high) =
+            lhs.montgomery_form.widening_mul(&rhs.montgomery_form);
+        let reduce: fn(Uint<2>, Uint<2>) -> (bool, Uint<2>) =
+            black_box(Field128::widening_montgomery_reduction);
+        let (carry, reduced) = reduce(low, high);
+        assert!(!carry);
+        assert_eq!(Field128::new_unchecked(reduced), lhs.mul(&rhs));
+    }
 }
