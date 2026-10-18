@@ -13,6 +13,7 @@ mod abi;
 async fn invalid_beacon_implementation_reverts_and_preserves_beacon_slot(
 ) -> Result<()> {
     let alice = Account::new().await?;
+    let bob = Account::new().await?;
     let no_code_address = Account::new().await?.address();
 
     // This fixture has code and can serve as a valid implementation target.
@@ -38,6 +39,7 @@ async fn invalid_beacon_implementation_reverts_and_preserves_beacon_slot(
         .contract_address;
     let target_address = alice
         .as_deployer()
+        .with_signer(&alice)
         .with_constructor(constructor!(implementation))
         .deploy()
         .await?
@@ -47,9 +49,20 @@ async fn invalid_beacon_implementation_reverts_and_preserves_beacon_slot(
         Erc1967BeaconRollbackExample::new(valid_beacon_address, &alice.wallet);
     let target =
         Erc1967BeaconRollbackExample::new(target_address, &alice.wallet);
+    let attacker_target =
+        Erc1967BeaconRollbackExample::new(target_address, &bob.wallet);
     assert_eq!(target.implementation().call().await?, implementation);
     assert_eq!(target.getBeacon().call().await?, Address::ZERO);
     assert_eq!(valid_beacon.implementation().call().await?, implementation);
+
+    let error = send!(attacker_target
+        .upgradeBeaconToAndCall(valid_beacon_address, Bytes::new()))
+    .expect_err("an unrelated account must not upgrade the beacon");
+    assert!(error.reverted_with(
+        Erc1967BeaconRollbackExample::OwnableUnauthorizedAccount {
+            account: bob.address(),
+        }
+    ));
 
     receipt!(target.upgradeBeaconToAndCall(valid_beacon_address, Bytes::new()))?;
     assert_eq!(target.getBeacon().call().await?, valid_beacon_address);

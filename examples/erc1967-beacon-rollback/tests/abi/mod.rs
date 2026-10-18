@@ -10,5 +10,6 @@ sol! {
         function upgradeBeaconToAndCall(address newBeacon, bytes data) external;
 
         error ERC1967InvalidImplementation(address implementation);
+        error OwnableUnauthorizedAccount(address account);
     }
 }
