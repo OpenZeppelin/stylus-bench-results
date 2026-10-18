@@ -456,6 +456,41 @@ impl Erc1155 {
     ) -> Result<(), Error> {
         Self::require_equal_arrays_length(&ids, &values)?;
 
+        // Preflight source balances so a later insufficient item cannot leave
+        // earlier batch items applied when a caller catches the returned Err.
+        // A self-transfer subtracts and adds each item immediately, so each
+        // item is checked against the unchanged balance independently.
+        if !from.is_zero() && from != to {
+            let mut remaining_balances: Vec<(U256, U256)> = Vec::new();
+            for (&token_id, &value) in ids.iter().zip(values.iter()) {
+                let index = remaining_balances
+                    .iter()
+                    .position(|(id, _)| *id == token_id);
+                let balance = match index {
+                    Some(index) => remaining_balances[index].1,
+                    None => self.balance_of(from, token_id),
+                };
+
+                if balance < value {
+                    return Err(Error::InsufficientBalance(
+                        ERC1155InsufficientBalance {
+                            sender: from,
+                            balance,
+                            needed: value,
+                            token_id,
+                        },
+                    ));
+                }
+
+                let remaining = balance - value;
+                if let Some(index) = index {
+                    remaining_balances[index].1 = remaining;
+                } else {
+                    remaining_balances.push((token_id, remaining));
+                }
+            }
+        }
+
         let operator = msg::sender();
 
         for (&token_id, &value) in ids.iter().zip(values.iter()) {

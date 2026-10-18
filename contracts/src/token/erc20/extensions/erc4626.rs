@@ -1073,9 +1073,11 @@ impl Erc4626 {
         shares: U256,
         erc20: &mut Erc20,
     ) -> Result<(), Error> {
-        if caller != owner {
-            erc20._spend_allowance(owner, caller, shares)?;
-        }
+        let remaining_allowance = if caller != owner {
+            Some(erc20._allowance_after_spending(owner, caller, shares)?)
+        } else {
+            None
+        };
 
         // If asset() is ERC-777, `transfer` can trigger a reentrancy AFTER the
         // transfer happens through the `tokens_received` hook. On the other
@@ -1087,7 +1089,12 @@ impl Erc4626 {
         // assets are transferred, which is a valid state.
 
         erc20._burn(owner, shares)?;
+        if let Some(remaining_allowance) = remaining_allowance {
+            erc20._write_spent_allowance(owner, caller, remaining_allowance)?;
+        }
 
+        // If this external transfer fails, callers must propagate the error
+        // for the EVM to revert the prior share burn and allowance update.
         self.safe_erc20.safe_transfer(self.asset(), receiver, assets)?;
 
         evm::log(Withdraw { sender: caller, receiver, owner, assets, shares });

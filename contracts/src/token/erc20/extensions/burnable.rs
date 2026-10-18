@@ -70,8 +70,11 @@ impl IErc20Burnable for Erc20 {
         account: Address,
         value: U256,
     ) -> Result<(), Self::Error> {
-        self._spend_allowance(account, msg::sender(), value)?;
-        self._burn(account, value)
+        let spender = msg::sender();
+        let remaining_allowance =
+            self._allowance_after_spending(account, spender, value)?;
+        self._burn(account, value)?;
+        self._write_spent_allowance(account, spender, remaining_allowance)
     }
 }
 

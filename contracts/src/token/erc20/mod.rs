@@ -318,13 +318,71 @@ impl IErc20 for Erc20 {
         value: U256,
     ) -> Result<bool, Self::Error> {
         let spender = msg::sender();
-        self._spend_allowance(from, spender, value)?;
+        let remaining_allowance =
+            self._allowance_after_spending(from, spender, value)?;
+
         self._transfer(from, to, value)?;
+        self._write_spent_allowance(from, spender, remaining_allowance)?;
         Ok(true)
     }
 }
 
 impl Erc20 {
+    /// Validates a proposed allowance spend without changing storage.
+    ///
+    /// The returned value is `None` for an infinite allowance and otherwise
+    /// contains the remaining allowance to write after the associated token
+    /// operation succeeds.
+    pub(crate) fn _allowance_after_spending(
+        &self,
+        owner: Address,
+        spender: Address,
+        value: U256,
+    ) -> Result<Option<U256>, Error> {
+        let current_allowance = self.allowance(owner, spender);
+        if current_allowance == U256::MAX {
+            return Ok(None);
+        }
+        if current_allowance < value {
+            return Err(Error::InsufficientAllowance(
+                ERC20InsufficientAllowance {
+                    spender,
+                    allowance: current_allowance,
+                    needed: value,
+                },
+            ));
+        }
+
+        // `_spend_allowance` historically reports insufficient allowance
+        // before `_approve` reports invalid owner or spender addresses.
+        if owner.is_zero() {
+            return Err(Error::InvalidApprover(ERC20InvalidApprover {
+                approver: Address::ZERO,
+            }));
+        }
+        if spender.is_zero() {
+            return Err(Error::InvalidSpender(ERC20InvalidSpender {
+                spender: Address::ZERO,
+            }));
+        }
+
+        Ok(Some(current_allowance - value))
+    }
+
+    /// Writes a previously validated allowance remainder after the associated
+    /// token operation succeeds.
+    pub(crate) fn _write_spent_allowance(
+        &mut self,
+        owner: Address,
+        spender: Address,
+        remaining_allowance: Option<U256>,
+    ) -> Result<(), Error> {
+        if let Some(allowance) = remaining_allowance {
+            self._approve(owner, spender, allowance, false)?;
+        }
+        Ok(())
+    }
+
     /// Sets a `value` number of tokens as the allowance of `spender` over the
     /// caller's tokens.
     ///
@@ -565,22 +623,9 @@ impl Erc20 {
         spender: Address,
         value: U256,
     ) -> Result<(), Error> {
-        let current_allowance = self.allowance(owner, spender);
-        if current_allowance != U256::MAX {
-            if current_allowance < value {
-                return Err(Error::InsufficientAllowance(
-                    ERC20InsufficientAllowance {
-                        spender,
-                        allowance: current_allowance,
-                        needed: value,
-                    },
-                ));
-            }
-
-            self._approve(owner, spender, current_allowance - value, false)?;
-        }
-
-        Ok(())
+        let remaining_allowance =
+            self._allowance_after_spending(owner, spender, value)?;
+        self._write_spent_allowance(owner, spender, remaining_allowance)
     }
 }
 

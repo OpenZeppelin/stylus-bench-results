@@ -290,9 +290,9 @@ impl Erc20FlashMint {
         }
     }
 
-    // This function can reenter, but it doesn't pose a risk because it always
-    // preserves the property that the amount minted at the beginning is always
-    // recovered and burned at the end, or else the entire function will revert.
+    // The receiver callback can reenter and has external side effects. Callers
+    // must propagate errors from this method so the EVM reverts the loan mint
+    // and callback effects if repayment or the callback fails.
     /// See [`IErc3156FlashLender::flash_loan`].
     #[allow(clippy::missing_panics_doc, clippy::missing_errors_doc)]
     pub fn flash_loan(
@@ -341,16 +341,44 @@ impl Erc20FlashMint {
         let allowance = value
             .checked_add(fee)
             .expect("allowance should not exceed `U256::MAX`");
-        erc20._spend_allowance(receiver, contract::address(), allowance)?;
+        let contract_address = contract::address();
+        let remaining_allowance =
+            erc20._allowance_after_spending(receiver, contract_address, allowance)?;
 
         let flash_fee_receiver = self.flash_fee_receiver_address.get();
 
         if fee.is_zero() || flash_fee_receiver.is_zero() {
             erc20._burn(receiver, allowance)?;
         } else {
+            let receiver_balance = erc20.balance_of(receiver);
+            if receiver_balance < value {
+                return Err(Error::InsufficientBalance(
+                    erc20::ERC20InsufficientBalance {
+                        sender: receiver,
+                        balance: receiver_balance,
+                        needed: value,
+                    },
+                ));
+            }
+            let balance_after_burn = receiver_balance - value;
+            if balance_after_burn < fee {
+                return Err(Error::InsufficientBalance(
+                    erc20::ERC20InsufficientBalance {
+                        sender: receiver,
+                        balance: balance_after_burn,
+                        needed: fee,
+                    },
+                ));
+            }
+
             erc20._burn(receiver, value)?;
             erc20._transfer(receiver, flash_fee_receiver, fee)?;
         }
+        erc20._write_spent_allowance(
+            receiver,
+            contract_address,
+            remaining_allowance,
+        )?;
 
         Ok(true)
     }

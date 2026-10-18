@@ -460,10 +460,8 @@ impl IErc721 for Erc721 {
             );
         }
 
-        // Setting an "auth" argument enables the `_is_authorized` check which
-        // verifies that the token exists (`from != 0`). Therefore, it is
-        // not needed to verify that the return value is not 0 here.
-        let previous_owner = self._update(to, token_id, msg::sender())?;
+        let previous_owner = self._owner_of(token_id);
+        self._check_authorized(previous_owner, msg::sender(), token_id)?;
         if previous_owner != from {
             return Err(ERC721IncorrectOwner {
                 sender: from,
@@ -472,6 +470,7 @@ impl IErc721 for Erc721 {
             }
             .into());
         }
+        self._update(to, token_id, Address::ZERO)?;
         Ok(())
     }
 
@@ -711,10 +710,11 @@ impl Erc721 {
             );
         }
 
-        let previous_owner = self._update(to, token_id, Address::ZERO)?;
-        if !previous_owner.is_zero() {
+        if !self._owner_of(token_id).is_zero() {
             return Err(ERC721InvalidSender { sender: Address::ZERO }.into());
         }
+
+        self._update(to, token_id, Address::ZERO)?;
         Ok(())
     }
 
@@ -778,11 +778,11 @@ impl Erc721 {
     ///
     /// * [`Transfer`].
     pub fn _burn(&mut self, token_id: U256) -> Result<(), Error> {
-        let previous_owner =
-            self._update(Address::ZERO, token_id, Address::ZERO)?;
-        if previous_owner.is_zero() {
+        if self._owner_of(token_id).is_zero() {
             return Err(ERC721NonexistentToken { token_id }.into());
         }
+
+        self._update(Address::ZERO, token_id, Address::ZERO)?;
         Ok(())
     }
 
@@ -819,10 +819,11 @@ impl Erc721 {
             );
         }
 
-        let previous_owner = self._update(to, token_id, Address::ZERO)?;
+        let previous_owner = self._owner_of(token_id);
         if previous_owner.is_zero() {
             return Err(ERC721NonexistentToken { token_id }.into());
-        } else if previous_owner != from {
+        }
+        if previous_owner != from {
             return Err(ERC721IncorrectOwner {
                 sender: from,
                 token_id,
@@ -830,6 +831,8 @@ impl Erc721 {
             }
             .into());
         }
+
+        self._update(to, token_id, Address::ZERO)?;
 
         Ok(())
     }

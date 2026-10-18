@@ -237,12 +237,13 @@ impl<T: IEip712 + StorageType> Erc20Permit<T> {
             return Err(ERC2612ExpiredSignature { deadline }.into());
         }
 
+        let nonce = nonces.nonces(owner);
         let struct_hash = keccak256(StructHashTuple::abi_encode(&(
             PERMIT_TYPEHASH,
             owner,
             spender,
             value,
-            nonces.use_nonce(owner),
+            nonce,
             deadline,
         )));
 
@@ -255,6 +256,7 @@ impl<T: IEip712 + StorageType> Erc20Permit<T> {
         }
 
         erc20._approve(owner, spender, value, true)?;
+        nonces.use_nonce(owner);
 
         Ok(())
     }
