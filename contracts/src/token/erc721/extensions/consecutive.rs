@@ -374,6 +374,11 @@ impl Erc721Consecutive {
         to: Address,
         batch_size: U96,
     ) -> Result<U96, Error> {
+        let vm = self.vm();
+        if vm.code_size(vm.contract_address()) != 0 {
+            return Err(ERC721ForbiddenBatchMint {}.into());
+        }
+
         let next = self._next_consecutive_id();
 
         // Minting a batch of size 0 is a no-op.
