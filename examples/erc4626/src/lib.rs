@@ -49,15 +49,15 @@ impl IErc4626 for Erc4626Example {
         self.erc4626.asset()
     }
 
-    fn total_assets(&self) -> Result<U256, Self::Error> {
+    fn total_assets(&self) -> Result<U256, erc4626::Error> {
         self.erc4626.total_assets()
     }
 
-    fn convert_to_shares(&self, assets: U256) -> Result<U256, Self::Error> {
+    fn convert_to_shares(&self, assets: U256) -> Result<U256, erc4626::Error> {
         self.erc4626.convert_to_shares(assets, &self.erc20)
     }
 
-    fn convert_to_assets(&self, shares: U256) -> Result<U256, Self::Error> {
+    fn convert_to_assets(&self, shares: U256) -> Result<U256, erc4626::Error> {
         self.erc4626.convert_to_assets(shares, &self.erc20)
     }
 
@@ -65,7 +65,7 @@ impl IErc4626 for Erc4626Example {
         self.erc4626.max_deposit(receiver)
     }
 
-    fn preview_deposit(&self, assets: U256) -> Result<U256, Self::Error> {
+    fn preview_deposit(&self, assets: U256) -> Result<U256, erc4626::Error> {
         self.erc4626.preview_deposit(assets, &self.erc20)
     }
 
@@ -73,7 +73,7 @@ impl IErc4626 for Erc4626Example {
         &mut self,
         assets: U256,
         receiver: Address,
-    ) -> Result<U256, Self::Error> {
+    ) -> Result<U256, erc4626::Error> {
         self.erc4626.deposit(assets, receiver, &mut self.erc20)
     }
 
@@ -81,7 +81,7 @@ impl IErc4626 for Erc4626Example {
         self.erc4626.max_mint(receiver)
     }
 
-    fn preview_mint(&self, shares: U256) -> Result<U256, Self::Error> {
+    fn preview_mint(&self, shares: U256) -> Result<U256, erc4626::Error> {
         self.erc4626.preview_mint(shares, &self.erc20)
     }
 
@@ -89,15 +89,15 @@ impl IErc4626 for Erc4626Example {
         &mut self,
         shares: U256,
         receiver: Address,
-    ) -> Result<U256, Self::Error> {
+    ) -> Result<U256, erc4626::Error> {
         self.erc4626.mint(shares, receiver, &mut self.erc20)
     }
 
-    fn max_withdraw(&self, owner: Address) -> Result<U256, Self::Error> {
+    fn max_withdraw(&self, owner: Address) -> Result<U256, erc4626::Error> {
         self.erc4626.max_withdraw(owner, &self.erc20)
     }
 
-    fn preview_withdraw(&self, assets: U256) -> Result<U256, Self::Error> {
+    fn preview_withdraw(&self, assets: U256) -> Result<U256, erc4626::Error> {
         self.erc4626.preview_withdraw(assets, &self.erc20)
     }
 
@@ -106,7 +106,7 @@ impl IErc4626 for Erc4626Example {
         assets: U256,
         receiver: Address,
         owner: Address,
-    ) -> Result<U256, Self::Error> {
+    ) -> Result<U256, erc4626::Error> {
         self.erc4626.withdraw(assets, receiver, owner, &mut self.erc20)
     }
 
@@ -114,7 +114,7 @@ impl IErc4626 for Erc4626Example {
         self.erc4626.max_redeem(owner, &self.erc20)
     }
 
-    fn preview_redeem(&self, shares: U256) -> Result<U256, Self::Error> {
+    fn preview_redeem(&self, shares: U256) -> Result<U256, erc4626::Error> {
         self.erc4626.preview_redeem(shares, &self.erc20)
     }
 
@@ -123,7 +123,7 @@ impl IErc4626 for Erc4626Example {
         shares: U256,
         receiver: Address,
         owner: Address,
-    ) -> Result<U256, Self::Error> {
+    ) -> Result<U256, erc4626::Error> {
         self.erc4626.redeem(shares, receiver, owner, &mut self.erc20)
     }
 }
@@ -144,7 +144,7 @@ impl IErc20 for Erc4626Example {
         &mut self,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc4626::Error> {
         Ok(self.erc20.transfer(to, value)?)
     }
 
@@ -156,7 +156,7 @@ impl IErc20 for Erc4626Example {
         &mut self,
         spender: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc4626::Error> {
         Ok(self.erc20.approve(spender, value)?)
     }
 
@@ -165,7 +165,7 @@ impl IErc20 for Erc4626Example {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc4626::Error> {
         Ok(self.erc20.transfer_from(from, to, value)?)
     }
 }

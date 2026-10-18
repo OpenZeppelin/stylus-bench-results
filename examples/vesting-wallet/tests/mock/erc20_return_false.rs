@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 #![cfg(feature = "e2e")]
+use crate::devnet_test_support::Wallet;
 use alloy::{primitives::Address, sol};
-use e2e::Wallet;
 
 sol! {
     #[allow(missing_docs)]

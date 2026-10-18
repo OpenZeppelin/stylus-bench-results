@@ -1,0 +1,382 @@
+Reading additional input from stdin...
+2026-10-18T08:11:19.714276Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/templates/crypto-erc20/Cargo.toml:
+stylus-sdk = "=0.9.0"
+alloy-primitives = "=0.8.20"
+2026-10-18T08:15:24.405364Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc20/utils/safe_erc20.rs:
+        let erc20 = Erc20Interface::new(token);
+        Ok(erc20.allowance(self, AddressVM::contract_address(), spender)?)
+2026-10-18T08:18:01.602282Z ERROR codex_core::tools::router: error=apply_patch verification failed: invalid hunk at line 6, Update hunk does not contain any lines
+2026-10-18T08:18:08.330743Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/proxy/erc1967/utils.rs:
+use stylus_sdk::{
+    abi::Bytes,
+    prelude::*,
+2026-10-18T08:18:32.119324Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc1155/mod.rs:
+        if !to.has_code() {
+            return Ok(());
+        }
+
+        let call = Call::new_in(self);
+        let receiver = IErc1155ReceiverInterface::new(to);
+        let response = if ids.len() == 1 {
+            receiver
+                .on_erc_1155_received(call, operator, from, id, value, data),
+        } else {
+            receiver
+                .on_erc_1155_batch_received(
+                    call, operator, from, ids, values, data,
+                ),
+2026-10-18T08:21:07.848240Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/devnet_test_support.rs:
+        command
+            .args(["stylus", "deploy"])
+            .args(["--endpoint", &self.rpc_url])
+            .args(["--private-key", &self.private_key])
+            .args(["--wasm-file", wasm_path.to_str().context("WASM path is not UTF-8")?])
+            .args(["--deployer-salt", &salt])
+            .arg("--no-verify")
+            .env("CARGO_TERM_COLOR", "never");
+
+        if let Some(constructor) = &self.constructor {
+            command.args(["--constructor-signature", &constructor.signature]);
+            if !constructor.args.is_empty() {
+                command.arg("--constructor-args").args(&constructor.args);
+            }
+        }
+2026-10-18T08:22:02.277185Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/devnet_test_support.rs:
+#[allow(dead_code)]
+const _: [u8; 4] = function_selector!("ContractInitializationError", Address, Bytes);
+2026-10-18T08:22:11.896205Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc721/extensions/wrapper.rs:
+use stylus_sdk::{
+    abi::Bytes,
+    call,
+    prelude::*,
+2026-10-18T08:22:47.898377Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/.github/workflows/test.yml:
+  - "lib/e2e"
+  - "lib/e2e-proc"
+2026-10-18T08:24:42.941052Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/devnet_test_support.rs:
+                .then(|| value.trim().trim_matches('"').to_owned())
+        })
+        .context("could not read package name from Cargo.toml")?;
+    wasm_for_package(&package_name)
+}
+
+fn wasm_for_package(package_name: &str) -> eyre::Result<PathBuf> {
+    let target_dir = env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            let mut executable = env::current_exe().expect("test executable path exists");
+            while executable.file_name().is_some_and(|name| name != "target") {
+                executable.pop();
+            }
+            executable
+        });
+    let path = target_dir
+        .join("wasm32-unknown-unknown")
+        .join("release")
+        .join(format!("{}.wasm", package_name.replace('-', "_")));
+    if !path.exists() {
+        eyre::bail!(
+            "WASM artifact missing at {}; run scripts/e2e-tests.sh",
+            path.display()
+        );
+    }
+    Ok(path)
+}
+2026-10-18T08:25:38.660995Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/devnet_test_support.rs:
+//! devnode. Stylus contracts are deployed and activated with `cargo stylus`.
+2026-10-18T08:27:18.233227Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/scripts/bench.sh:
+# Optimize contract's wasm binary by crate name.
+opt_wasm() {
+  local CONTRACT_CRATE_NAME=$1
+  local CONTRACT_BIN_NAME="${CONTRACT_CRATE_NAME//-/_}.wasm"
+  local CONTRACT_OPT_BIN_NAME="${CONTRACT_CRATE_NAME//-/_}_opt.wasm"
+
+  echo
+  echo "Optimizing $CONTRACT_CRATE_NAME WASM binary"
+  # https://rustwasm.github.io/book/reference/code-size.html#use-wasm-opt-tool
+  wasm-opt --enable-bulk-memory -O3 -o ./target/wasm32-unknown-unknown/release/"$CONTRACT_OPT_BIN_NAME" ./target/wasm32-unknown-unknown/release/"$CONTRACT_BIN_NAME"
+}
+
+cargo build --locked --release --target wasm32-unknown-unknown
+
+# Optimize contract's wasm for gas usage.
+while IFS= read -r crate_name; do
+  opt_wasm "$crate_name"
+done < <(
+  cargo metadata --no-deps --format-version 1 |
+    python3 -c 'import json,sys; data=json.load(sys.stdin); print("\n".join(p["name"] for p in data["packages"] if "/examples/" in p["manifest_path"] and any("cdylib" in t["kind"] for t in p["targets"])))'
+)
+
+export RPC_URL=http://localhost:8547
+2026-10-18T08:29:36.611932Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/utils/storage_slot.rs:
+        fn get_address_at_zero_slot(&self) -> Address {
+            StorageSlot::get_slot::<StorageAddress>(U256::ZERO).get()
+        }
+
+        fn set_address_at_zero_slot(&self, new_address: Address) {
+            StorageSlot::get_slot::<StorageAddress>(U256::ZERO)
+                .set(new_address);
+2026-10-18T08:31:23.915924Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/devnet_test_support.rs:
+    providers::{
+        fillers::{
+            BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill,
+            NonceFiller, WalletFiller,
+        },
+        Identity, Provider, ProviderBuilder, RootProvider,
+    },
+2026-10-18T08:31:36.688684Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/devnet_test_support.rs:
+}
+
+#[macro_export]
+macro_rules! watch {
+    ($call:expr) => {
+        $crate::send!($call)?.watch().await
+    };
+}
+
+#[macro_export]
+macro_rules! receipt {
+    ($call:expr) => {
+        $crate::send!($call)?.get_receipt().await
+    };
+}
+
+/// Build cargo-stylus constructor arguments.
+#[macro_export]
+macro_rules! constructor {
+2026-10-18T08:34:04.584296Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc20/extensions/wrapper.rs:
+        let amount = uint!(10_U256);
+
+        contract
+            .sender(alice)
+            .constructor(erc20_contract.address())
+            .expect("should construct");
+
+        erc20_contract
+            .sender(alice)
+            ._mint(alice, amount)
+            .expect("should mint");
+
+        erc20_contract
+            .sender(alice)
+            .approve(contract.address(), amount)
+            .expect("should approve");
+
+        contract
+            .sender(alice)
+            .deposit_for(alice, amount)
+            .expect("should deposit");
+2026-10-18T08:36:23.684884Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/proxy/beacon/upgradeable.rs:
+pub trait IUpgradeableBeacon: IBeacon + IOwnable {
+2026-10-18T08:40:39.962418Z ERROR codex_core::tools::router: error=failed to parse function arguments: unknown field `timeout_ms`, expected `path_prefix` at line 1 column 13
+2026-10-18T08:41:01.810913Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 46287
+2026-10-18T08:41:09.409438Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc20/extensions/burnable.rs:
+impl IErc20Burnable for Erc20 {
+    type Error = erc20::Error;
+2026-10-18T08:41:50.429462Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/proxy/beacon/proxy.rs:
+    unsafe impl TopLevelStorage for Erc20Example {}
+2026-10-18T08:42:58.931976Z ERROR codex_core::tools::router: error=agent_name `..` is reserved
+2026-10-18T08:46:21.886251Z ERROR codex_core::tools::router: error=failed to parse function arguments: missing field `message` at line 1 column 18
+2026-10-18T08:47:10.600212Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/proxy/erc1967/utils.rs:
+    impl IImplementation {
+2026-10-18T08:49:20.296963Z ERROR codex_core::tools::router: error=exec_command failed: CreateProcess { message: "Rejected(\"`/bin/zsh -lc \\\"rm -rf lib/e2e lib/e2e-proc && rg -n 'e2e::|e2e-proc|lib/e2e|e2e.workspace|path = \\\\\\\"lib/e2e' --glob '\\\"'!Cargo.lock'\\\"' --glob '\\\"'!**/target/**'\\\"' . || true && git diff --check\\\"` rejected: rm -f style commands are not permitted. Use a safer approach\")" }
+2026-10-18T08:49:25.606436Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/proxy/erc1967/utils.rs:
+        beacon.sender(alice).constructor(implementation.address());
+
+        contract
+2026-10-18T08:49:25.817148Z ERROR codex_core::tools::router: error=apply_patch verification failed: invalid patch: The last line of the patch must be '*** End Patch'
+2026-10-18T08:57:23.359327Z ERROR codex_core::tools::router: error=apply_patch verification failed: invalid patch: multiple operations target /tmp/bench/ws/benches/src/report.rs
+2026-10-18T09:00:28.210041Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/scripts/e2e-tests.sh:
+cargo build --release --target wasm32-unknown-unknown "${PACKAGE_ARGS[@]}"
+2026-10-18T09:01:27.256794Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/proxy/erc1967/mod.rs:
+    /// * [`Error::NonPayable`] - If the data is empty and
+    ///   the call value[msg_value] is not [`U256::ZERO`][U256].
+2026-10-18T09:24:49.467216Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 0
+2026-10-18T09:30:14.358795Z ERROR codex_core::tools::router: error=apply_patch verification failed: invalid patch: multiple operations target /tmp/bench/ws/scripts/check-wasm.sh
+2026-10-18T09:32:20.306828Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/devnet_test_support.rs:
+/// Constructor arguments passed to `cargo-stylus deploy`.
+#[derive(Debug, Clone)]
+pub struct Constructor {
+    /// CLI-compatible values corresponding to the constructor arguments.
+    pub args: Vec<String>,
+}
+2026-10-18T09:38:25.645878Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/scripts/bench.sh:
+cd "${MYDIR}"
+cd ..
+2026-10-18T09:44:39.519560Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 46430
+2026-10-18T09:51:44.206419Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 74773
+2026-10-18T09:52:01.124714Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/docs/modules/ROOT/pages/proxy.adoc:
+    fn delegate(
+2026-10-18T10:13:16.710991Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/docs/modules/ROOT/pages/upgrade-from-v0.3.0.adoc:
+The SDK's `contract-client-gen` feature can be enabled by a
+consumer crate to generate typed clients for public contracts.
+2026-10-18T10:14:58.936341Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/docs/modules/ROOT/pages/upgrade-from-v0.3.0.adoc:
+The examples use Tokio, Alloy, and `cargo stylus deploy` against the devnode
+started by `scripts/devnet.sh`.
+2026-10-18T10:15:09.710989Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/docs/modules/ROOT/pages/upgrade-from-v0.3.0.adoc:
+The examples use Tokio, Alloy, and
+`cargo stylus deploy` against the devnode started by `scripts/devnet.sh`.
+2026-10-18T10:15:18.635626Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/docs/modules/ROOT/pages/upgrade-from-v0.3.0.adoc:
+The examples use Tokio, Alloy, and `cargo stylus deploy` against the devnode
+started by `scripts/devnet.sh`.
+2026-10-18T10:19:34.402033Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/F04-analysis.md:
+| ERC721 | Mint ID 19 to Alice, set caller Alice, then `transfer_from(Other, Bob, 19)` | Owner remains Alice. |
+| ERC1155 | Alice has ID 1 = 5 and ID 2 = 1; batch transfer values `[2, 2]` | The first item remains with Alice and Bob receives zero ID 1 when ID 2 is insufficient. |
+| ERC20 | Approve spender for 2 with Alice holding zero, then spender calls `transfer_from(Alice, Bob, 2)` | Allowance remains 2 when token transfer fails for insufficient balance. |
+2026-10-18T10:22:11.698490Z ERROR codex_core::tools::router: error=live agent path `/root/security_review/security_deep` not found
+2026-10-18T10:23:43.786752Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/docs/modules/ROOT/pages/upgrade-from-v0.3.0.adoc:
+pause and mint permissions remain
+explicit application decisions. The SDK's `contract-client-gen` feature can
+generate typed clients from public contract crates.
+2026-10-18T10:27:11.322328Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc20/extensions/flash_mint.rs:
+        let allowance = value
+            .checked_add(fee)
+            .expect("allowance should not exceed `U256::MAX");
+        erc20._spend_allowance(
+            receiver,
+            self.vm().contract_address(),
+            allowance,
+        )?;
+
+        let flash_fee_receiver = self.flash_fee_receiver_address.get();
+
+        if fee.is_zero() || flash_fee_receiver.is_zero() {
+            erc20._burn(receiver, allowance)?;
+        } else {
+            erc20._burn(receiver, value)?;
+            erc20._transfer(receiver, flash_fee_receiver, fee)?;
+        }
+
+        Ok(true)
+2026-10-18T10:49:59.791656Z ERROR codex_core::tools::router: error=exec_command failed: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'rm -rf scripts/__pycache__ && git status --short --untracked-files=normal | tail -25'` rejected: rm -f style commands are not permitted. Use a safer approach\")" }
+2026-10-18T10:52:48.744135Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 90987
+2026-10-18T11:14:11.830896Z ERROR codex_core::tools::router: error=agent_name `..` is reserved
+2026-10-18T11:17:04.775491Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/docs/modules/ROOT/pages/upgrade-from-v0.3.0.adoc:
+   directly, in `Stylus.toml`, in the toolchain file, and via `cargo stylus
+2026-10-18T12:00:58.539830Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/scripts/devnet.sh:
+  local pid="${DEVNET_PID:-}"
+  if [[ -z "${pid}" && -f "${DEVNET_PID_FILE}" ]]; then
+    pid="$(<"${DEVNET_PID_FILE}")"
+  fi
+  if [[ "${pid}" =~ ^[0-9]+$ ]] && kill -0 "${pid}" 2>/dev/null; then
+    kill -TERM "${pid}" 2>/dev/null || true
+    for ((attempt = 0; attempt < 100; attempt++)); do
+      kill -0 "${pid}" 2>/dev/null || break
+      sleep 0.1
+    done
+    if kill -0 "${pid}" 2>/dev/null; then
+      kill -KILL "${pid}" 2>/dev/null || true
+    fi
+  fi
+2026-10-18T12:03:56.188577Z ERROR codex_core::tools::router: error=exec_command failed: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'rm -rf scripts/__pycache__ && git status --short | tail -25'` rejected: rm -f style commands are not permitted. Use a safer approach\")" }
+2026-10-18T12:09:59.190037Z ERROR codex_core::tools::router: error=agent_name `..` is reserved
+2026-10-18T12:10:46.294952Z ERROR codex_core::tools::router: error=failed to parse function arguments: missing field `cell_id` at line 1 column 20
+2026-10-18T12:27:47.203846Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/docs/modules/ROOT/pages/upgrade-from-v0.3.0.adoc:
+`U256::MAX`; valid owner indices are always smaller than this key.
+This avoids adding a storage field that would change the surrounding contract's
+layout. The original zero-token sentinel bug is fixed. If a live v0.3.0
+enumerable proxy already owns token ID zero, its old mapping does not contain the
+new count metadata. Reconcile that owner's count during your application
+migration before relying on owner-index enumeration for token ID zero. Other
+stored token IDs remain readable without this count.
+2026-10-18T12:30:19.777959Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/common/erc2981.rs:
+    /// `fee_numerator` and [`Self::_set_default_royalty`] as a
+    /// fraction of the sale price.
+    ///
+    /// Defaults to 10000 so fees are expressed in basis points, but
+    /// may be customized in the constructor.
+2026-10-18T12:31:40.758534Z ERROR codex_core::tools::router: error=apply_patch verification failed: invalid patch: multiple operations target /tmp/bench/ws/examples/erc1967-beacon-rollback/src/main.rs
+2026-10-18T12:32:04.909914Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc721/extensions/enumerable.rs:
+        assert_eq!(returned_token_id, token_id);
+    }
+2026-10-18T12:48:55.723758Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/utils/cryptography/ecdsa.rs:
+    let recovered =
+        call::static_call(host, Call::new(), ECRECOVER_ADDR, &calldata)
+            .expect("should call `ecRecover` precompile");
+
+    let recovered = Address::from_slice(&recovered[12..]);
+2026-10-18T12:49:52.449008Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/erc721-wrapper/tests/abi/mod.rs:
+        function ownerOf(uint256 tokenId) external view returns (address owner);
+        function depositFor(address account, uint256[] memory tokenIds) external returns (bool);
+        function withdrawTo(address account, uint256[] memory tokenIds) external returns (bool);
+2026-10-18T12:50:35.711789Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/erc721-wrapper/tests/abi/mod.rs:
+        function ownerOf(uint256 tokenId) external view returns (address owner);
+        function depositFor(address account, uint256[] memory tokenIds) external returns (bool);
+        function withdrawTo(address account, uint256[] memory tokenIds) external returns (bool);
+        function burn(uint256 tokenId) external;
+2026-10-18T12:53:19.776947Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts-proc/src/lib.rs:
+/// }
+/// ```
+pub fn interface_id(attr: TokenStream, input: TokenStream) -> TokenStream {
+2026-10-18T13:05:54.399447Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/erc721/tests/mock/receiver.rs:
+    #[sol(rpc, bytecode="60c060405234801561000f575f80fd5b5060405161029e38038061029e83398101604081905261002e91610044565b6001600160a01b0390911660805260a05261007b565b5f8060408385031215610055575f80fd5b82516001600160a01b038116811461006b575f80fd5b6020939093015192949293505050565b60805160a05161020461009a5f395f608801525f60b601526102045ff3fe608060405234801561000f575f80fd5b5060043610610029575f3560e01c8063150b7a021461002d575b5f80fd5b61004061003b36600461013b565b61005d565b6040516001600160e01b0319909116815260200160405180910390f35b5f805460ff1661010e575f805460ff191660011790556040516340c10f1960e01b81523060048201527f000000000000000000000000000000000000000000000000000000000000000060248201526001600160a01b037f000000000000000000000000000000000000000000000000000000000000000016906340c10f19906044015f604051808303815f87803b1580156100f7575f80fd5b505af1158015610109573d5f803e3d5ffd5b505050505b50630a85bd0160e11b959450505050565b80356001600160a01b0381168114610136575f80fd5b919050565b5f805f805f6080868803121561014f575f80fd5b61015886610120565b945061016660208701610120565b935060408601359250606086013567ffffffffffffffff80821115610189575f80fd5b818801915088601f83011261019c575f80fd5b8135818111156101aa575f80fd5b8960208285010111156101bb575f80fd5b969995985093965060200194939250505056fea26469706673582212203c27560db1c0676fd3598440c0322c7fc2c4d7ab117e503a45b991b192aee89664736f6c63430008180033")]
+    contract ReentrantReceiver {
+        constructor(address token, uint256 reentrantTokenId);
+    }
+}
+2026-10-18T13:16:15.209309Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/erc1155-metadata-uri/tests/erc1155-metadata-uri.rs:
+async fn uri_ignores_metadata_uri_when_token_uri_is_set() -> eyre::Result<()>
+2026-10-18T13:16:32.411892Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/erc1155-metadata-uri/src/lib.rs:
+#![cfg_attr(not(any(test, feature = "export-abi")), no_main)]
+use openzeppelin_stylus::{
+2026-10-18T13:18:12.659317Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/erc721-metadata/tests/erc721_metadata.rs:
+    assert!(err.reverted_with(Erc721::OwnableUnauthorizedAccount {
+        account: bob.address(),
+    }));
+    assert_eq!(
+        contract_alice.tokenURI(token_id).call().await?,
+        original_uri
+2026-10-18T13:20:25.430591Z ERROR codex_core::tools::router: error=failed to parse function arguments: missing field `message` at line 1 column 26
+2026-10-18T13:39:45.955152Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 0
+2026-10-18T13:49:26.864796Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/erc20/tests/erc20.rs:
+        .as_deployer()
+2026-10-18T13:49:48.748927Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/contracts/src/token/erc721/extensions/consecutive.rs:
+//! This extension allows the minting large batches of tokens, during
+//! contract construction only. For upgradeable contracts, this implies that
+//! batch minting is only available during proxy deployment, and not in
+//! subsequent upgrades. These batches are limited to 5000 tokens at a time by
+//! default to accommodate off-chain indexers.
+2026-10-18T13:51:51.649405Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/basic/token/tests/mint_authorization.rs:
+    send!(contract.mint(alice.address(), amount))
+        .expect_err("a non-deployer must not mint tokens");
+    assert_eq!(U256::ZERO, contract.totalSupply().call().await?);
+    assert_eq!(U256::ZERO, contract.balanceOf(alice.address()).call().await?);
+2026-10-18T13:55:40.717663Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/erc721/tests/erc721.rs:
+    let contract_addr = alice.as_deployer().with_signer(&alice).deploy().await?.contract_address;
+    let contract = Erc721::new(contract_addr, &alice.wallet);
+
+    let alice_addr = alice.address();
+    let token_id = random_token_id();
+2026-10-18T13:56:06.219878Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/erc721/src/lib.rs:
+    InvalidOperator(erc721::ERC721InvalidOperator),
+    UnauthorizedAccount(ownable::OwnableUnauthorizedAccount),
+    InvalidOwner(ownable::OwnableInvalidOwner),
+2026-10-18T14:09:23.523506Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/devnet_test_support.rs:
+                    && contains_selector(
+                        &details,
+                        &CONTRACT_INITIALIZATION_ERROR_SELECTOR,
+                    ))
+2026-10-18T14:29:26.966889Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/examples/devnet_test_support.rs:
+        Deployer {
+            rpc_url: self.rpc_url.clone(),
+            constructor: None,
+            example_name: None,
+            signer: None,
+        }
+2026-10-18T14:30:18.317859Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/docs/modules/ROOT/pages/upgrade-from-v0.3.0.adoc:
+  `erc1155-supply`, and `erc721` examples now restrict their mint methods to
+  the owner. ERC-20 `pause()` and `unpause()` are owner-only. ERC-1155
+  `mintBatch` follows the same owner check as `mint`. These examples expose
+  `IOwnable` and a one-time `initializeOwner(address)`; their constructors set
+  the owner to the deployer for new deployments.
+2026-10-18T16:55:26.301537Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 27277
+2026-10-18T17:09:15.825960Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 9134
+2026-10-18T17:14:14.068257Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 87469
+2026-10-18T17:17:42.760730Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 19839
+2026-10-18T17:19:24.903268Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 99419
+2026-10-18T17:20:32.687693Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 72273
+2026-10-18T17:32:25.470594Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 76913
+2026-10-18T18:05:33.420297Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in /tmp/bench/ws/docs/modules/ROOT/pages/upgrade-from-v0.3.0.adoc:
+explicitly composed traits. A contract crate's package-level
+`contract-client-gen` feature can generate typed clients from its public API;
+artifacts built with it are client stubs and must not be deployed.
+2026-10-18T19:08:45.954711Z ERROR codex_core::tools::router: error=write_stdin failed: Unknown process id 62481

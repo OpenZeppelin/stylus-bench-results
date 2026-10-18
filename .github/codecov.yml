@@ -17,9 +17,6 @@ coverage:
 # Docs and examples are not relevant to coverage.
 ignore:
   - "docs"
-  - "examples"
-  - "lib/e2e"
-  - "lib/e2e-proc"
 # Make comments less noisy.
 comment:
   layout: "files"

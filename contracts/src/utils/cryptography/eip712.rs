@@ -14,7 +14,7 @@ use alloc::{borrow::ToOwned, string::String, vec::Vec};
 
 use alloy_primitives::{keccak256, Address, B256, U256};
 use alloy_sol_types::{sol, SolType};
-use stylus_sdk::{block, contract};
+use stylus_sdk::prelude::*;
 
 /// Keccak-256 hash of the EIP-712 domain separator type string.
 const TYPE_HASH: [u8; 32] =
@@ -58,7 +58,7 @@ pub fn to_typed_data_hash(
 }
 
 /// EIP-712 Contract interface.
-pub trait IEip712 {
+pub trait IEip712: HostAccess {
     /// Immutable name of EIP-712 instance.
     const NAME: &'static str;
     /// Hashed name of EIP-712 instance.
@@ -74,14 +74,14 @@ pub trait IEip712 {
 
     /// Returns chain id.
     #[must_use]
-    fn chain_id() -> U256 {
-        U256::from(block::chainid())
+    fn chain_id(&self) -> U256 {
+        U256::from(self.vm().chain_id())
     }
 
     /// Returns the contract's address.
     #[must_use]
-    fn contract_address() -> Address {
-        contract::address()
+    fn contract_address(&self) -> Address {
+        self.vm().contract_address()
     }
 
     /// Returns the fields and values that describe the domain separator used by
@@ -97,8 +97,8 @@ pub trait IEip712 {
             FIELDS,
             Self::NAME.to_owned(),
             Self::VERSION.to_owned(),
-            Self::chain_id(),
-            Self::contract_address(),
+            self.chain_id(),
+            self.contract_address(),
             SALT,
             Vec::new(),
         )
@@ -114,8 +114,8 @@ pub trait IEip712 {
             TYPE_HASH,
             Self::HASHED_NAME,
             Self::HASHED_VERSION,
-            Self::chain_id(),
-            Self::contract_address(),
+            self.chain_id(),
+            self.contract_address(),
         ));
 
         keccak256(encoded)
@@ -138,6 +138,8 @@ pub trait IEip712 {
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{address, b256, uint, Address, U256};
+    use stylus_sdk::stylus_core::host::HostAccess;
+    use stylus_test::{TestVM, TestVMBuilder};
 
     use super::{to_typed_data_hash, IEip712, FIELDS, SALT};
 
@@ -146,25 +148,37 @@ mod tests {
     const CONTRACT_ADDRESS: Address =
         address!("000000000000000000000000000000000000dEaD");
 
-    #[derive(Default)]
-    struct TestEIP712;
+    struct TestEIP712 {
+        vm: TestVM,
+    }
+
+    impl Default for TestEIP712 {
+        fn default() -> Self {
+            Self {
+                vm: TestVMBuilder::new()
+                    .chain_id(42161)
+                    .contract_address(CONTRACT_ADDRESS)
+                    .build(),
+            }
+        }
+    }
+
+    impl HostAccess for TestEIP712 {
+        type Host = TestVM;
+
+        fn vm(&self) -> &Self::Host {
+            &self.vm
+        }
+    }
 
     impl IEip712 for TestEIP712 {
         const NAME: &'static str = "A Name";
         const VERSION: &'static str = "1";
-
-        fn chain_id() -> U256 {
-            CHAIN_ID
-        }
-
-        fn contract_address() -> Address {
-            CONTRACT_ADDRESS
-        }
     }
 
     #[test]
     fn domain_test() {
-        let contract = TestEIP712;
+        let contract = TestEIP712::default();
         let domain = contract.eip712_domain();
         assert_eq!(FIELDS, domain.0);
         assert_eq!(TestEIP712::NAME, domain.1);
@@ -181,7 +195,6 @@ mod tests {
         let domain_separator = b256!(
             "8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f"
         );
-        // bytes32("stylus");
         let struct_hash = b256!(
             "7379746c75730000000000000000000000000000000000000000000000000000"
         );

@@ -56,9 +56,12 @@ jobs:
 
       - name: Generate corpus if needed
         if: steps.cache-corpus.outputs.cache-hit != 'true'
+        working-directory: ./fuzz
         run: |
           echo "No cached corpus found. Generating new corpus..."
-          cargo run --bin gen-${{ github.event.inputs.fuzz_target }}-corpus
+          if [ "${{ github.event.inputs.fuzz_target }}" = "merkle" ]; then
+            cargo run --bin gen-merkle-corpus
+          fi
 
       - name: Run fuzzer with ${{ github.event.inputs.sanitizer }} sanitizer
         working-directory: ./fuzz

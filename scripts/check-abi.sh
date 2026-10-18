@@ -3,7 +3,8 @@ set -e
 
 # Function to retrieve all Cargo.toml paths in the ./examples directory
 get_example_dirs() {
-  find ./examples -maxdepth 2 -type f -name "Cargo.toml" | xargs -n1 dirname | sort
+  find ./examples -type f -name "Cargo.toml" -print0 |
+    xargs -0 -n1 dirname | sort
 }
 
 # Get the root directory of the git repository
@@ -35,3 +36,5 @@ check_abi() {
 for CRATE_PATH in $(get_example_dirs); do
   check_abi "$CRATE_PATH"
 done
+
+check_abi "templates/crypto-erc20"

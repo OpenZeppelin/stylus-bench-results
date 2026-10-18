@@ -64,11 +64,11 @@ impl IOwnable for MyContract {
     fn transfer_ownership(
         &mut self,
         new_owner: Address,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         Ok(self.ownable.transfer_ownership(new_owner)?)
     }
 
-    fn renounce_ownership(&mut self) -> Result<(), Self::Error> {
+    fn renounce_ownership(&mut self) -> Result<(), Error> {
         Ok(self.ownable.renounce_ownership()?)
     }
 }
@@ -188,7 +188,7 @@ impl IErc20 for Example {
         &mut self,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, Error> {
         Ok(self.erc20.transfer(to, value)?)
     }
 
@@ -200,7 +200,7 @@ impl IErc20 for Example {
         &mut self,
         spender: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, Error> {
         Ok(self.erc20.approve(spender, value)?)
     }
 
@@ -209,7 +209,7 @@ impl IErc20 for Example {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, Error> {
         Ok(self.erc20.transfer_from(from, to, value)?)
     }
 }
@@ -222,7 +222,7 @@ impl IAccessControl for Example {
         self.access.has_role(role, account)
     }
 
-    fn only_role(&self, role: B256) -> Result<(), Self::Error> {
+    fn only_role(&self, role: B256) -> Result<(), Error> {
         Ok(self.access.only_role(role)?)
     }
 
@@ -234,7 +234,7 @@ impl IAccessControl for Example {
         &mut self,
         role: B256,
         account: Address,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         Ok(self.access.grant_role(role, account)?)
     }
 
@@ -242,7 +242,7 @@ impl IAccessControl for Example {
         &mut self,
         role: B256,
         account: Address,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         Ok(self.access.revoke_role(role, account)?)
     }
 
@@ -250,7 +250,7 @@ impl IAccessControl for Example {
         &mut self,
         role: B256,
         confirmation: Address,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         Ok(self.access.renounce_role(role, confirmation)?)
     }
 }
@@ -328,6 +328,6 @@ Every role has an associated admin role, which grants permission to call the `gr
 
 This mechanism can be used to create complex permissioning structures resembling organizational charts, but it also provides an easy way to manage simpler applications. `AccessControl` includes a special role, called `DEFAULT_ADMIN_ROLE`, which acts as the **default admin role for all roles**. An account with this role will be able to manage any other role, unless `_set_role_admin` is used to select a new admin role.
 
-Note that, by default, no accounts are granted the 'minter' or 'burner' roles. We assume you use a constructor to set the default admin role as the role of the deployer, or have a different mechanism where you make sure that you are able to grant roles. However, because those roles' admin role is the default admin role, and _that_ role was granted to `msg::sender()`, that same account can call `grant_role` to give minting or burning permission, and `revoke_role` to remove it.
+Note that, by default, no accounts are granted the 'minter' or 'burner' roles. We assume you use a constructor to set the default admin role as the role of the deployer, or have a different mechanism where you make sure that you are able to grant roles. However, because those roles' admin role is the default admin role, and _that_ role was granted to the deployer's address, that same account can call `grant_role` to give minting or burning permission, and `revoke_role` to remove it. In SDK 0.10 contracts, the current caller is read with `self.vm().msg_sender()`.
 
 Dynamic role allocation is often a desirable property, for example in systems where trust in a participant may vary over time. It can also be used to support use cases such as https://en.wikipedia.org/wiki/Know_your_customer[KYC], where the list of role-bearers may not be known up-front, or may be prohibitively expensive to include in a single transaction.

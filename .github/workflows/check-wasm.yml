@@ -22,10 +22,17 @@ jobs:
       - name: Install rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
+          toolchain: 1.91.0
+          target: wasm32-unknown-unknown
           rustflags: ""
 
       - name: Install cargo-stylus
-        run: cargo install --locked --force cargo-stylus@0.6.3
+        run: cargo install --locked --force cargo-stylus@0.10.10
+
+      - name: Install pinned WebAssembly optimizer and validator
+        run: |
+          cargo install --locked --force wasm-opt@0.116.1
+          cargo install --locked --force wasm-tools@1.262.0
 
       - name: Run wasm check
-        run: ./scripts/check-wasm.sh
+        run: ./scripts/devnet.sh run -- ./scripts/check-wasm.sh

@@ -4,6 +4,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 use openzeppelin_stylus::{
+    access::ownable::{self, IOwnable, Ownable},
     token::erc20::{
         self,
         extensions::{Erc20Metadata, IErc20Metadata},
@@ -14,6 +15,7 @@ use openzeppelin_stylus::{
 use stylus_sdk::{
     alloy_primitives::{aliases::B32, Address, U256, U8},
     prelude::*,
+    storage::StorageBool,
 };
 
 #[entrypoint]
@@ -21,22 +23,66 @@ use stylus_sdk::{
 struct Erc20Example {
     erc20: Erc20,
     metadata: Erc20Metadata,
+    ownable: Ownable,
+    owner_initialized: StorageBool,
 }
 
 #[public]
-#[implements(IErc20<Error = erc20::Error>, IErc20Metadata, IErc165)]
+#[implements(IErc20<Error = erc20::Error>, IErc20Metadata, IErc165, IOwnable)]
 impl Erc20Example {
     #[constructor]
-    fn constructor(&mut self, name: String, symbol: String) {
+    fn constructor(
+        &mut self,
+        name: String,
+        symbol: String,
+        initial_owner: Address,
+    ) -> Result<(), Vec<u8>> {
+        self.ownable.constructor(initial_owner)?;
+        self.owner_initialized.set(true);
         self.metadata.constructor(name, symbol);
+        Ok(())
     }
 
-    fn mint(
+    /// Initializes ownership when upgrading a proxy created by the previous
+    /// version. Call this atomically with the implementation upgrade.
+    fn initialize_owner(
         &mut self,
-        account: Address,
-        value: U256,
-    ) -> Result<(), erc20::Error> {
-        self.erc20._mint(account, value)
+        initial_owner: Address,
+    ) -> Result<(), Vec<u8>> {
+        if self.owner_initialized.get() {
+            return Err(ownable::Error::UnauthorizedAccount(
+                ownable::OwnableUnauthorizedAccount {
+                    account: self.vm().msg_sender(),
+                },
+            )
+            .into());
+        }
+        self.ownable.constructor(initial_owner)?;
+        self.owner_initialized.set(true);
+        Ok(())
+    }
+
+    fn mint(&mut self, account: Address, value: U256) -> Result<(), Vec<u8>> {
+        self.ownable.only_owner()?;
+        self.erc20._mint(account, value).map_err(Into::into)
+    }
+}
+
+#[public]
+impl IOwnable for Erc20Example {
+    fn owner(&self) -> Address {
+        self.ownable.owner()
+    }
+
+    fn transfer_ownership(
+        &mut self,
+        new_owner: Address,
+    ) -> Result<(), Vec<u8>> {
+        Ok(self.ownable.transfer_ownership(new_owner)?)
+    }
+
+    fn renounce_ownership(&mut self) -> Result<(), Vec<u8>> {
+        Ok(self.ownable.renounce_ownership()?)
     }
 }
 
@@ -56,7 +102,7 @@ impl IErc20 for Erc20Example {
         &mut self,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer(to, value)
     }
 
@@ -68,7 +114,7 @@ impl IErc20 for Erc20Example {
         &mut self,
         spender: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.approve(spender, value)
     }
 
@@ -77,7 +123,7 @@ impl IErc20 for Erc20Example {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer_from(from, to, value)
     }
 }
@@ -102,5 +148,6 @@ impl IErc165 for Erc20Example {
     fn supports_interface(&self, interface_id: B32) -> bool {
         self.erc20.supports_interface(interface_id)
             || self.metadata.supports_interface(interface_id)
+            || <Self as IOwnable>::interface_id() == interface_id
     }
 }

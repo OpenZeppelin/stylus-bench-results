@@ -118,8 +118,8 @@ impl Erc721Metadata {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{aliases::B32, Address};
-    use motsu::prelude::Contract;
+    use crate::test_support::{test_address, TestContract as TestVMContract};
+    use alloy_primitives::aliases::B32;
 
     use super::*;
     use crate::{
@@ -170,18 +170,19 @@ mod tests {
 
     unsafe impl TopLevelStorage for Erc721MetadataExample {}
 
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual = <Erc721MetadataExample as IErc721Metadata>::interface_id();
         let expected: B32 = 0x5b5e139f_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
-    fn supports_interface(
-        contract: Contract<Erc721MetadataExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn supports_interface() {
+        let contract =
+            TestVMContract::<Erc721MetadataExample>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         assert!(contract.sender(alice).supports_interface(
             <Erc721MetadataExample as IErc721Metadata>::interface_id()
         ));
@@ -193,8 +194,12 @@ mod tests {
         assert!(!contract.sender(alice).supports_interface(fake_interface_id));
     }
 
-    #[motsu::test]
-    fn constructor(contract: Contract<Erc721MetadataExample>, alice: Address) {
+    #[test]
+    fn constructor() {
+        let contract =
+            TestVMContract::<Erc721MetadataExample>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let name: String = "Erc721MetadataExample".to_string();
         let symbol: String = "OZ".to_string();
         contract.sender(alice).constructor(name.clone(), symbol.clone());

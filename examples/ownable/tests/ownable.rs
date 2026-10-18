@@ -1,11 +1,13 @@
 #![cfg(feature = "e2e")]
+#[path = "../../devnet_test_support.rs"]
+mod devnet_test_support;
 
-use abi::{Ownable, Ownable::OwnershipTransferred};
-use alloy::primitives::Address;
-use e2e::{
+use crate::devnet_test_support::{
     constructor, receipt, send, Account, Constructor,
     ContractInitializationError, EventExt, Revert,
 };
+use abi::{Ownable, Ownable::OwnershipTransferred};
+use alloy::primitives::Address;
 use eyre::Result;
 
 mod abi;
@@ -18,8 +20,10 @@ fn ctr(owner: Address) -> Constructor {
 // Integration Tests: Ownable
 // ============================================================================
 
-#[e2e::test]
-async fn constructs(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn constructs() -> Result<()> {
+    let alice = Account::new().await?;
+
     let alice_addr = alice.address();
     let receipt =
         alice.as_deployer().with_constructor(ctr(alice_addr)).deploy().await?;
@@ -30,13 +34,15 @@ async fn constructs(alice: Account) -> Result<()> {
         newOwner: alice_addr,
     }));
 
-    let Ownable::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, alice_addr);
     Ok(())
 }
 
-#[e2e::test]
-async fn rejects_zero_address_initial_owner(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn rejects_zero_address_initial_owner() -> Result<()> {
+    let alice = Account::new().await?;
+
     let err = alice
         .as_deployer()
         .with_constructor(ctr(Address::ZERO))
@@ -44,18 +50,18 @@ async fn rejects_zero_address_initial_owner(alice: Account) -> Result<()> {
         .await
         .expect_err("should not deploy due to `OwnableInvalidOwner`");
 
-    // TODO: assert the actual `OwnableInvalidOwner` error was returned once
-    // `StylusDeployer` is able to return the exact revert reason from
-    // constructors.
-    // assert!(err.reverted_with(Ownable::OwnableInvalidOwner { owner:
-    // Address::ZERO }));
+    // StylusDeployer reports this constructor failure without exposing its
+    // revert data.
     assert!(err.downcast_ref::<ContractInitializationError>().is_some());
 
     Ok(())
 }
 
-#[e2e::test]
-async fn transfers_ownership(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn transfers_ownership() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let alice_addr = alice.address();
     let bob_addr = bob.address();
 
@@ -73,17 +79,17 @@ async fn transfers_ownership(alice: Account, bob: Account) -> Result<()> {
         newOwner: bob_addr,
     }));
 
-    let Ownable::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, bob_addr);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn prevents_non_owners_from_transferring(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn prevents_non_owners_from_transferring() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let alice_addr = alice.address();
     let bob_addr = bob.address();
 
@@ -104,8 +110,10 @@ async fn prevents_non_owners_from_transferring(
     Ok(())
 }
 
-#[e2e::test]
-async fn guards_against_stuck_state(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn guards_against_stuck_state() -> Result<()> {
+    let alice = Account::new().await?;
+
     let alice_addr = alice.address();
     let contract_addr = alice
         .as_deployer()
@@ -119,14 +127,16 @@ async fn guards_against_stuck_state(alice: Account) -> Result<()> {
         .expect_err("should not transfer to Address::ZERO");
     err.reverted_with(Ownable::OwnableInvalidOwner { owner: Address::ZERO });
 
-    let Ownable::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, alice_addr);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn loses_ownership_after_renouncement(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn loses_ownership_after_renouncement() -> Result<()> {
+    let alice = Account::new().await?;
+
     let alice_addr = alice.address();
     let contract_addr = alice
         .as_deployer()
@@ -142,17 +152,17 @@ async fn loses_ownership_after_renouncement(alice: Account) -> Result<()> {
         newOwner: Address::ZERO,
     }));
 
-    let Ownable::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, Address::ZERO);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn prevents_non_owners_from_renouncement(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
+#[tokio::test]
+async fn prevents_non_owners_from_renouncement() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let alice_addr = alice.address();
     let bob_addr = bob.address();
 
@@ -170,7 +180,7 @@ async fn prevents_non_owners_from_renouncement(
         account: bob_addr,
     });
 
-    let Ownable::ownerReturn { owner } = contract.owner().call().await?;
+    let owner = contract.owner().call().await?;
     assert_eq!(owner, alice_addr);
 
     Ok(())

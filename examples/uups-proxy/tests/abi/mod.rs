@@ -40,6 +40,7 @@ sol!(
         error ERC20InvalidReceiver(address receiver);
         error ERC20InsufficientAllowance(address spender, uint256 allowance, uint256 needed);
         error ERC20InvalidSpender(address spender);
+        error OwnableUnauthorizedAccount(address account);
 
         #[derive(Debug, PartialEq)]
         event Transfer(address indexed from, address indexed to, uint256 value);
@@ -51,6 +52,8 @@ sol!(
         function UPGRADE_INTERFACE_VERSION() external view returns (string version);
         function initialize(address owner) external;
         function getVersion() external pure returns (uint32 version);
+        #[derive(Debug)]
+        function setVersion() external;
 
         // ERC1822 proxiable function
         #[derive(Debug)]

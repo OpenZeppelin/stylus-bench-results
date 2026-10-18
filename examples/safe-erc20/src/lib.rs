@@ -8,7 +8,6 @@ use openzeppelin_stylus::token::erc20::utils::safe_erc20::{
 use stylus_sdk::{
     abi::Bytes,
     alloy_primitives::{Address, U256},
-    evm,
     prelude::*,
 };
 
@@ -40,7 +39,7 @@ impl ISafeErc20 for SafeErc20Example {
         token: Address,
         to: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), safe_erc20::Error> {
         self.safe_erc20.safe_transfer(token, to, value)
     }
 
@@ -50,7 +49,7 @@ impl ISafeErc20 for SafeErc20Example {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), safe_erc20::Error> {
         self.safe_erc20.safe_transfer_from(token, from, to, value)
     }
 
@@ -65,10 +64,10 @@ impl ISafeErc20 for SafeErc20Example {
         // log the result so we can assert it in tests.
         if result {
             #[allow(deprecated)]
-            evm::log(True {});
+            self.vm().log(True {});
         } else {
             #[allow(deprecated)]
-            evm::log(False {});
+            self.vm().log(False {});
         }
         result
     }
@@ -86,10 +85,10 @@ impl ISafeErc20 for SafeErc20Example {
         // log the result so we can assert it in tests.
         if result {
             #[allow(deprecated)]
-            evm::log(True {});
+            self.vm().log(True {});
         } else {
             #[allow(deprecated)]
-            evm::log(False {});
+            self.vm().log(False {});
         }
         result
     }
@@ -99,7 +98,7 @@ impl ISafeErc20 for SafeErc20Example {
         token: Address,
         spender: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), safe_erc20::Error> {
         self.safe_erc20.safe_increase_allowance(token, spender, value)
     }
 
@@ -108,7 +107,7 @@ impl ISafeErc20 for SafeErc20Example {
         token: Address,
         spender: Address,
         requested_decrease: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), safe_erc20::Error> {
         self.safe_erc20.safe_decrease_allowance(
             token,
             spender,
@@ -121,7 +120,7 @@ impl ISafeErc20 for SafeErc20Example {
         token: Address,
         spender: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), safe_erc20::Error> {
         self.safe_erc20.force_approve(token, spender, value)
     }
 
@@ -131,7 +130,7 @@ impl ISafeErc20 for SafeErc20Example {
         to: Address,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), safe_erc20::Error> {
         self.safe_erc20.transfer_and_call_relaxed(token, to, value, data)
     }
 
@@ -142,7 +141,7 @@ impl ISafeErc20 for SafeErc20Example {
         to: Address,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), safe_erc20::Error> {
         self.safe_erc20
             .transfer_from_and_call_relaxed(token, from, to, value, data)
     }
@@ -153,7 +152,7 @@ impl ISafeErc20 for SafeErc20Example {
         spender: Address,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), safe_erc20::Error> {
         self.safe_erc20.approve_and_call_relaxed(token, spender, value, data)
     }
 }

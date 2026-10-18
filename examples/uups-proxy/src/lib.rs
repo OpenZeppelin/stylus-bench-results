@@ -102,18 +102,25 @@ impl UUPSProxyErc20Example {
         Ok(())
     }
 
-    fn mint(&mut self, to: Address, value: U256) -> Result<(), erc20::Error> {
-        self.erc20._mint(to, value)
+    fn mint(&mut self, to: Address, value: U256) -> Result<(), Vec<u8>> {
+        self.ownable.only_owner()?;
+        self.erc20._mint(to, value).map_err(Into::into)
     }
 
     /// Initializes the contract.
     fn initialize(&mut self, owner: Address) -> Result<(), Error> {
-        self.uups.set_version()?;
+        if self.uups.version.get() >= uups_upgradeable::VERSION_NUMBER {
+            return Err(Error::InvalidInitialization(
+                uups_upgradeable::InvalidInitialization {},
+            ));
+        }
         self.ownable.constructor(owner)?;
+        self.uups.set_version()?;
         Ok(())
     }
 
     fn set_version(&mut self) -> Result<(), Error> {
+        self.ownable.only_owner()?;
         Ok(self.uups.set_version()?)
     }
 
@@ -138,7 +145,7 @@ impl IErc20 for UUPSProxyErc20Example {
         &mut self,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer(to, value)
     }
 
@@ -147,7 +154,7 @@ impl IErc20 for UUPSProxyErc20Example {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer_from(from, to, value)
     }
 
@@ -159,7 +166,7 @@ impl IErc20 for UUPSProxyErc20Example {
         &mut self,
         spender: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.approve(spender, value)
     }
 }
@@ -208,5 +215,38 @@ impl IErc1822Proxiable for UUPSProxyErc20Example {
     #[selector(name = "proxiableUUID")]
     fn proxiable_uuid(&self) -> Result<B256, Vec<u8>> {
         self.uups.proxiable_uuid()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use stylus_test::{TestVM, TestVMBuilder};
+
+    use super::*;
+
+    fn proxy_storage(tag: u8) -> (TestVM, UUPSProxyErc20Example) {
+        let vm = TestVMBuilder::new()
+            .contract_address(Address::repeat_byte(tag))
+            .build();
+        let contract = UUPSProxyErc20Example::from(&vm);
+        (vm, contract)
+    }
+
+    #[test]
+    fn initializer_rejects_reinitialization() {
+        let alice = Address::repeat_byte(1);
+        let bob = Address::repeat_byte(2);
+        let (vm, mut contract) = proxy_storage(101);
+
+        vm.set_sender(alice);
+        contract.initialize(alice).expect("initialization should succeed");
+
+        vm.set_sender(bob);
+        let error = contract
+            .initialize(bob)
+            .expect_err("reinitialization should revert");
+
+        assert!(matches!(error, Error::InvalidInitialization(_)));
+        assert_eq!(alice, contract.owner());
     }
 }

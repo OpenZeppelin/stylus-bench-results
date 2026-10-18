@@ -48,7 +48,7 @@ pub trait IErc20Metadata: IErc165 {
     /// function ([`DEFAULT_DECIMALS`]), unless it's overridden.
     ///
     /// NOTE: This information is only used for *display* purposes: in
-    /// no way it affects any of the arithmetic of the contract, including
+    /// no way it affects any of the arithmetic of the  including
     /// [`super::super::IErc20::balance_of`] and
     /// [`super::super::IErc20::transfer`].
     ///
@@ -100,22 +100,26 @@ impl IErc165 for Erc20Metadata {
 
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::Contract;
-    use stylus_sdk::{alloy_primitives::Address, prelude::*};
+    use crate::test_support::{test_address, TestContract as TestVMContract};
+    use stylus_sdk::prelude::*;
 
     use super::*;
 
     unsafe impl TopLevelStorage for Erc20Metadata {}
 
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual = <Erc20Metadata as IErc20Metadata>::interface_id();
         let expected: B32 = 0xa219a025_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
-    fn supports_interface(contract: Contract<Erc20Metadata>, alice: Address) {
+    #[test]
+    fn supports_interface() {
+        let contract =
+            TestVMContract::<Erc20Metadata>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         assert!(contract.sender(alice).supports_interface(
             <Erc20Metadata as IErc20Metadata>::interface_id()
         ));

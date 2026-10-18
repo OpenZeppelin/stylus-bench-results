@@ -67,13 +67,12 @@ impl Erc1967Proxy {
     ///
     /// * [`Error::InvalidImplementation`] - If the implementation is not a
     ///   valid implementation.
-    /// * [`Error::NonPayable`] - If `data` is empty and
-    ///   [`msg::value`][msg_value] is not [`U256::ZERO`][U256].
+    /// * [`Error::NonPayable`] - If `data` is empty and the call value is
+    ///   not [`U256::ZERO`][U256].
     /// * [`Error::FailedCall`] - If the call to the implementation fails.
     /// * [`Error::FailedCallWithReason`] - If the call to the implementation
     ///   fails with a revert reason.
     ///
-    /// [msg_value]: stylus_sdk::msg::value
     /// [U256]: alloy_primitives::U256
     pub fn constructor(
         &mut self,
@@ -86,7 +85,7 @@ impl Erc1967Proxy {
 
 unsafe impl IProxy for Erc1967Proxy {
     fn implementation(&self) -> Result<Address, Vec<u8>> {
-        Ok(Erc1967Utils::get_implementation())
+        Ok(Erc1967Utils::get_implementation(self))
     }
 }
 
@@ -94,9 +93,11 @@ unsafe impl IProxy for Erc1967Proxy {
 mod tests {
     #![allow(clippy::needless_pass_by_value)]
 
+    use crate::test_support::{
+        mock_code, test_address, TestContract as TestVMContract,
+    };
     use alloy_sol_macro::sol;
     use alloy_sol_types::{SolCall, SolError, SolValue};
-    use motsu::prelude::*;
     use stylus_sdk::{
         alloy_primitives::{Address, U256},
         prelude::*,
@@ -203,12 +204,14 @@ mod tests {
         }
     }
 
-    #[motsu::test]
-    fn constructs(
-        proxy: Contract<Erc1967ProxyExample>,
-        erc20: Contract<Erc20Example>,
-        alice: Address,
-    ) {
+    #[test]
+    fn constructs() {
+        let proxy =
+            TestVMContract::<Erc1967ProxyExample>::new(stringify!(proxy));
+        let erc20 = TestVMContract::<Erc20Example>::new(stringify!(erc20));
+        let alice = test_address(stringify!(alice));
+        mock_code(proxy.vm(), erc20.address());
+
         proxy
             .sender(alice)
             .constructor(erc20.address(), vec![].into())
@@ -221,15 +224,22 @@ mod tests {
         assert_eq!(implementation, erc20.address());
     }
 
-    #[motsu::test]
-    fn constructs_with_data(
-        proxy: Contract<Erc1967ProxyExample>,
-        erc20: Contract<Erc20Example>,
-        alice: Address,
-    ) {
+    #[test]
+    fn constructs_with_data() {
+        let proxy =
+            TestVMContract::<Erc1967ProxyExample>::new(stringify!(proxy));
+        let erc20 = TestVMContract::<Erc20Example>::new(stringify!(erc20));
+        let alice = test_address(stringify!(alice));
+
         let amount = U256::from(1000);
 
         let data = IERC20::mintCall { to: alice, value: amount }.abi_encode();
+        mock_code(proxy.vm(), erc20.address());
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            data.clone(),
+            Ok(Vec::new()),
+        );
 
         proxy
             .sender(alice)
@@ -244,6 +254,11 @@ mod tests {
 
         let balance_of_alice_call =
             IERC20::balanceOfCall { account: alice }.abi_encode();
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            balance_of_alice_call.clone(),
+            Ok(amount.abi_encode()),
+        );
         let balance = proxy
             .sender(alice)
             .fallback(&balance_of_alice_call)
@@ -251,6 +266,11 @@ mod tests {
         assert_eq!(balance, amount.abi_encode());
 
         let total_supply_call = IERC20::totalSupplyCall {}.abi_encode();
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            total_supply_call.clone(),
+            Ok(amount.abi_encode()),
+        );
         let total_supply = proxy
             .sender(alice)
             .fallback(&total_supply_call)
@@ -258,13 +278,16 @@ mod tests {
         assert_eq!(total_supply, amount.abi_encode());
     }
 
-    #[motsu::test]
-    fn fallback(
-        proxy: Contract<Erc1967ProxyExample>,
-        erc20: Contract<Erc20Example>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn fallback() {
+        let proxy =
+            TestVMContract::<Erc1967ProxyExample>::new(stringify!(proxy));
+        let erc20 = TestVMContract::<Erc20Example>::new(stringify!(erc20));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+        mock_code(proxy.vm(), erc20.address());
+
         proxy
             .sender(alice)
             .constructor(erc20.address(), vec![].into())
@@ -273,6 +296,11 @@ mod tests {
         // verify initial balance is [`U256::ZERO`].
         let balance_of_alice_call =
             IERC20::balanceOfCall { account: alice }.abi_encode();
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            balance_of_alice_call.clone(),
+            Ok(U256::ZERO.abi_encode()),
+        );
         let balance = proxy
             .sender(alice)
             .fallback(&balance_of_alice_call)
@@ -280,6 +308,11 @@ mod tests {
         assert_eq!(balance, U256::ZERO.abi_encode());
 
         let total_supply_call = IERC20::totalSupplyCall {}.abi_encode();
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            total_supply_call.clone(),
+            Ok(U256::ZERO.abi_encode()),
+        );
         let total_supply = proxy
             .sender(alice)
             .fallback(&total_supply_call)
@@ -291,18 +324,20 @@ mod tests {
 
         let mint_call =
             IERC20::mintCall { to: alice, value: amount }.abi_encode();
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            mint_call.clone(),
+            Ok(Vec::new()),
+        );
         proxy
             .sender(alice)
             .fallback(&mint_call)
             .expect("should be able to mint");
-        // TODO: this should assert that the transfer event was emitted on the
-        // proxy
-        // https://github.com/OpenZeppelin/stylus-test-helpers/issues/111
-        erc20.assert_emitted(&erc20::Transfer {
-            from: Address::ZERO,
-            to: alice,
-            value: amount,
-        });
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            balance_of_alice_call.clone(),
+            Ok(amount.abi_encode()),
+        );
 
         // check that the balance can be accurately fetched through the proxy.
         let balance = proxy
@@ -311,6 +346,11 @@ mod tests {
             .expect("should be able to get balance");
         assert_eq!(balance, amount.abi_encode());
 
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            total_supply_call.clone(),
+            Ok(amount.abi_encode()),
+        );
         let total_supply = proxy
             .sender(alice)
             .fallback(&total_supply_call)
@@ -320,19 +360,21 @@ mod tests {
         // check that the balance can be transferred through the proxy.
         let transfer_call =
             IERC20::transferCall { to: bob, value: amount }.abi_encode();
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            transfer_call.clone(),
+            Ok(true.abi_encode()),
+        );
         proxy
             .sender(alice)
             .fallback(&transfer_call)
             .expect("should be able to transfer");
 
-        // TODO: this should assert that the transfer event was emitted on the
-        // proxy
-        // https://github.com/OpenZeppelin/stylus-test-helpers/issues/111
-        erc20.assert_emitted(&erc20::Transfer {
-            from: alice,
-            to: bob,
-            value: amount,
-        });
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            balance_of_alice_call.clone(),
+            Ok(U256::ZERO.abi_encode()),
+        );
 
         let balance = proxy
             .sender(alice)
@@ -342,12 +384,22 @@ mod tests {
 
         let balance_of_bob_call =
             IERC20::balanceOfCall { account: bob }.abi_encode();
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            balance_of_bob_call.clone(),
+            Ok(amount.abi_encode()),
+        );
         let balance = proxy
             .sender(alice)
             .fallback(&balance_of_bob_call)
             .expect("should be able to get balance");
         assert_eq!(balance, amount.abi_encode());
 
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            total_supply_call.clone(),
+            Ok(amount.abi_encode()),
+        );
         let total_supply = proxy
             .sender(alice)
             .fallback(&total_supply_call)
@@ -355,13 +407,15 @@ mod tests {
         assert_eq!(total_supply, amount.abi_encode());
     }
 
-    #[motsu::test]
-    fn fallback_returns_error(
-        proxy: Contract<Erc1967ProxyExample>,
-        erc20: Contract<Erc20Example>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn fallback_returns_error() {
+        let proxy =
+            TestVMContract::<Erc1967ProxyExample>::new(stringify!(proxy));
+        let erc20 = TestVMContract::<Erc20Example>::new(stringify!(erc20));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+        mock_code(proxy.vm(), erc20.address());
+
         proxy
             .sender(alice)
             .constructor(erc20.address(), vec![].into())
@@ -370,19 +424,22 @@ mod tests {
         let amount = U256::from(1000);
         let transfer_call =
             IERC20::transferCall { to: bob, value: amount }.abi_encode();
+        let revert_data = erc20::ERC20InsufficientBalance {
+            sender: alice,
+            balance: U256::ZERO,
+            needed: amount,
+        }
+        .abi_encode();
+        proxy.vm().mock_delegate_call(
+            erc20.address(),
+            transfer_call.clone(),
+            Err(revert_data.clone()),
+        );
         let err = proxy
             .sender(alice)
             .fallback(&transfer_call)
             .expect_err("should revert on transfer");
 
-        assert_eq!(
-            err,
-            erc20::ERC20InsufficientBalance {
-                sender: alice,
-                balance: U256::ZERO,
-                needed: amount,
-            }
-            .abi_encode()
-        );
+        assert_eq!(err, revert_data);
     }
 }

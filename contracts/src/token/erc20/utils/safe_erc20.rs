@@ -6,7 +6,7 @@
 //! successful.
 //!
 //! To use this library, you can add a `#[implements(ISafeErc20<Error =
-//! Error>)]` attribute to your contract, which allows you to call the safe
+//! Error>)]` attribute to your  which allows you to call the safe
 //! operations as `contract.safe_transfer(token_addr, ...)`, etc.
 
 use alloc::{vec, vec::Vec};
@@ -15,13 +15,7 @@ use alloy_primitives::{aliases::B32, Address, U256};
 use alloy_sol_types::{sol_data::Bool, SolCall, SolType};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
-use stylus_sdk::{
-    abi::Bytes,
-    call::{MethodError, RawCall},
-    contract, function_selector,
-    prelude::*,
-    types::AddressVM,
-};
+use stylus_sdk::{abi::Bytes, call::RawCall, function_selector, prelude::*};
 
 use crate::{
     token::erc20::interface::Erc20Interface,
@@ -127,9 +121,8 @@ pub trait ISafeErc20 {
     ///
     /// # Errors
     ///
-    ///  * [`Error::SafeErc20FailedOperation`] - If the `token` address is not a
-    ///    contract , the contract fails to execute the call or the call returns
-    ///    value that is not `true`.
+    /// * [`Error::SafeErc20FailedOperation`] - If `token` has no code, the
+    ///   external call fails, or the call returns `false`.
     fn safe_transfer(
         &mut self,
         token: Address,
@@ -151,9 +144,8 @@ pub trait ISafeErc20 {
     ///
     /// # Errors
     ///
-    ///  * [`Error::SafeErc20FailedOperation`] - If the `token` address is not a
-    ///    contract , the contract fails to execute the call or the call returns
-    ///    value that is not `true`.
+    /// * [`Error::SafeErc20FailedOperation`] - If `token` has no code, the
+    ///   external call fails, or the call returns `false`.
     fn safe_transfer_from(
         &mut self,
         token: Address,
@@ -209,9 +201,8 @@ pub trait ISafeErc20 {
     ///
     /// # Errors
     ///
-    /// * [`Error::SafeErc20FailedOperation`] - If the `token` address is not a
-    ///   contract, the contract fails to execute the call or the call returns
-    ///   value that is not `true`.
+    /// * [`Error::SafeErc20FailedOperation`] - If `token` has no code, the
+    ///   external call fails, or the call returns `false`.
     ///
     /// # Panics
     ///
@@ -236,9 +227,8 @@ pub trait ISafeErc20 {
     ///
     /// # Errors
     ///
-    /// * [`Error::SafeErc20FailedOperation`] - If the `token` address is not a
-    ///   contract, the contract fails to execute the call or the call returns
-    ///   value that is not `true`.
+    /// * [`Error::SafeErc20FailedOperation`] - If `token` has no code, the
+    ///   external call fails, or the call returns `false`.
     /// * [`Error::SafeErc20FailedDecreaseAllowance`] - If the current allowance
     ///   is less than `requested_decrease`.
     fn safe_decrease_allowance(
@@ -262,9 +252,8 @@ pub trait ISafeErc20 {
     ///
     /// # Errors
     ///
-    /// * [`Error::SafeErc20FailedOperation`] - If the `token` address is not a
-    ///   contract, the contract fails to execute the call or the call returns
-    ///   value that is not `true`.
+    /// * [`Error::SafeErc20FailedOperation`] - If `token` has no code, the
+    ///   external call fails, or the call returns `false`.
     fn force_approve(
         &mut self,
         token: Address,
@@ -289,9 +278,8 @@ pub trait ISafeErc20 {
     ///
     /// # Errors
     ///
-    ///  * [`Error::SafeErc20FailedOperation`] - If the `token` address is not a
-    ///    contract, the contract fails to execute the call or the call returns
-    ///    value that is not `true`.
+    /// * [`Error::SafeErc20FailedOperation`] - If `token` has no code, the
+    ///   external call fails, or the call returns `false`.
     fn transfer_and_call_relaxed(
         &mut self,
         token: Address,
@@ -319,9 +307,8 @@ pub trait ISafeErc20 {
     ///
     /// # Errors
     ///
-    ///  * [`Error::SafeErc20FailedOperation`] - If the `token` address is not a
-    ///    contract , the contract fails to execute the call or the call returns
-    ///    value that is not `true`.
+    /// * [`Error::SafeErc20FailedOperation`] - If `token` has no code, the
+    ///   external call fails, or the call returns `false`.
     fn transfer_from_and_call_relaxed(
         &mut self,
         token: Address,
@@ -347,9 +334,8 @@ pub trait ISafeErc20 {
     ///
     /// # Errors
     ///
-    ///  * [`Error::SafeErc20FailedOperation`] - If the `token` address is not a
-    ///    contract , the contract fails to execute the call or the call returns
-    ///    value that is not `true`.
+    /// * [`Error::SafeErc20FailedOperation`] - If `token` has no code, the
+    ///   external call fails, or the call returns `false`.
     fn approve_and_call_relaxed(
         &mut self,
         token: Address,
@@ -372,10 +358,10 @@ impl ISafeErc20 for SafeErc20 {
         token: Address,
         to: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let call = IERC20::transferCall { to, value };
 
-        Self::call_optional_return(token, &call)
+        self.call_optional_return(token, &call)
     }
 
     fn safe_transfer_from(
@@ -384,10 +370,10 @@ impl ISafeErc20 for SafeErc20 {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let call = IERC20::transferFromCall { from, to, value };
 
-        Self::call_optional_return(token, &call)
+        self.call_optional_return(token, &call)
     }
 
     fn try_safe_transfer(
@@ -414,7 +400,7 @@ impl ISafeErc20 for SafeErc20 {
         token: Address,
         spender: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let current_allowance = self.allowance(token, spender)?;
         let new_allowance = current_allowance
             .checked_add(value)
@@ -427,7 +413,7 @@ impl ISafeErc20 for SafeErc20 {
         token: Address,
         spender: Address,
         requested_decrease: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let current_allowance = self.allowance(token, spender)?;
 
         if current_allowance < requested_decrease {
@@ -451,11 +437,11 @@ impl ISafeErc20 for SafeErc20 {
         token: Address,
         spender: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let approve_call = IERC20::approveCall { spender, value };
 
         // Try performing the approval with the desired value.
-        if Self::call_optional_return(token, &approve_call).is_ok() {
+        if self.call_optional_return(token, &approve_call).is_ok() {
             return Ok(());
         }
 
@@ -463,8 +449,8 @@ impl ISafeErc20 for SafeErc20 {
         // approval.
         let reset_approval_call =
             IERC20::approveCall { spender, value: U256::ZERO };
-        Self::call_optional_return(token, &reset_approval_call)?;
-        Self::call_optional_return(token, &approve_call)
+        self.call_optional_return(token, &reset_approval_call)?;
+        self.call_optional_return(token, &approve_call)
     }
 
     fn transfer_and_call_relaxed(
@@ -473,19 +459,21 @@ impl ISafeErc20 for SafeErc20 {
         to: Address,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
-        if !to.has_code() {
+    ) -> Result<(), Error> {
+        if self.vm().code_size(to) == 0 {
             return self.safe_transfer(token, to, value);
         }
 
-        if !token.has_code() {
+        if self.vm().code_size(token) == 0 {
             return Err(Error::SafeErc20FailedOperation(
                 SafeErc20FailedOperation { token },
             ));
         }
 
+        let vm = self.vm().clone();
         match Erc1363Interface::new(token).transfer_and_call(
-            self,
+            &vm,
+            Call::new_mutating(self),
             to,
             value,
             data.to_vec().into(),
@@ -506,19 +494,21 @@ impl ISafeErc20 for SafeErc20 {
         to: Address,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
-        if !to.has_code() {
+    ) -> Result<(), Error> {
+        if self.vm().code_size(to) == 0 {
             return self.safe_transfer_from(token, from, to, value);
         }
 
-        if !token.has_code() {
+        if self.vm().code_size(token) == 0 {
             return Err(Error::SafeErc20FailedOperation(
                 SafeErc20FailedOperation { token },
             ));
         }
 
+        let vm = self.vm().clone();
         match Erc1363Interface::new(token).transfer_from_and_call(
-            self,
+            &vm,
+            Call::new_mutating(self),
             from,
             to,
             value,
@@ -539,19 +529,21 @@ impl ISafeErc20 for SafeErc20 {
         spender: Address,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
-        if !spender.has_code() {
+    ) -> Result<(), Error> {
+        if self.vm().code_size(spender) == 0 {
             return self.force_approve(token, spender, value);
         }
 
-        if !token.has_code() {
+        if self.vm().code_size(token) == 0 {
             return Err(Error::SafeErc20FailedOperation(
                 SafeErc20FailedOperation { token },
             ));
         }
 
+        let vm = self.vm().clone();
         match Erc1363Interface::new(token).approve_and_call(
-            self,
+            &vm,
+            Call::new_mutating(self),
             spender,
             value,
             data.to_vec().into(),
@@ -578,21 +570,21 @@ impl SafeErc20 {
     ///
     /// # Errors
     ///
-    /// * [`Error::SafeErc20FailedOperation`] - If the `token` address is not a
-    ///   contract, the contract fails to execute the call or the call returns
-    ///   value that is not `true`.
+    /// * [`Error::SafeErc20FailedOperation`] - If `token` has no code, the
+    ///   external call fails, or the call returns `false`.
     fn call_optional_return(
+        &mut self,
         token: Address,
         call: &impl SolCall,
     ) -> Result<(), Error> {
-        if !token.has_code() {
+        if self.vm().code_size(token) == 0 {
             return Err(Error::SafeErc20FailedOperation(
                 SafeErc20FailedOperation { token },
             ));
         }
 
         let result = unsafe {
-            RawCall::new()
+            RawCall::new(self.vm())
                 .limit_return_data(0, BOOL_TYPE_SIZE)
                 .flush_storage_cache()
                 .call(token, &call.abi_encode())
@@ -601,8 +593,7 @@ impl SafeErc20 {
         match result {
             Ok(data)
                 if data.is_empty()
-                    || Bool::abi_decode(&data, true)
-                        .is_ok_and(|success| success) =>
+                    || Bool::abi_decode(&data).is_ok_and(|success| success) =>
             {
                 Ok(())
             }
@@ -628,18 +619,30 @@ impl SafeErc20 {
         token: Address,
         spender: Address,
     ) -> Result<U256, Error> {
-        if !Address::has_code(&token) {
+        if self.vm().code_size(token) == 0 {
             return Err(SafeErc20FailedOperation { token }.into());
         }
 
         let erc20 = Erc20Interface::new(token);
-        erc20.allowance(self, contract::address(), spender).map_err(|_e| {
-            Error::SafeErc20FailedOperation(SafeErc20FailedOperation { token })
-        })
+        erc20
+            .allowance(
+                self.vm(),
+                Call::new(),
+                self.vm().contract_address(),
+                spender,
+            )
+            .map_err(|_e| {
+                Error::SafeErc20FailedOperation(SafeErc20FailedOperation {
+                    token,
+                })
+            })
     }
 }
 
 impl IErc165 for SafeErc20 {
+    #[cfg(not(feature = "contract-client-gen"))]
+    fn __stylus_trait_and_impl_must_be_tagged_with_public_macro(&self) {}
+
     fn supports_interface(&self, interface_id: B32) -> bool {
         <Self as ISafeErc20>::interface_id() == interface_id
             || <Self as IErc165>::interface_id() == interface_id
@@ -647,13 +650,16 @@ impl IErc165 for SafeErc20 {
 }
 
 #[cfg_attr(coverage_nightly, coverage(off))]
+use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
+    use crate::test_support::{
+        mock_call, mock_code, test_address, TestContract as TestVMContract,
+    };
     use alloy_primitives::{uint, Address};
-    use motsu::prelude::*;
+    use alloy_sol_types::SolValue;
 
     use super::*;
-    use crate::token::erc20::{Erc20, IErc20};
 
     #[storage]
     #[entrypoint]
@@ -772,70 +778,64 @@ mod tests {
         }
     }
 
-    #[motsu::test]
-    fn try_safe_transfer(
-        contract: Contract<SafeErc20Example>,
-        erc20: Contract<Erc20>,
-        alice: Address,
-    ) {
-        let token = erc20.address();
-        let value = U256::from(1);
-        erc20.sender(alice)._mint(contract.address(), value).unwrap();
+    #[test]
+    fn try_safe_transfer() {
+        let contract =
+            TestVMContract::<SafeErc20Example>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
 
-        let balance = erc20.sender(alice).balance_of(contract.address());
-        assert_eq!(balance, value);
-        let balance = erc20.sender(alice).balance_of(alice);
-        assert_eq!(balance, U256::ZERO);
+        let token = test_address(stringify!(erc20));
+        let value = U256::from(1);
+        mock_code(contract.vm(), token);
+        mock_call(
+            contract.vm(),
+            token,
+            "transfer(address,uint256)",
+            (alice, value),
+            Ok(true.abi_encode()),
+        );
 
         let result =
             contract.sender(alice).try_safe_transfer(token, alice, value);
         assert!(result);
-
-        let balance = erc20.sender(alice).balance_of(contract.address());
-        assert_eq!(balance, U256::ZERO);
-        let balance = erc20.sender(alice).balance_of(alice);
-        assert_eq!(balance, value);
     }
 
-    #[motsu::test]
-    fn try_safe_transfer_from(
-        contract: Contract<SafeErc20Example>,
-        erc20: Contract<Erc20>,
-        alice: Address,
-        bob: Address,
-    ) {
-        let token = erc20.address();
-        let value = U256::from(1);
-        erc20.sender(alice)._mint(alice, value).unwrap();
-        erc20.sender(alice).approve(contract.address(), value).unwrap();
+    #[test]
+    fn try_safe_transfer_from() {
+        let contract =
+            TestVMContract::<SafeErc20Example>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
 
-        let balance = erc20.sender(alice).balance_of(alice);
-        assert_eq!(balance, value);
-        let balance = erc20.sender(alice).balance_of(bob);
-        assert_eq!(balance, U256::ZERO);
+        let token = test_address(stringify!(erc20));
+        let value = U256::from(1);
+        mock_code(contract.vm(), token);
+        mock_call(
+            contract.vm(),
+            token,
+            "transferFrom(address,address,uint256)",
+            (alice, bob, value),
+            Ok(true.abi_encode()),
+        );
 
         let result = contract
             .sender(alice)
             .try_safe_transfer_from(token, alice, bob, value);
         assert!(result);
-
-        let balance = erc20.sender(alice).balance_of(alice);
-        assert_eq!(balance, U256::ZERO);
-        let balance = erc20.sender(alice).balance_of(bob);
-        assert_eq!(balance, value);
     }
 
-    #[motsu::test]
-    fn safe_decrease_allowance_reverts_on_no_code_address(
-        contract: Contract<SafeErc20Example>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn safe_decrease_allowance_reverts_on_no_code_address() {
+        let contract =
+            TestVMContract::<SafeErc20Example>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         let no_code_addr = alice;
         let err = contract
             .sender(alice)
             .safe_decrease_allowance(no_code_addr, bob, uint!(1_U256))
-            .motsu_expect_err("should revert on no code address");
+            .expect_err("should revert on no code address");
         assert!(matches!(
         err,
         Error::SafeErc20FailedOperation(
@@ -845,17 +845,18 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn safe_increase_allowance_reverts_on_no_code_address(
-        contract: Contract<SafeErc20Example>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn safe_increase_allowance_reverts_on_no_code_address() {
+        let contract =
+            TestVMContract::<SafeErc20Example>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         let no_code_addr = alice;
         let err = contract
             .sender(alice)
             .safe_increase_allowance(no_code_addr, bob, uint!(1_U256))
-            .motsu_expect_err("should revert on no code address");
+            .expect_err("should revert on no code address");
         assert!(matches!(
         err,
         Error::SafeErc20FailedOperation(

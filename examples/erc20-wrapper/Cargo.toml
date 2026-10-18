@@ -15,8 +15,6 @@ stylus-sdk.workspace = true
 alloy.workspace = true
 eyre.workspace = true
 tokio.workspace = true
-e2e.workspace = true
-
 [features]
 e2e = []
 export-abi = ["openzeppelin-stylus/export-abi"]
@@ -27,3 +25,5 @@ crate-type = ["lib", "cdylib"]
 [[bin]]
 name = "erc20-wrapper-example"
 path = "src/main.rs"
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("contract-client-gen"))'] }

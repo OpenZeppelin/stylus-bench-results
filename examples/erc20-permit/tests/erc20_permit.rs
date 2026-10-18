@@ -1,5 +1,10 @@
 #![cfg(feature = "e2e")]
+#[path = "../../devnet_test_support.rs"]
+mod devnet_test_support;
 
+use crate::devnet_test_support::{
+    receipt, send, watch, Account, EventExt, Revert,
+};
 use abi::Erc20Permit;
 use alloy::{
     primitives::{keccak256, Address, B256, U256},
@@ -7,7 +12,6 @@ use alloy::{
     sol_types::SolType,
 };
 use alloy_primitives::uint;
-use e2e::{receipt, send, watch, Account, EventExt, Revert};
 use eyre::Result;
 mod abi;
 
@@ -28,12 +32,12 @@ type PermitStructHashTuple = sol! {
 
 macro_rules! domain_separator {
     ($contract:expr) => {{
-        let Erc20Permit::DOMAIN_SEPARATORReturn { domainSeparator } = $contract
+        let domain_separator = $contract
             .DOMAIN_SEPARATOR()
             .call()
             .await
             .expect("should return `DOMAIN_SEPARATOR`");
-        B256::from_slice(domainSeparator.as_slice())
+        B256::from_slice(domain_separator.as_slice())
     }};
 }
 
@@ -76,12 +80,13 @@ fn to_non_eip155_v(v: bool) -> u8 {
 // Integration Tests: ERC-20 Permit Extension
 // ============================================================================
 
-#[e2e::test]
-async fn error_when_expired_deadline_for_permit(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn error_when_expired_deadline_for_permit() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract_alice = Erc20Permit::new(contract_addr, &alice.wallet);
     let alice_addr = alice.address();
     let bob_addr = bob.address();
@@ -122,9 +127,13 @@ async fn error_when_expired_deadline_for_permit(
     Ok(())
 }
 
-#[e2e::test]
-async fn permit_works(alice: Account, bob: Account) -> Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn permit_works() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract_alice = Erc20Permit::new(contract_addr, &alice.wallet);
     let alice_addr = alice.address();
     let bob_addr = bob.address();
@@ -148,10 +157,9 @@ async fn permit_works(alice: Account, bob: Account) -> Result<()> {
         ))
         .await;
 
-    let Erc20Permit::noncesReturn { nonce: initial_nonce } =
-        contract_alice.nonces(alice_addr).call().await?;
+    let initial_nonce = contract_alice.nonces(alice_addr).call().await?;
 
-    let Erc20Permit::allowanceReturn { allowance: initial_allowance } =
+    let initial_allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     let receipt = receipt!(contract_alice.permit(
@@ -170,31 +178,27 @@ async fn permit_works(alice: Account, bob: Account) -> Result<()> {
         value: balance,
     }));
 
-    let Erc20Permit::allowanceReturn { allowance } =
+    let allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     assert_eq!(initial_allowance + balance, allowance);
 
-    let Erc20Permit::noncesReturn { nonce } =
-        contract_alice.nonces(alice_addr).call().await?;
+    let nonce = contract_alice.nonces(alice_addr).call().await?;
 
     assert_eq!(initial_nonce + uint!(1_U256), nonce);
 
     let contract_bob = Erc20Permit::new(contract_addr, &bob.wallet);
     let value = balance - uint!(1_U256);
-    let Erc20Permit::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20Permit::balanceOfReturn { balance: initial_bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
+    let initial_bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
 
     let receipt =
         receipt!(contract_bob.transferFrom(alice_addr, bob_addr, value))?;
 
-    let Erc20Permit::balanceOfReturn { balance: alice_balance } =
-        contract_alice.balanceOf(alice_addr).call().await?;
-    let Erc20Permit::balanceOfReturn { balance: bob_balance } =
-        contract_alice.balanceOf(bob_addr).call().await?;
-    let Erc20Permit::allowanceReturn { allowance } =
+    let alice_balance = contract_alice.balanceOf(alice_addr).call().await?;
+    let bob_balance = contract_alice.balanceOf(bob_addr).call().await?;
+    let allowance =
         contract_alice.allowance(alice_addr, bob_addr).call().await?;
 
     assert!(receipt.emits(Erc20Permit::Transfer {
@@ -210,12 +214,13 @@ async fn permit_works(alice: Account, bob: Account) -> Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn permit_rejects_reused_signature(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn permit_rejects_reused_signature() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract_alice = Erc20Permit::new(contract_addr, &alice.wallet);
     let alice_addr = alice.address();
     let bob_addr = bob.address();
@@ -285,12 +290,13 @@ async fn permit_rejects_reused_signature(
     Ok(())
 }
 
-#[e2e::test]
-async fn permit_rejects_invalid_signature(
-    alice: Account,
-    bob: Account,
-) -> Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn permit_rejects_invalid_signature() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract_alice = Erc20Permit::new(contract_addr, &alice.wallet);
     let alice_addr = alice.address();
     let bob_addr = bob.address();

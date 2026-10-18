@@ -13,8 +13,6 @@ use alloy_primitives::{uint, Address, U256, U8};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
 use stylus_sdk::{
-    call::{Call, MethodError},
-    contract, evm, msg,
     prelude::*,
     storage::{StorageAddress, StorageU8},
 };
@@ -658,7 +656,7 @@ impl Erc4626 {
         let asset = self.asset();
         let erc20 = Erc20Interface::new(asset);
         erc20
-            .balance_of(self, contract::address())
+            .balance_of(self.vm(), Call::new(), self.vm().contract_address())
             .map_err(|_| InvalidAsset { asset }.into())
     }
 
@@ -771,7 +769,7 @@ impl Erc4626 {
 
         let shares = self.preview_deposit(assets, erc20)?;
 
-        self._deposit(msg::sender(), receiver, assets, shares, erc20)?;
+        self._deposit(self.vm().msg_sender(), receiver, assets, shares, erc20)?;
 
         Ok(shares)
     }
@@ -795,7 +793,7 @@ impl Erc4626 {
         }
 
         let assets = self.preview_mint(shares, erc20)?;
-        self._deposit(msg::sender(), receiver, assets, shares, erc20)?;
+        self._deposit(self.vm().msg_sender(), receiver, assets, shares, erc20)?;
 
         Ok(assets)
     }
@@ -818,7 +816,14 @@ impl Erc4626 {
         }
 
         let shares = self.preview_withdraw(assets, erc20)?;
-        self._withdraw(msg::sender(), receiver, owner, assets, shares, erc20)?;
+        self._withdraw(
+            self.vm().msg_sender(),
+            receiver,
+            owner,
+            assets,
+            shares,
+            erc20,
+        )?;
 
         Ok(shares)
     }
@@ -843,7 +848,14 @@ impl Erc4626 {
 
         let assets = self.preview_redeem(shares, erc20)?;
 
-        self._withdraw(msg::sender(), receiver, owner, assets, shares, erc20)?;
+        self._withdraw(
+            self.vm().msg_sender(),
+            receiver,
+            owner,
+            assets,
+            shares,
+            erc20,
+        )?;
 
         Ok(assets)
     }
@@ -1032,13 +1044,18 @@ impl Erc4626 {
         self.safe_erc20.safe_transfer_from(
             self.asset(),
             caller,
-            contract::address(),
+            self.vm().contract_address(),
             assets,
         )?;
 
         erc20._mint(receiver, shares)?;
 
-        evm::log(Deposit { sender: caller, owner: receiver, assets, shares });
+        self.vm().log(Deposit {
+            sender: caller,
+            owner: receiver,
+            assets,
+            shares,
+        });
 
         Ok(())
     }
@@ -1073,9 +1090,11 @@ impl Erc4626 {
         shares: U256,
         erc20: &mut Erc20,
     ) -> Result<(), Error> {
-        if caller != owner {
-            erc20._spend_allowance(owner, caller, shares)?;
-        }
+        let remaining_allowance = if caller == owner {
+            None
+        } else {
+            Some(erc20._allowance_after_spending(owner, caller, shares)?)
+        };
 
         // If asset() is ERC-777, `transfer` can trigger a reentrancy AFTER the
         // transfer happens through the `tokens_received` hook. On the other
@@ -1087,10 +1106,21 @@ impl Erc4626 {
         // assets are transferred, which is a valid state.
 
         erc20._burn(owner, shares)?;
+        if let Some(remaining_allowance) = remaining_allowance {
+            erc20._write_spent_allowance(owner, caller, remaining_allowance)?;
+        }
 
+        // If this external transfer fails, callers must propagate the error
+        // for the EVM to revert the prior share burn and allowance update.
         self.safe_erc20.safe_transfer(self.asset(), receiver, assets)?;
 
-        evm::log(Withdraw { sender: caller, receiver, owner, assets, shares });
+        self.vm().log(Withdraw {
+            sender: caller,
+            receiver,
+            owner,
+            assets,
+            shares,
+        });
 
         Ok(())
     }
@@ -1110,25 +1140,17 @@ impl Erc4626 {
     /// Solidity's boolean tuple return.
     fn try_get_asset_decimals(&mut self, asset: Address) -> Option<u8> {
         let erc20 = IErc20MetadataInterface::new(asset);
-        let call = Call::new_in(self);
-        erc20.decimals(call).ok()
+        erc20.decimals(self.vm(), Call::new()).ok()
     }
 }
 
-// TODO: implement `IErc165` once `IErc4626` is implemented for `Erc4626`.
-// #[public]
-// impl IErc165 for Erc4626 {
-//     fn supports_interface(&self, interface_id: B32) -> bool {
-//         <Self as IErc4626>::interface_id() == interface_id
-//             || <Self as IErc165>::interface_id() == interface_id
-//     }
-// }
+// TODO: Add missing scenarios using TestVM external-call mocks.
 
-// TODO: Add missing tests once `motsu` supports calling external contracts.
+use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
+    use crate::test_support::{test_address, TestContract as TestVMContract};
     use alloy_primitives::{address, aliases::B32, Address, U256, U8};
-    use motsu::prelude::*;
     use stylus_sdk::prelude::*;
 
     use super::*;
@@ -1264,42 +1286,59 @@ mod tests {
 
     unsafe impl TopLevelStorage for Erc4626TestExample {}
 
-    #[motsu::test]
-    fn asset_works(contract: Contract<Erc4626TestExample>, alice: Address) {
+    #[test]
+    fn asset_works() {
+        let contract =
+            TestVMContract::<Erc4626TestExample>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let asset = address!("DeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF");
         contract.sender(alice).erc4626.asset.set(asset);
         assert_eq!(contract.sender(alice).erc4626.asset(), asset);
     }
 
-    #[motsu::test]
-    fn max_deposit(contract: Contract<Erc4626TestExample>, alice: Address) {
+    #[test]
+    fn max_deposit() {
+        let contract =
+            TestVMContract::<Erc4626TestExample>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let max_deposit = contract.sender(alice).max_deposit(alice);
         assert_eq!(max_deposit, U256::MAX);
     }
 
-    #[motsu::test]
-    fn max_mint(contract: Contract<Erc4626TestExample>, alice: Address) {
+    #[test]
+    fn max_mint() {
+        let contract =
+            TestVMContract::<Erc4626TestExample>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let max_mint = contract.sender(alice).max_mint(alice);
         assert_eq!(max_mint, U256::MAX);
     }
 
-    #[motsu::test]
-    fn max_redeem_works(
-        contract: Contract<Erc4626TestExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn max_redeem_works() {
+        let contract =
+            TestVMContract::<Erc4626TestExample>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let assets = U256::from(1000);
         contract
             .sender(alice)
             .erc20
             ._mint(alice, assets)
-            .motsu_expect("should mint assets");
+            .expect("should mint assets");
         let max_redeem = contract.sender(alice).max_redeem(alice);
         assert_eq!(assets, max_redeem);
     }
 
-    #[motsu::test]
-    fn decimals_offset(contract: Contract<Erc4626TestExample>, alice: Address) {
+    #[test]
+    fn decimals_offset() {
+        let contract =
+            TestVMContract::<Erc4626TestExample>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let decimals_offset = contract.sender(alice).erc4626._decimals_offset();
         assert_eq!(decimals_offset, U8::ZERO);
 
@@ -1310,8 +1349,12 @@ mod tests {
         assert_eq!(decimals_offset, new_decimal_offset);
     }
 
-    #[motsu::test]
-    fn decimals(contract: Contract<Erc4626TestExample>, alice: Address) {
+    #[test]
+    fn decimals() {
+        let contract =
+            TestVMContract::<Erc4626TestExample>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let underlying_decimals = U8::from(17);
         contract
             .sender(alice)
@@ -1328,7 +1371,7 @@ mod tests {
         assert_eq!(decimals, underlying_decimals + new_decimal_offset);
     }
 
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual = <Erc4626TestExample as IErc4626>::interface_id();
         let expected: B32 = 0x87dfe5a0_u32.into();

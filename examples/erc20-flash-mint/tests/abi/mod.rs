@@ -20,6 +20,10 @@ sol!(
 
         function setFlashFeeReceiver(address newReceiver) external;
         function setFlashFeeValue(uint256 newValue) external;
+        function owner() external view returns (address);
+        function initializeOwner(address initialOwner) external;
+        function transferOwnership(address newOwner) external;
+        function renounceOwnership() external;
 
         error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed);
         error ERC20InvalidSender(address sender);
@@ -30,6 +34,9 @@ sol!(
         error ERC3156UnsupportedToken(address token);
         error ERC3156ExceededMaxLoan(uint256 maxLoan);
         error ERC3156InvalidReceiver(address receiver);
+
+        error OwnableUnauthorizedAccount(address account);
+        error OwnableInvalidOwner(address owner);
 
         #[derive(Debug, PartialEq)]
         event Transfer(address indexed from, address indexed to, uint256 value);

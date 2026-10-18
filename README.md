@@ -8,12 +8,12 @@ Stylus enables high-performance smart contracts in Rust, compiled to WebAssembly
 
 - Security-first contracts, ported from the [`openzeppelin-contracts`] library.
 - Full support for `no_std` Rust environments.
-- Ready-to-use [unit] and [integration] testing helpers, used in our own tests.
+- Ready-to-use [SDK unit testing] and [local devnet testing] workflows, used in our own tests.
 - Familiar, well-documented contract APIs.
 
 [`openzeppelin-contracts`]: https://github.com/OpenZeppelin/openzeppelin-contracts
-[unit]: https://github.com/OpenZeppelin/stylus-test-helpers
-[integration]: ./lib/e2e/README.md
+[SDK unit testing]: https://docs.rs/stylus-test/0.10.10/stylus_test/vm/struct.TestVM.html
+[local devnet testing]: https://developer.arbitrum.io/stylus/fundamentals/testing-contracts
 
 ## 🚀 Usage
 
@@ -25,13 +25,6 @@ Add the crate to your Cargo.toml:
 openzeppelin-stylus = "=0.3.0"
 ```
 
-If you want to use the latest features before they are fully stabilized or audited, try the most recent alpha. We release a new alpha version every ~3 weeks.
-
-```toml
-[dependencies]
-openzeppelin-stylus = "=0.3.0-rc.1"
-```
-
 **Enable ABI export support**:
 
 ```toml
@@ -40,6 +33,10 @@ openzeppelin-stylus = "=0.3.0-rc.1"
 export-abi = ["openzeppelin-stylus/export-abi"]
 ```
 
+If you need typed Rust clients for calls to this contract from another Rust
+contract, enable `contract-client-gen` on the contract package. This feature
+builds client stubs and does not produce a deployable contract artifact.
+
 ## 🧱 `no_std` Projects
 
 This library is designed for `no_std` environments to reduce Wasm size.
@@ -47,25 +44,21 @@ Ensure your dependencies also avoid the standard library:
 
 > ```toml
 > [dependencies]
-> alloy-primitives = { version = "=0.8.20", default-features = false }
-> stylus-sdk = "=0.9.0"
+> alloy-primitives = { version = "=1.5.7", default-features = false }
+> stylus-sdk = "=0.10.10"
 > ```
 
-## 🦀 Rust Nightly & WASM Builds
+## 🦀 Stable Rust & WASM Builds
 
-This library requires the **Rust nightly toolchain**, due to unstable flags used during compilation to reduce the Wasm size of Stylus contracts.
+This release uses stable Rust 1.91.0 and Stylus SDK 0.10.10. Install the `wasm32-unknown-unknown` target before building contracts.
 
-> ⚠️ Note: While nightly is pinned in this repository via [`rust-toolchain.toml`](./rust-toolchain.toml), this only affects local development **within this repo**.
-> We also include a [`config.toml`](./.cargo/config.toml) to define platform-specific compiler flags.
+The example contracts pin Binaryen 116 and the optimizer recipe in `Stylus.toml`. `cargo-stylus` applies this recipe during deployment and verification.
 
-End-users of the crate must **set their own nightly toolchain** when compiling projects that use `openzeppelin-stylus`.
-
-To compile contracts for Arbitrum Stylus, run:
+Build a contract package with the SDK tool, selecting it explicitly in this
+workspace:
 
 ```sh
-cargo build --release --target wasm32-unknown-unknown \
-  -Z build-std=std,panic_abort \
-  -Z build-std-features=panic_immediate_abort
+cargo stylus build --contract <contract-package>
 ```
 
 ## 🧪 Example: ERC20 Token
@@ -106,7 +99,7 @@ impl IErc20 for Erc20Example {
         &mut self,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer(to, value)
     }
 
@@ -127,13 +120,20 @@ impl IErc20 for Erc20Example {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer_from(from, to, value)
     }
 }
 ```
 
 For a working demo with deployment and queries, check out the [basic] example.
+
+Run the Stylus SDK unit tests with `cargo test --workspace`. Run the local
+devnet integration suite with `./scripts/e2e-tests.sh`; this starts the SDK's
+devnet unless `RPC_URL` points to a node you started yourself.
+
+When upgrading an existing v0.3.0 contract, see the
+[upgrade guide](docs/modules/ROOT/pages/upgrade-from-v0.3.0.adoc).
 
 ## 📚 Resources
 

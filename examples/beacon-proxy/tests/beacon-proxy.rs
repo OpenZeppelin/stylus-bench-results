@@ -1,11 +1,15 @@
 #![cfg(feature = "e2e")]
+#[path = "../../devnet_test_support.rs"]
+mod devnet_test_support;
 
+use crate::devnet_test_support::{
+    constructor, receipt, send, watch, Account, EventExt, Revert,
+};
 use abi::BeaconProxyExample;
+use alloy::primitives::Bytes;
 use alloy::{primitives::U256, sol_types::SolCall};
-use e2e::{constructor, receipt, send, watch, Account, EventExt, Revert};
 use eyre::Result;
 use mock::{erc20, erc20::ERC20Mock};
-use stylus_sdk::abi::Bytes;
 
 mod abi;
 mod mock;
@@ -14,8 +18,10 @@ fn zero_bytes() -> Bytes {
     vec![].into()
 }
 
-#[e2e::test]
-async fn constructs(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn constructs() -> Result<()> {
+    let alice = Account::new().await?;
+
     let implementation_addr = erc20::deploy(&alice.wallet).await?;
     let beacon_addr = alice
         .as_deployer()
@@ -32,17 +38,19 @@ async fn constructs(alice: Account) -> Result<()> {
         .contract_address;
     let contract = BeaconProxyExample::new(contract_addr, &alice.wallet);
 
-    let implementation = contract.implementation().call().await?.implementation;
+    let implementation = contract.implementation().call().await?;
     assert_eq!(implementation, implementation_addr);
 
-    let beacon = contract.getBeacon().call().await?.beacon;
+    let beacon = contract.getBeacon().call().await?;
     assert_eq!(beacon, beacon_addr);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn constructs_with_data(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn constructs_with_data() -> Result<()> {
+    let alice = Account::new().await?;
+
     let implementation_addr = erc20::deploy(&alice.wallet).await?;
     let beacon_addr = alice
         .as_deployer()
@@ -66,24 +74,27 @@ async fn constructs_with_data(alice: Account) -> Result<()> {
         .contract_address;
     let contract = BeaconProxyExample::new(contract_addr, &alice.wallet);
 
-    let implementation = contract.implementation().call().await?.implementation;
+    let implementation = contract.implementation().call().await?;
     assert_eq!(implementation, implementation_addr);
 
-    let beacon = contract.getBeacon().call().await?.beacon;
+    let beacon = contract.getBeacon().call().await?;
     assert_eq!(beacon, beacon_addr);
 
     // check that the balance can be accurately fetched through the proxy.
-    let balance = contract.balanceOf(alice.address()).call().await?.balance;
+    let balance = contract.balanceOf(alice.address()).call().await?;
     assert_eq!(balance, amount);
 
-    let total_supply = contract.totalSupply().call().await?.totalSupply;
+    let total_supply = contract.totalSupply().call().await?;
     assert_eq!(total_supply, amount);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn fallback(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn fallback() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let implementation_addr = erc20::deploy(&alice.wallet).await?;
     let beacon_addr = alice
         .as_deployer()
@@ -101,10 +112,10 @@ async fn fallback(alice: Account, bob: Account) -> Result<()> {
     let contract = BeaconProxyExample::new(contract_addr, &alice.wallet);
 
     // verify initial balance is [`U256::ZERO`].
-    let balance = contract.balanceOf(alice.address()).call().await?.balance;
+    let balance = contract.balanceOf(alice.address()).call().await?;
     assert_eq!(balance, U256::ZERO);
 
-    let total_supply = contract.totalSupply().call().await?.totalSupply;
+    let total_supply = contract.totalSupply().call().await?;
     assert_eq!(total_supply, U256::ZERO);
 
     // mint 1000 tokens.
@@ -112,10 +123,10 @@ async fn fallback(alice: Account, bob: Account) -> Result<()> {
     watch!(contract.mint(alice.address(), amount))?;
 
     // check that the balance can be accurately fetched through the proxy.
-    let balance = contract.balanceOf(alice.address()).call().await?.balance;
+    let balance = contract.balanceOf(alice.address()).call().await?;
     assert_eq!(balance, amount);
 
-    let total_supply = contract.totalSupply().call().await?.totalSupply;
+    let total_supply = contract.totalSupply().call().await?;
     assert_eq!(total_supply, amount);
 
     // check that the balance can be transferred through the proxy.
@@ -127,20 +138,23 @@ async fn fallback(alice: Account, bob: Account) -> Result<()> {
         value: amount,
     }));
 
-    let balance = contract.balanceOf(alice.address()).call().await?.balance;
+    let balance = contract.balanceOf(alice.address()).call().await?;
     assert_eq!(balance, U256::ZERO);
 
-    let balance = contract.balanceOf(bob.address()).call().await?.balance;
+    let balance = contract.balanceOf(bob.address()).call().await?;
     assert_eq!(balance, amount);
 
-    let total_supply = contract.totalSupply().call().await?.totalSupply;
+    let total_supply = contract.totalSupply().call().await?;
     assert_eq!(total_supply, amount);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn fallback_returns_error(alice: Account, bob: Account) -> Result<()> {
+#[tokio::test]
+async fn fallback_returns_error() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
     let implementation_addr = erc20::deploy(&alice.wallet).await?;
     let beacon_addr = alice
         .as_deployer()

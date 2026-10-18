@@ -1,9 +1,13 @@
 #![cfg(feature = "e2e")]
+#[path = "../../devnet_test_support.rs"]
+mod devnet_test_support;
 
+use crate::devnet_test_support::{
+    receipt, send, watch, Account, EventExt, Revert, Trap,
+};
 use abi::{Erc20, SafeErc20};
 use alloy::primitives::uint;
 use alloy_primitives::U256;
-use e2e::{receipt, send, watch, Account, EventExt, Panic, PanicCode, Revert};
 use mock::{erc20, erc20::ERC20Mock};
 
 mod abi;
@@ -12,11 +16,11 @@ mod mock;
 mod transfers {
     use super::*;
 
-    #[e2e::test]
-    async fn does_not_revert_on_transfer(
-        alice: Account,
-        bob: Account,
-    ) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn does_not_revert_on_transfer() -> eyre::Result<()> {
+        let alice = Account::new().await?;
+        let bob = Account::new().await?;
+
         let safe_erc20_addr =
             alice.as_deployer().deploy().await?.contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
@@ -31,9 +35,9 @@ mod transfers {
         watch!(erc20_alice.mint(safe_erc20_addr, balance))?;
 
         let initial_safe_erc20_balance =
-            erc20_alice.balanceOf(safe_erc20_addr).call().await?._0;
+            erc20_alice.balanceOf(safe_erc20_addr).call().await?;
         let initial_bob_balance =
-            erc20_alice.balanceOf(bob_addr).call().await?._0;
+            erc20_alice.balanceOf(bob_addr).call().await?;
         assert_eq!(initial_safe_erc20_balance, balance);
         assert_eq!(initial_bob_balance, U256::ZERO);
 
@@ -50,8 +54,8 @@ mod transfers {
         }));
 
         let safe_erc20_balance =
-            erc20_alice.balanceOf(safe_erc20_addr).call().await?._0;
-        let bob_balance = erc20_alice.balanceOf(bob_addr).call().await?._0;
+            erc20_alice.balanceOf(safe_erc20_addr).call().await?;
+        let bob_balance = erc20_alice.balanceOf(bob_addr).call().await?;
 
         assert_eq!(initial_safe_erc20_balance - value, safe_erc20_balance);
         assert_eq!(initial_bob_balance + value, bob_balance);
@@ -59,11 +63,11 @@ mod transfers {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_on_transfer_with_internal_error(
-        alice: Account,
-        bob: Account,
-    ) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn reverts_on_transfer_with_internal_error() -> eyre::Result<()> {
+        let alice = Account::new().await?;
+        let bob = Account::new().await?;
+
         let safe_erc20_addr =
             alice.as_deployer().deploy().await?.contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
@@ -75,9 +79,9 @@ mod transfers {
         let erc20_alice = ERC20Mock::new(erc20_address, &alice.wallet);
 
         let initial_safe_erc20_balance =
-            erc20_alice.balanceOf(safe_erc20_addr).call().await?._0;
+            erc20_alice.balanceOf(safe_erc20_addr).call().await?;
         let initial_bob_balance =
-            erc20_alice.balanceOf(bob_addr).call().await?._0;
+            erc20_alice.balanceOf(bob_addr).call().await?;
 
         let err = send!(safe_erc20_alice.safeTransfer(
             erc20_address,
@@ -91,8 +95,8 @@ mod transfers {
         }));
 
         let safe_erc20_balance =
-            erc20_alice.balanceOf(safe_erc20_addr).call().await?._0;
-        let bob_balance = erc20_alice.balanceOf(bob_addr).call().await?._0;
+            erc20_alice.balanceOf(safe_erc20_addr).call().await?;
+        let bob_balance = erc20_alice.balanceOf(bob_addr).call().await?;
 
         assert_eq!(initial_safe_erc20_balance, safe_erc20_balance);
         assert_eq!(initial_bob_balance, bob_balance);
@@ -100,11 +104,11 @@ mod transfers {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn does_not_revert_on_transfer_from(
-        alice: Account,
-        bob: Account,
-    ) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn does_not_revert_on_transfer_from() -> eyre::Result<()> {
+        let alice = Account::new().await?;
+        let bob = Account::new().await?;
+
         let safe_erc20_addr =
             alice.as_deployer().deploy().await?.contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
@@ -121,9 +125,9 @@ mod transfers {
         watch!(erc20_alice.approve(safe_erc20_addr, value))?;
 
         let initial_alice_balance =
-            erc20_alice.balanceOf(alice_addr).call().await?._0;
+            erc20_alice.balanceOf(alice_addr).call().await?;
         let initial_bob_balance =
-            erc20_alice.balanceOf(bob_addr).call().await?._0;
+            erc20_alice.balanceOf(bob_addr).call().await?;
         assert_eq!(initial_alice_balance, balance);
         assert_eq!(initial_bob_balance, U256::ZERO);
 
@@ -140,8 +144,8 @@ mod transfers {
             value
         }));
 
-        let alice_balance = erc20_alice.balanceOf(alice_addr).call().await?._0;
-        let bob_balance = erc20_alice.balanceOf(bob_addr).call().await?._0;
+        let alice_balance = erc20_alice.balanceOf(alice_addr).call().await?;
+        let bob_balance = erc20_alice.balanceOf(bob_addr).call().await?;
 
         assert_eq!(initial_alice_balance - value, alice_balance);
         assert_eq!(initial_bob_balance + value, bob_balance);
@@ -149,11 +153,11 @@ mod transfers {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_true_on_try_safe_transfer(
-        alice: Account,
-        bob: Account,
-    ) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn returns_true_on_try_safe_transfer() -> eyre::Result<()> {
+        let alice = Account::new().await?;
+        let bob = Account::new().await?;
+
         let safe_erc20_addr =
             alice.as_deployer().deploy().await?.contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
@@ -168,9 +172,9 @@ mod transfers {
         watch!(erc20_alice.mint(safe_erc20_addr, balance))?;
 
         let initial_safe_erc20_balance =
-            erc20_alice.balanceOf(safe_erc20_addr).call().await?._0;
+            erc20_alice.balanceOf(safe_erc20_addr).call().await?;
         let initial_bob_balance =
-            erc20_alice.balanceOf(bob_addr).call().await?._0;
+            erc20_alice.balanceOf(bob_addr).call().await?;
         assert_eq!(initial_safe_erc20_balance, balance);
         assert_eq!(initial_bob_balance, U256::ZERO);
 
@@ -189,8 +193,8 @@ mod transfers {
         }));
 
         let safe_erc20_balance =
-            erc20_alice.balanceOf(safe_erc20_addr).call().await?._0;
-        let bob_balance = erc20_alice.balanceOf(bob_addr).call().await?._0;
+            erc20_alice.balanceOf(safe_erc20_addr).call().await?;
+        let bob_balance = erc20_alice.balanceOf(bob_addr).call().await?;
 
         assert_eq!(initial_safe_erc20_balance - value, safe_erc20_balance);
         assert_eq!(initial_bob_balance + value, bob_balance);
@@ -198,11 +202,11 @@ mod transfers {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn reverts_on_transfer_from_internal_error(
-        alice: Account,
-        bob: Account,
-    ) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn reverts_on_transfer_from_internal_error() -> eyre::Result<()> {
+        let alice = Account::new().await?;
+        let bob = Account::new().await?;
+
         let safe_erc20_addr =
             alice.as_deployer().deploy().await?.contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
@@ -217,9 +221,9 @@ mod transfers {
         watch!(erc20_alice.approve(safe_erc20_addr, value))?;
 
         let initial_alice_balance =
-            erc20_alice.balanceOf(alice_addr).call().await?._0;
+            erc20_alice.balanceOf(alice_addr).call().await?;
         let initial_bob_balance =
-            erc20_alice.balanceOf(bob_addr).call().await?._0;
+            erc20_alice.balanceOf(bob_addr).call().await?;
 
         let err = send!(safe_erc20_alice.safeTransferFrom(
             erc20_address,
@@ -233,8 +237,8 @@ mod transfers {
             token: erc20_address
         }));
 
-        let alice_balance = erc20_alice.balanceOf(alice_addr).call().await?._0;
-        let bob_balance = erc20_alice.balanceOf(bob_addr).call().await?._0;
+        let alice_balance = erc20_alice.balanceOf(alice_addr).call().await?;
+        let bob_balance = erc20_alice.balanceOf(bob_addr).call().await?;
 
         assert_eq!(initial_alice_balance, alice_balance);
         assert_eq!(initial_bob_balance, bob_balance);
@@ -242,11 +246,11 @@ mod transfers {
         Ok(())
     }
 
-    #[e2e::test]
-    async fn returns_true_on_try_safe_transfer_from(
-        alice: Account,
-        bob: Account,
-    ) -> eyre::Result<()> {
+    #[tokio::test]
+    async fn returns_true_on_try_safe_transfer_from() -> eyre::Result<()> {
+        let alice = Account::new().await?;
+        let bob = Account::new().await?;
+
         let safe_erc20_addr =
             alice.as_deployer().deploy().await?.contract_address;
         let safe_erc20_alice = SafeErc20::new(safe_erc20_addr, &alice.wallet);
@@ -263,9 +267,9 @@ mod transfers {
         watch!(erc20_alice.approve(safe_erc20_addr, value))?;
 
         let initial_alice_balance =
-            erc20_alice.balanceOf(alice_addr).call().await?._0;
+            erc20_alice.balanceOf(alice_addr).call().await?;
         let initial_bob_balance =
-            erc20_alice.balanceOf(bob_addr).call().await?._0;
+            erc20_alice.balanceOf(bob_addr).call().await?;
         assert_eq!(initial_alice_balance, balance);
         assert_eq!(initial_bob_balance, U256::ZERO);
 
@@ -284,8 +288,8 @@ mod transfers {
             value
         }));
 
-        let alice_balance = erc20_alice.balanceOf(alice_addr).call().await?._0;
-        let bob_balance = erc20_alice.balanceOf(bob_addr).call().await?._0;
+        let alice_balance = erc20_alice.balanceOf(alice_addr).call().await?;
+        let bob_balance = erc20_alice.balanceOf(bob_addr).call().await?;
 
         assert_eq!(initial_alice_balance - value, alice_balance);
         assert_eq!(initial_bob_balance + value, bob_balance);
@@ -298,10 +302,11 @@ mod approvals {
     mod with_zero_allowance {
         use super::super::*;
 
-        #[e2e::test]
+        #[tokio::test]
         async fn does_not_revert_when_force_approving_a_non_zero_allowance(
-            alice: Account,
         ) -> eyre::Result<()> {
+            let alice = Account::new().await?;
+
             let safe_erc20_addr =
                 alice.as_deployer().deploy().await?.contract_address;
             let safe_erc20_alice =
@@ -334,17 +339,17 @@ mod approvals {
             let spender_allowance = erc20_alice
                 .allowance(safe_erc20_addr, spender_addr)
                 .call()
-                .await?
-                ._0;
+                .await?;
             assert_eq!(spender_allowance, value);
 
             Ok(())
         }
 
-        #[e2e::test]
+        #[tokio::test]
         async fn does_not_revert_when_force_approving_a_zero_allowance(
-            alice: Account,
         ) -> eyre::Result<()> {
+            let alice = Account::new().await?;
+
             let safe_erc20_addr =
                 alice.as_deployer().deploy().await?.contract_address;
             let safe_erc20_alice =
@@ -375,17 +380,17 @@ mod approvals {
             let spender_allowance = erc20_alice
                 .allowance(safe_erc20_addr, spender_addr)
                 .call()
-                .await?
-                ._0;
+                .await?;
             assert_eq!(spender_allowance, U256::ZERO);
 
             Ok(())
         }
 
-        #[e2e::test]
+        #[tokio::test]
         async fn does_not_revert_when_increasing_the_allowance(
-            alice: Account,
         ) -> eyre::Result<()> {
+            let alice = Account::new().await?;
+
             let safe_erc20_addr =
                 alice.as_deployer().deploy().await?.contract_address;
             let safe_erc20_alice =
@@ -418,17 +423,17 @@ mod approvals {
             let spender_allowance = erc20_alice
                 .allowance(safe_erc20_addr, spender_addr)
                 .call()
-                .await?
-                ._0;
+                .await?;
             assert_eq!(spender_allowance, value);
 
             Ok(())
         }
 
-        #[e2e::test]
+        #[tokio::test]
         async fn panics_when_increasing_the_allowance_overflow(
-            alice: Account,
         ) -> eyre::Result<()> {
+            let alice = Account::new().await?;
+
             let safe_erc20_addr =
                 alice.as_deployer().deploy().await?.contract_address;
             let safe_erc20_alice =
@@ -453,15 +458,15 @@ mod approvals {
             ))
             .expect_err("should not exceed U256::MAX");
 
-            assert!(err.panicked_with(PanicCode::ArithmeticOverflow));
+            assert!(err.trapped());
 
             Ok(())
         }
 
-        #[e2e::test]
-        async fn reverts_when_decreasing_the_allowance(
-            alice: Account,
-        ) -> eyre::Result<()> {
+        #[tokio::test]
+        async fn reverts_when_decreasing_the_allowance() -> eyre::Result<()> {
+            let alice = Account::new().await?;
+
             let safe_erc20_addr =
                 alice.as_deployer().deploy().await?.contract_address;
             let safe_erc20_alice =
@@ -500,10 +505,11 @@ mod approvals {
     mod with_non_zero_allowance {
         use super::super::*;
 
-        #[e2e::test]
+        #[tokio::test]
         async fn does_not_revert_when_force_approving_a_non_zero_allowance(
-            alice: Account,
         ) -> eyre::Result<()> {
+            let alice = Account::new().await?;
+
             let safe_erc20_addr =
                 alice.as_deployer().deploy().await?.contract_address;
             let safe_erc20_alice =
@@ -538,17 +544,17 @@ mod approvals {
             let spender_allowance = erc20_alice
                 .allowance(safe_erc20_addr, spender_addr)
                 .call()
-                .await?
-                ._0;
+                .await?;
             assert_eq!(spender_allowance, value);
 
             Ok(())
         }
 
-        #[e2e::test]
+        #[tokio::test]
         async fn does_not_revert_when_force_approving_a_zero_allowance(
-            alice: Account,
         ) -> eyre::Result<()> {
+            let alice = Account::new().await?;
+
             let safe_erc20_addr =
                 alice.as_deployer().deploy().await?.contract_address;
             let safe_erc20_alice =
@@ -581,17 +587,17 @@ mod approvals {
             let spender_allowance = erc20_alice
                 .allowance(safe_erc20_addr, spender_addr)
                 .call()
-                .await?
-                ._0;
+                .await?;
             assert_eq!(spender_allowance, U256::ZERO);
 
             Ok(())
         }
 
-        #[e2e::test]
+        #[tokio::test]
         async fn does_not_revert_when_increasing_the_allowance(
-            alice: Account,
         ) -> eyre::Result<()> {
+            let alice = Account::new().await?;
+
             let safe_erc20_addr =
                 alice.as_deployer().deploy().await?.contract_address;
             let safe_erc20_alice =
@@ -626,17 +632,17 @@ mod approvals {
             let spender_allowance = erc20_alice
                 .allowance(safe_erc20_addr, spender_addr)
                 .call()
-                .await?
-                ._0;
+                .await?;
             assert_eq!(spender_allowance, allowance + value);
 
             Ok(())
         }
 
-        #[e2e::test]
+        #[tokio::test]
         async fn does_not_revert_when_decreasing_the_allowance_to_a_positive_value(
-            alice: Account,
         ) -> eyre::Result<()> {
+            let alice = Account::new().await?;
+
             let safe_erc20_addr =
                 alice.as_deployer().deploy().await?.contract_address;
             let safe_erc20_alice =
@@ -671,17 +677,17 @@ mod approvals {
             let spender_allowance = erc20_alice
                 .allowance(safe_erc20_addr, spender_addr)
                 .call()
-                .await?
-                ._0;
+                .await?;
             assert_eq!(spender_allowance, allowance - value);
 
             Ok(())
         }
 
-        #[e2e::test]
+        #[tokio::test]
         async fn reverts_when_decreasing_the_allowance_to_a_negative_value(
-            alice: Account,
         ) -> eyre::Result<()> {
+            let alice = Account::new().await?;
+
             let safe_erc20_addr =
                 alice.as_deployer().deploy().await?.contract_address;
             let safe_erc20_alice =

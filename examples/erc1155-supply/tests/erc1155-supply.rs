@@ -1,9 +1,13 @@
 #![cfg(feature = "e2e")]
 #![allow(clippy::unreadable_literal)]
+#[path = "../../devnet_test_support.rs"]
+mod devnet_test_support;
 
+use crate::devnet_test_support::{
+    receipt, send, watch, Account, EventExt, Revert, Trap,
+};
 use abi::Erc1155Supply;
 use alloy::primitives::{aliases::B32, Address, U256};
-use e2e::{receipt, send, watch, Account, EventExt, Panic, PanicCode};
 use mock::{receiver, receiver::ERC1155ReceiverMock};
 
 mod abi;
@@ -21,16 +25,19 @@ fn random_values(size: usize) -> Vec<U256> {
 // Integration Tests: ERC-1155 Supply Extension
 // ============================================================================
 
-#[e2e::test]
-async fn constructs(alice: Account) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn constructs() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
     let token_id = random_token_ids(1)[0];
 
-    let total_supply = contract.totalSupply_0(token_id).call().await?._0;
-    let total_supply_all = contract.totalSupply_1().call().await?._0;
-    let token_exists = contract.exists(token_id).call().await?._0;
+    let total_supply = contract.totalSupply_0(token_id).call().await?;
+    let total_supply_all = contract.totalSupply_1().call().await?;
+    let token_exists = contract.exists(token_id).call().await?;
 
     assert_eq!(U256::ZERO, total_supply);
     assert_eq!(U256::ZERO, total_supply_all);
@@ -39,9 +46,12 @@ async fn constructs(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn mint(alice: Account) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn mint() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
     let alice_addr = alice.address();
@@ -59,11 +69,10 @@ async fn mint(alice: Account) -> eyre::Result<()> {
         value,
     }));
 
-    let balance =
-        contract.balanceOf(alice_addr, token_id).call().await?.balance;
-    let total_supply = contract.totalSupply_0(token_id).call().await?._0;
-    let total_supply_all = contract.totalSupply_1().call().await?._0;
-    let token_exists = contract.exists(token_id).call().await?._0;
+    let balance = contract.balanceOf(alice_addr, token_id).call().await?;
+    let total_supply = contract.totalSupply_0(token_id).call().await?;
+    let total_supply_all = contract.totalSupply_1().call().await?;
+    let token_exists = contract.exists(token_id).call().await?;
 
     assert_eq!(value, balance);
     assert_eq!(value, total_supply);
@@ -73,9 +82,12 @@ async fn mint(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn mint_to_receiver_contract(alice: Account) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn mint_to_receiver_contract() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
     let receiver_addr =
@@ -87,7 +99,7 @@ async fn mint_to_receiver_contract(alice: Account) -> eyre::Result<()> {
     let value = random_values(1)[0];
 
     let initial_receiver_balance =
-        contract.balanceOf(receiver_addr, token_id).call().await?.balance;
+        contract.balanceOf(receiver_addr, token_id).call().await?;
 
     let receipt =
         receipt!(contract.mint(receiver_addr, token_id, value, vec![].into()))?;
@@ -109,10 +121,10 @@ async fn mint_to_receiver_contract(alice: Account) -> eyre::Result<()> {
     }));
 
     let receiver_balance =
-        contract.balanceOf(receiver_addr, token_id).call().await?.balance;
-    let total_supply = contract.totalSupply_0(token_id).call().await?._0;
-    let total_supply_all = contract.totalSupply_1().call().await?._0;
-    let token_exists = contract.exists(token_id).call().await?._0;
+        contract.balanceOf(receiver_addr, token_id).call().await?;
+    let total_supply = contract.totalSupply_0(token_id).call().await?;
+    let total_supply_all = contract.totalSupply_1().call().await?;
+    let token_exists = contract.exists(token_id).call().await?;
 
     assert_eq!(initial_receiver_balance + value, receiver_balance);
     assert_eq!(value, total_supply);
@@ -122,9 +134,13 @@ async fn mint_to_receiver_contract(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn mint_batch(alice: Account, bob: Account) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn mint_batch() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
     let alice_addr = alice.address();
@@ -153,8 +169,7 @@ async fn mint_batch(alice: Account, bob: Account) -> eyre::Result<()> {
         let balances = contract
             .balanceOfBatch(vec![account, account], token_ids.clone())
             .call()
-            .await?
-            .balances;
+            .await?;
 
         assert_eq!(values, balances);
     }
@@ -162,24 +177,25 @@ async fn mint_batch(alice: Account, bob: Account) -> eyre::Result<()> {
     let accounts_len = U256::from(accounts.len());
 
     for (&token_id, &value) in token_ids.iter().zip(values.iter()) {
-        let token_exists = contract.exists(token_id).call().await?._0;
-        let total_supply = contract.totalSupply_0(token_id).call().await?._0;
+        let token_exists = contract.exists(token_id).call().await?;
+        let total_supply = contract.totalSupply_0(token_id).call().await?;
 
         assert_eq!(value * accounts_len, total_supply);
         assert!(token_exists);
     }
 
-    let total_supply_all = contract.totalSupply_1().call().await?._0;
+    let total_supply_all = contract.totalSupply_1().call().await?;
     assert_eq!(values.iter().sum::<U256>() * accounts_len, total_supply_all);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn mint_batch_transfer_to_receiver_contract(
-    alice: Account,
-) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn mint_batch_transfer_to_receiver_contract() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
     let receiver_addr =
@@ -193,8 +209,7 @@ async fn mint_batch_transfer_to_receiver_contract(
     let initial_receiver_balances = contract
         .balanceOfBatch(vec![receiver_addr, receiver_addr], token_ids.clone())
         .call()
-        .await?
-        .balances;
+        .await?;
 
     let receipt = receipt!(contract.mintBatch(
         receiver_addr,
@@ -222,14 +237,13 @@ async fn mint_batch_transfer_to_receiver_contract(
     let receiver_balances = contract
         .balanceOfBatch(vec![receiver_addr, receiver_addr], token_ids.clone())
         .call()
-        .await?
-        .balances;
+        .await?;
 
     for (idx, (&token_id, &value)) in
         token_ids.iter().zip(values.iter()).enumerate()
     {
-        let token_exists = contract.exists(token_id).call().await?._0;
-        let total_supply = contract.totalSupply_0(token_id).call().await?._0;
+        let token_exists = contract.exists(token_id).call().await?;
+        let total_supply = contract.totalSupply_0(token_id).call().await?;
 
         assert_eq!(
             initial_receiver_balances[idx] + value,
@@ -239,18 +253,19 @@ async fn mint_batch_transfer_to_receiver_contract(
         assert!(token_exists);
     }
 
-    let total_supply_all = contract.totalSupply_1().call().await?._0;
+    let total_supply_all = contract.totalSupply_1().call().await?;
     assert_eq!(values.iter().sum::<U256>(), total_supply_all);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn mint_panics_on_total_supply_overflow(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn mint_panics_on_total_supply_overflow() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
     let alice_addr = alice.address();
@@ -270,16 +285,17 @@ async fn mint_panics_on_total_supply_overflow(
     let err = send!(contract.mint(alice_addr, token_id, three, vec![].into()))
         .expect_err("should panic due to total_supply overflow");
 
-    assert!(err.panicked_with(PanicCode::ArithmeticOverflow));
+    assert!(err.trapped(), "unexpected overflow response: {err:?}");
 
     Ok(())
 }
 
-#[e2e::test]
-async fn mint_panics_on_total_supply_all_overflow(
-    alice: Account,
-) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn mint_panics_on_total_supply_all_overflow() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
     let alice_addr = alice.address();
@@ -295,14 +311,17 @@ async fn mint_panics_on_total_supply_all_overflow(
     ))
     .expect_err("should panic due to total_supply_all overflow");
 
-    assert!(err.panicked_with(PanicCode::ArithmeticOverflow));
+    assert!(err.trapped(), "unexpected overflow response: {err:?}");
 
     Ok(())
 }
 
-#[e2e::test]
-async fn burn(alice: Account) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn burn() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
     let alice_addr = alice.address();
@@ -321,11 +340,10 @@ async fn burn(alice: Account) -> eyre::Result<()> {
         value,
     }));
 
-    let token_exists = contract.exists(token_id).call().await?._0;
-    let balance =
-        contract.balanceOf(alice_addr, token_id).call().await?.balance;
-    let total_supply = contract.totalSupply_0(token_id).call().await?._0;
-    let total_supply_all = contract.totalSupply_1().call().await?._0;
+    let token_exists = contract.exists(token_id).call().await?;
+    let balance = contract.balanceOf(alice_addr, token_id).call().await?;
+    let total_supply = contract.totalSupply_0(token_id).call().await?;
+    let total_supply_all = contract.totalSupply_1().call().await?;
 
     assert_eq!(U256::ZERO, balance);
     assert_eq!(U256::ZERO, total_supply);
@@ -335,9 +353,13 @@ async fn burn(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn burn_with_approval(alice: Account, bob: Account) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn burn_with_approval() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
     let contract_bob = Erc1155Supply::new(contract_addr, &bob.wallet);
 
@@ -360,10 +382,10 @@ async fn burn_with_approval(alice: Account, bob: Account) -> eyre::Result<()> {
         value,
     }));
 
-    let token_exists = contract.exists(token_id).call().await?._0;
-    let balance = contract.balanceOf(bob_addr, token_id).call().await?.balance;
-    let total_supply = contract.totalSupply_0(token_id).call().await?._0;
-    let total_supply_all = contract.totalSupply_1().call().await?._0;
+    let token_exists = contract.exists(token_id).call().await?;
+    let balance = contract.balanceOf(bob_addr, token_id).call().await?;
+    let total_supply = contract.totalSupply_0(token_id).call().await?;
+    let total_supply_all = contract.totalSupply_1().call().await?;
 
     assert_eq!(U256::ZERO, balance);
     assert_eq!(U256::ZERO, total_supply);
@@ -373,9 +395,50 @@ async fn burn_with_approval(alice: Account, bob: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn burn_batch(alice: Account) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn error_when_unapproved_operator_burns() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
+    let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
+    let contract_bob = Erc1155Supply::new(contract_addr, &bob.wallet);
+
+    let alice_addr = alice.address();
+    let bob_addr = bob.address();
+    let token_id = random_token_ids(1)[0];
+    let value = random_values(1)[0];
+
+    watch!(contract.mint(alice_addr, token_id, value, vec![].into()))?;
+
+    let burn_result = send!(contract_bob.burn(alice_addr, token_id, value));
+    let remaining_balance =
+        contract.balanceOf(alice_addr, token_id).call().await?;
+
+    assert!(
+        burn_result.is_err() && remaining_balance == value,
+        "unapproved operator burn must fail and preserve the holder balance; succeeded={}, remaining_balance={remaining_balance}",
+        burn_result.is_ok()
+    );
+    if let Err(err) = burn_result {
+        assert!(err.reverted_with(
+            Erc1155Supply::ERC1155MissingApprovalForAll {
+                operator: bob_addr,
+                owner: alice_addr
+            }
+        ));
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn burn_batch() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
     let alice_addr = alice.address();
@@ -404,28 +467,77 @@ async fn burn_batch(alice: Account) -> eyre::Result<()> {
     }));
 
     for token_id in token_ids {
-        let balance =
-            contract.balanceOf(alice_addr, token_id).call().await?.balance;
-        let token_exists = contract.exists(token_id).call().await?._0;
-        let total_supply = contract.totalSupply_0(token_id).call().await?._0;
+        let balance = contract.balanceOf(alice_addr, token_id).call().await?;
+        let token_exists = contract.exists(token_id).call().await?;
+        let total_supply = contract.totalSupply_0(token_id).call().await?;
 
         assert_eq!(U256::ZERO, balance);
         assert_eq!(U256::ZERO, total_supply);
         assert!(!token_exists);
     }
 
-    let total_supply_all = contract.totalSupply_1().call().await?._0;
+    let total_supply_all = contract.totalSupply_1().call().await?;
     assert_eq!(U256::ZERO, total_supply_all);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn burn_batch_with_approval(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn error_when_unapproved_operator_burns_batch() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
+    let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
+    let contract_bob = Erc1155Supply::new(contract_addr, &bob.wallet);
+
+    let alice_addr = alice.address();
+    let bob_addr = bob.address();
+    let token_ids = random_token_ids(2);
+    let values = random_values(2);
+
+    watch!(contract.mintBatch(
+        alice_addr,
+        token_ids.clone(),
+        values.clone(),
+        vec![].into()
+    ))?;
+
+    let burn_result = send!(contract_bob.burnBatch(
+        alice_addr,
+        token_ids.clone(),
+        values.clone()
+    ));
+    let remaining_balances = contract
+        .balanceOfBatch(vec![alice_addr; token_ids.len()], token_ids)
+        .call()
+        .await?;
+
+    assert!(
+        burn_result.is_err() && remaining_balances == values,
+        "unapproved operator batch burn must fail and preserve the holder balances; succeeded={}, remaining_balances={remaining_balances:?}",
+        burn_result.is_ok()
+    );
+    if let Err(err) = burn_result {
+        assert!(err.reverted_with(
+            Erc1155Supply::ERC1155MissingApprovalForAll {
+                operator: bob_addr,
+                owner: alice_addr
+            }
+        ));
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn burn_batch_with_approval() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
     let contract_bob = Erc1155Supply::new(contract_addr, &bob.wallet);
 
@@ -458,28 +570,28 @@ async fn burn_batch_with_approval(
     }));
 
     for token_id in token_ids {
-        let balance =
-            contract.balanceOf(bob_addr, token_id).call().await?.balance;
-        let token_exists = contract.exists(token_id).call().await?._0;
-        let total_supply = contract.totalSupply_0(token_id).call().await?._0;
+        let balance = contract.balanceOf(bob_addr, token_id).call().await?;
+        let token_exists = contract.exists(token_id).call().await?;
+        let total_supply = contract.totalSupply_0(token_id).call().await?;
 
         assert_eq!(U256::ZERO, balance);
         assert_eq!(U256::ZERO, total_supply);
         assert!(!token_exists);
     }
 
-    let total_supply_all = contract.totalSupply_1().call().await?._0;
+    let total_supply_all = contract.totalSupply_1().call().await?;
     assert_eq!(U256::ZERO, total_supply_all);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn supply_unaffected_by_safe_transfer_from(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn supply_unaffected_by_safe_transfer_from() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
     let alice_addr = alice.address();
@@ -490,18 +602,15 @@ async fn supply_unaffected_by_safe_transfer_from(
     watch!(contract.mint(alice_addr, token_id, value, vec![].into()))?;
 
     // assert balances as expected after mint
-    let alice_balance =
-        contract.balanceOf(alice_addr, token_id).call().await?.balance;
-    let bob_balance =
-        contract.balanceOf(bob_addr, token_id).call().await?.balance;
+    let alice_balance = contract.balanceOf(alice_addr, token_id).call().await?;
+    let bob_balance = contract.balanceOf(bob_addr, token_id).call().await?;
 
     assert_eq!(value, alice_balance);
     assert_eq!(U256::ZERO, bob_balance);
 
     // total supplies (all) logic has been checked in other tests, assume valid
-    let initial_total_supply =
-        contract.totalSupply_0(token_id).call().await?._0;
-    let initial_total_supply_all = contract.totalSupply_1().call().await?._0;
+    let initial_total_supply = contract.totalSupply_0(token_id).call().await?;
+    let initial_total_supply_all = contract.totalSupply_1().call().await?;
 
     let receipt = receipt!(contract.safeTransferFrom(
         alice_addr,
@@ -520,18 +629,16 @@ async fn supply_unaffected_by_safe_transfer_from(
     }));
 
     // assert balances updated as expected
-    let alice_balance =
-        contract.balanceOf(alice_addr, token_id).call().await?.balance;
-    let bob_balance =
-        contract.balanceOf(bob_addr, token_id).call().await?.balance;
+    let alice_balance = contract.balanceOf(alice_addr, token_id).call().await?;
+    let bob_balance = contract.balanceOf(bob_addr, token_id).call().await?;
 
     assert_eq!(U256::ZERO, alice_balance);
     assert_eq!(value, bob_balance);
 
     // assert supply-related data remains unchanged
-    let total_supply = contract.totalSupply_0(token_id).call().await?._0;
-    let total_supply_all = contract.totalSupply_1().call().await?._0;
-    let token_exists = contract.exists(token_id).call().await?._0;
+    let total_supply = contract.totalSupply_0(token_id).call().await?;
+    let total_supply_all = contract.totalSupply_1().call().await?;
+    let token_exists = contract.exists(token_id).call().await?;
 
     assert_eq!(initial_total_supply, total_supply);
     assert_eq!(initial_total_supply_all, total_supply_all);
@@ -540,12 +647,13 @@ async fn supply_unaffected_by_safe_transfer_from(
     Ok(())
 }
 
-#[e2e::test]
-async fn supply_unaffected_by_safe_transfer_from_batch(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn supply_unaffected_by_safe_transfer_from_batch() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
     let alice_addr = alice.address();
@@ -563,9 +671,8 @@ async fn supply_unaffected_by_safe_transfer_from_batch(
     // assert balances as expected after mint
     for (&token_id, &value) in token_ids.iter().zip(values.iter()) {
         let alice_balance =
-            contract.balanceOf(alice_addr, token_id).call().await?.balance;
-        let bob_balance =
-            contract.balanceOf(bob_addr, token_id).call().await?.balance;
+            contract.balanceOf(alice_addr, token_id).call().await?;
+        let bob_balance = contract.balanceOf(bob_addr, token_id).call().await?;
 
         assert_eq!(value, alice_balance);
         assert_eq!(U256::ZERO, bob_balance);
@@ -574,10 +681,10 @@ async fn supply_unaffected_by_safe_transfer_from_batch(
     // total supplies (all) logic has been checked in other tests, assume valid
     let mut initial_total_supplies: Vec<U256> = vec![];
     for &token_id in &token_ids {
-        let supply = contract.totalSupply_0(token_id).call().await?._0;
+        let supply = contract.totalSupply_0(token_id).call().await?;
         initial_total_supplies.push(supply);
     }
-    let initial_total_supply_all = contract.totalSupply_1().call().await?._0;
+    let initial_total_supply_all = contract.totalSupply_1().call().await?;
 
     let receipt = receipt!(contract.safeBatchTransferFrom(
         alice_addr,
@@ -598,9 +705,8 @@ async fn supply_unaffected_by_safe_transfer_from_batch(
     // assert balances updated as expected
     for (&token_id, &value) in token_ids.iter().zip(values.iter()) {
         let alice_balance =
-            contract.balanceOf(alice_addr, token_id).call().await?.balance;
-        let bob_balance =
-            contract.balanceOf(bob_addr, token_id).call().await?.balance;
+            contract.balanceOf(alice_addr, token_id).call().await?;
+        let bob_balance = contract.balanceOf(bob_addr, token_id).call().await?;
 
         assert_eq!(U256::ZERO, alice_balance);
         assert_eq!(value, bob_balance);
@@ -610,14 +716,14 @@ async fn supply_unaffected_by_safe_transfer_from_batch(
     for (&token_id, &initial_total_supply) in
         token_ids.iter().zip(initial_total_supplies.iter())
     {
-        let total_supply = contract.totalSupply_0(token_id).call().await?._0;
-        let token_exists = contract.exists(token_id).call().await?._0;
+        let total_supply = contract.totalSupply_0(token_id).call().await?;
+        let token_exists = contract.exists(token_id).call().await?;
 
         assert_eq!(initial_total_supply, total_supply);
         assert!(token_exists);
     }
 
-    let total_supply_all = contract.totalSupply_1().call().await?._0;
+    let total_supply_all = contract.totalSupply_1().call().await?;
     assert_eq!(initial_total_supply_all, total_supply_all);
 
     Ok(())
@@ -627,45 +733,49 @@ async fn supply_unaffected_by_safe_transfer_from_batch(
 // Integration Tests: Happy Paths of Re-exported functions from ERC-1155
 // =====================================================================
 
-#[e2e::test]
-async fn balance_of_zero_balance(alice: Account) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn balance_of_zero_balance() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
     let token_ids = random_token_ids(1);
 
-    let Erc1155Supply::balanceOfReturn { balance } =
+    let balance =
         contract.balanceOf(alice.address(), token_ids[0]).call().await?;
     assert_eq!(U256::ZERO, balance);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn balance_of_batch_zero_balance(
-    alice: Account,
-    bob: Account,
-    dave: Account,
-    charlie: Account,
-) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn balance_of_batch_zero_balance() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+    let dave = Account::new().await?;
+    let charlie = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
     let accounts =
         vec![alice.address(), bob.address(), dave.address(), charlie.address()];
     let token_ids = random_token_ids(4);
 
-    let Erc1155Supply::balanceOfBatchReturn { balances } =
-        contract.balanceOfBatch(accounts, token_ids).call().await?;
+    let balances = contract.balanceOfBatch(accounts, token_ids).call().await?;
     assert_eq!(vec![U256::ZERO, U256::ZERO, U256::ZERO, U256::ZERO], balances);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn set_approval_for_all(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn set_approval_for_all() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
     let alice_addr = alice.address();
@@ -681,7 +791,7 @@ async fn set_approval_for_all(
         approved: approved_value,
     }));
 
-    let Erc1155Supply::isApprovedForAllReturn { approved } =
+    let approved =
         contract.isApprovedForAll(alice_addr, bob_addr).call().await?;
     assert_eq!(approved_value, approved);
 
@@ -695,21 +805,24 @@ async fn set_approval_for_all(
         approved: approved_value,
     }));
 
-    let Erc1155Supply::isApprovedForAllReturn { approved } =
+    let approved =
         contract.isApprovedForAll(alice_addr, bob_addr).call().await?;
     assert_eq!(approved_value, approved);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn is_approved_for_all_zero_address(alice: Account) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn is_approved_for_all_zero_address() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
     let invalid_operator = Address::ZERO;
 
-    let Erc1155Supply::isApprovedForAllReturn { approved } = contract
+    let approved = contract
         .isApprovedForAll(alice.address(), invalid_operator)
         .call()
         .await?;
@@ -719,9 +832,13 @@ async fn is_approved_for_all_zero_address(alice: Account) -> eyre::Result<()> {
     Ok(())
 }
 
-#[e2e::test]
-async fn safe_transfer_from(alice: Account, bob: Account) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn safe_transfer_from() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
     let alice_addr = alice.address();
@@ -735,9 +852,9 @@ async fn safe_transfer_from(alice: Account, bob: Account) -> eyre::Result<()> {
         vec![0, 1, 2, 3].into()
     ))?;
 
-    let Erc1155Supply::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract.balanceOf(alice_addr, token_id).call().await?;
-    let Erc1155Supply::balanceOfReturn { balance: initial_bob_balance } =
+    let initial_bob_balance =
         contract.balanceOf(bob_addr, token_id).call().await?;
 
     let receipt = receipt!(contract.safeTransferFrom(
@@ -756,23 +873,22 @@ async fn safe_transfer_from(alice: Account, bob: Account) -> eyre::Result<()> {
         value
     }));
 
-    let Erc1155Supply::balanceOfReturn { balance: alice_balance } =
-        contract.balanceOf(alice_addr, token_id).call().await?;
+    let alice_balance = contract.balanceOf(alice_addr, token_id).call().await?;
     assert_eq!(initial_alice_balance - value, alice_balance);
 
-    let Erc1155Supply::balanceOfReturn { balance: bob_balance } =
-        contract.balanceOf(bob_addr, token_id).call().await?;
+    let bob_balance = contract.balanceOf(bob_addr, token_id).call().await?;
     assert_eq!(initial_bob_balance + value, bob_balance);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn safe_transfer_from_with_approval(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn safe_transfer_from_with_approval() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract_alice = Erc1155Supply::new(contract_addr, &alice.wallet);
     let contract_bob = Erc1155Supply::new(contract_addr, &bob.wallet);
 
@@ -781,7 +897,7 @@ async fn safe_transfer_from_with_approval(
     let token_id = random_token_ids(1)[0];
     let value = random_values(1)[0];
 
-    watch!(contract_bob.mint(
+    watch!(contract_alice.mint(
         bob_addr,
         token_id,
         value,
@@ -790,9 +906,9 @@ async fn safe_transfer_from_with_approval(
 
     watch!(contract_bob.setApprovalForAll(alice_addr, true))?;
 
-    let Erc1155Supply::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract_alice.balanceOf(alice_addr, token_id).call().await?;
-    let Erc1155Supply::balanceOfReturn { balance: initial_bob_balance } =
+    let initial_bob_balance =
         contract_alice.balanceOf(bob_addr, token_id).call().await?;
 
     let receipt = receipt!(contract_alice.safeTransferFrom(
@@ -811,22 +927,23 @@ async fn safe_transfer_from_with_approval(
         value
     }));
 
-    let Erc1155Supply::balanceOfReturn { balance: alice_balance } =
+    let alice_balance =
         contract_alice.balanceOf(alice_addr, token_id).call().await?;
     assert_eq!(initial_alice_balance + value, alice_balance);
 
-    let Erc1155Supply::balanceOfReturn { balance: bob_balance } =
+    let bob_balance =
         contract_alice.balanceOf(bob_addr, token_id).call().await?;
     assert_eq!(initial_bob_balance - value, bob_balance);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn safe_transfer_to_receiver_contract(
-    alice: Account,
-) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn safe_transfer_to_receiver_contract() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
     let receiver_addr =
@@ -844,9 +961,9 @@ async fn safe_transfer_to_receiver_contract(
         vec![0, 1, 2, 3].into()
     ))?;
 
-    let Erc1155Supply::balanceOfReturn { balance: initial_alice_balance } =
+    let initial_alice_balance =
         contract.balanceOf(alice_addr, token_id).call().await?;
-    let Erc1155Supply::balanceOfReturn { balance: initial_receiver_balance } =
+    let initial_receiver_balance =
         contract.balanceOf(receiver_addr, token_id).call().await?;
 
     let receipt = receipt!(contract.safeTransferFrom(
@@ -873,23 +990,23 @@ async fn safe_transfer_to_receiver_contract(
         data: vec![].into(),
     }));
 
-    let Erc1155Supply::balanceOfReturn { balance: alice_balance } =
-        contract.balanceOf(alice_addr, token_id).call().await?;
+    let alice_balance = contract.balanceOf(alice_addr, token_id).call().await?;
     assert_eq!(initial_alice_balance - value, alice_balance);
 
-    let Erc1155Supply::balanceOfReturn { balance: receiver_balance } =
+    let receiver_balance =
         contract.balanceOf(receiver_addr, token_id).call().await?;
     assert_eq!(initial_receiver_balance + value, receiver_balance);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn safe_batch_transfer_from(
-    alice: Account,
-    bob: Account,
-) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn safe_batch_transfer_from() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract_alice = Erc1155Supply::new(contract_addr, &alice.wallet);
 
     let alice_addr = alice.address();
@@ -904,18 +1021,15 @@ async fn safe_batch_transfer_from(
         vec![].into()
     ))?;
 
-    let Erc1155Supply::balanceOfBatchReturn {
-        balances: initial_alice_balances,
-    } = contract_alice
+    let initial_alice_balances = contract_alice
         .balanceOfBatch(vec![alice_addr, alice_addr], token_ids.clone())
         .call()
         .await?;
 
-    let Erc1155Supply::balanceOfBatchReturn { balances: initial_bob_balances } =
-        contract_alice
-            .balanceOfBatch(vec![bob_addr, bob_addr], token_ids.clone())
-            .call()
-            .await?;
+    let initial_bob_balances = contract_alice
+        .balanceOfBatch(vec![bob_addr, bob_addr], token_ids.clone())
+        .call()
+        .await?;
 
     let receipt = receipt!(contract_alice.safeBatchTransferFrom(
         alice_addr,
@@ -933,17 +1047,15 @@ async fn safe_batch_transfer_from(
         values: values.clone()
     }));
 
-    let Erc1155Supply::balanceOfBatchReturn { balances: alice_balances } =
-        contract_alice
-            .balanceOfBatch(vec![alice_addr, alice_addr], token_ids.clone())
-            .call()
-            .await?;
+    let alice_balances = contract_alice
+        .balanceOfBatch(vec![alice_addr, alice_addr], token_ids.clone())
+        .call()
+        .await?;
 
-    let Erc1155Supply::balanceOfBatchReturn { balances: bob_balances } =
-        contract_alice
-            .balanceOfBatch(vec![bob_addr, bob_addr], token_ids.clone())
-            .call()
-            .await?;
+    let bob_balances = contract_alice
+        .balanceOfBatch(vec![bob_addr, bob_addr], token_ids.clone())
+        .call()
+        .await?;
 
     for (idx, value) in values.iter().enumerate() {
         assert_eq!(initial_alice_balances[idx] - value, alice_balances[idx]);
@@ -953,11 +1065,12 @@ async fn safe_batch_transfer_from(
     Ok(())
 }
 
-#[e2e::test]
-async fn safe_batch_transfer_to_receiver_contract(
-    alice: Account,
-) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn safe_batch_transfer_to_receiver_contract() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
 
     let receiver_addr =
@@ -975,16 +1088,12 @@ async fn safe_batch_transfer_to_receiver_contract(
         vec![].into()
     ))?;
 
-    let Erc1155Supply::balanceOfBatchReturn {
-        balances: initial_alice_balances,
-    } = contract
+    let initial_alice_balances = contract
         .balanceOfBatch(vec![alice_addr, alice_addr], token_ids.clone())
         .call()
         .await?;
 
-    let Erc1155Supply::balanceOfBatchReturn {
-        balances: initial_receiver_balances,
-    } = contract
+    let initial_receiver_balances = contract
         .balanceOfBatch(vec![receiver_addr, receiver_addr], token_ids.clone())
         .call()
         .await?;
@@ -1013,20 +1122,15 @@ async fn safe_batch_transfer_to_receiver_contract(
         data: vec![].into(),
     }));
 
-    let Erc1155Supply::balanceOfBatchReturn { balances: alice_balances } =
-        contract
-            .balanceOfBatch(vec![alice_addr, alice_addr], token_ids.clone())
-            .call()
-            .await?;
+    let alice_balances = contract
+        .balanceOfBatch(vec![alice_addr, alice_addr], token_ids.clone())
+        .call()
+        .await?;
 
-    let Erc1155Supply::balanceOfBatchReturn { balances: receiver_balances } =
-        contract
-            .balanceOfBatch(
-                vec![receiver_addr, receiver_addr],
-                token_ids.clone(),
-            )
-            .call()
-            .await?;
+    let receiver_balances = contract
+        .balanceOfBatch(vec![receiver_addr, receiver_addr], token_ids.clone())
+        .call()
+        .await?;
 
     for (idx, value) in values.iter().enumerate() {
         assert_eq!(initial_alice_balances[idx] - value, alice_balances[idx]);
@@ -1039,13 +1143,14 @@ async fn safe_batch_transfer_to_receiver_contract(
     Ok(())
 }
 
-#[e2e::test]
-async fn safe_batch_transfer_from_with_approval(
-    alice: Account,
-    bob: Account,
-    dave: Account,
-) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn safe_batch_transfer_from_with_approval() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+    let dave = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract_alice = Erc1155Supply::new(contract_addr, &alice.wallet);
     let contract_bob = Erc1155Supply::new(contract_addr, &bob.wallet);
 
@@ -1064,17 +1169,15 @@ async fn safe_batch_transfer_from_with_approval(
 
     watch!(contract_bob.setApprovalForAll(alice_addr, true))?;
 
-    let Erc1155Supply::balanceOfBatchReturn { balances: initial_dave_balances } =
-        contract_alice
-            .balanceOfBatch(vec![dave_addr, dave_addr], token_ids.clone())
-            .call()
-            .await?;
+    let initial_dave_balances = contract_alice
+        .balanceOfBatch(vec![dave_addr, dave_addr], token_ids.clone())
+        .call()
+        .await?;
 
-    let Erc1155Supply::balanceOfBatchReturn { balances: initial_bob_balances } =
-        contract_alice
-            .balanceOfBatch(vec![bob_addr, bob_addr], token_ids.clone())
-            .call()
-            .await?;
+    let initial_bob_balances = contract_alice
+        .balanceOfBatch(vec![bob_addr, bob_addr], token_ids.clone())
+        .call()
+        .await?;
 
     let receipt = receipt!(contract_alice.safeBatchTransferFrom(
         bob_addr,
@@ -1092,17 +1195,15 @@ async fn safe_batch_transfer_from_with_approval(
         values: values.clone()
     }));
 
-    let Erc1155Supply::balanceOfBatchReturn { balances: bob_balances } =
-        contract_alice
-            .balanceOfBatch(vec![bob_addr, bob_addr], token_ids.clone())
-            .call()
-            .await?;
+    let bob_balances = contract_alice
+        .balanceOfBatch(vec![bob_addr, bob_addr], token_ids.clone())
+        .call()
+        .await?;
 
-    let Erc1155Supply::balanceOfBatchReturn { balances: dave_balances } =
-        contract_alice
-            .balanceOfBatch(vec![dave_addr, dave_addr], token_ids.clone())
-            .call()
-            .await?;
+    let dave_balances = contract_alice
+        .balanceOfBatch(vec![dave_addr, dave_addr], token_ids.clone())
+        .call()
+        .await?;
 
     for (idx, value) in values.iter().enumerate() {
         assert_eq!(initial_bob_balances[idx] - value, bob_balances[idx]);
@@ -1116,25 +1217,28 @@ async fn safe_batch_transfer_from_with_approval(
 // Integration Tests: ERC-165 Support Interface
 // ============================================================================
 
-#[e2e::test]
-async fn supports_interface(alice: Account) -> eyre::Result<()> {
-    let contract_addr = alice.as_deployer().deploy().await?.contract_address;
+#[tokio::test]
+async fn supports_interface() -> eyre::Result<()> {
+    let alice = Account::new().await?;
+
+    let contract_addr =
+        alice.as_deployer().with_owner(&alice).deploy().await?.contract_address;
     let contract = Erc1155Supply::new(contract_addr, &alice.wallet);
     let invalid_interface_id: B32 = 0xffffffff_u32.into();
     let supports_interface =
-        contract.supportsInterface(invalid_interface_id).call().await?._0;
+        contract.supportsInterface(invalid_interface_id).call().await?;
 
     assert!(!supports_interface);
 
     let erc1155_interface_id: B32 = 0xd9b67a26_u32.into();
     let supports_interface =
-        contract.supportsInterface(erc1155_interface_id).call().await?._0;
+        contract.supportsInterface(erc1155_interface_id).call().await?;
 
     assert!(supports_interface);
 
     let erc165_interface_id: B32 = 0x01ffc9a7_u32.into();
     let supports_interface =
-        contract.supportsInterface(erc165_interface_id).call().await?._0;
+        contract.supportsInterface(erc165_interface_id).call().await?;
 
     assert!(supports_interface);
 

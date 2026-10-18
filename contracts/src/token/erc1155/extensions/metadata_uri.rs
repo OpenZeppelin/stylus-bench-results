@@ -88,21 +88,19 @@ impl IErc165 for Erc1155MetadataUri {
 
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::Contract;
-    use stylus_sdk::{
-        alloy_primitives::{uint, Address},
-        prelude::*,
-    };
+    use crate::test_support::{test_address, TestContract as TestVMContract};
+    use stylus_sdk::{alloy_primitives::uint, prelude::*};
 
     use super::*;
 
     unsafe impl TopLevelStorage for Erc1155MetadataUri {}
 
-    #[motsu::test]
-    fn uri_ignores_token_id(
-        contract: Contract<Erc1155MetadataUri>,
-        alice: Address,
-    ) {
+    #[test]
+    fn uri_ignores_token_id() {
+        let contract =
+            TestVMContract::<Erc1155MetadataUri>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let uri = String::from("https://token-cdn-domain/\\{id\\}.json");
         contract.sender(alice).constructor(uri.clone());
 
@@ -113,7 +111,7 @@ mod tests {
         assert_eq!(uri, contract.sender(alice).uri(token_id));
     }
 
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual =
             <Erc1155MetadataUri as IErc1155MetadataUri>::interface_id();
@@ -121,11 +119,12 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
-    fn supports_interface(
-        contract: Contract<Erc1155MetadataUri>,
-        alice: Address,
-    ) {
+    #[test]
+    fn supports_interface() {
+        let contract =
+            TestVMContract::<Erc1155MetadataUri>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         assert!(contract.sender(alice).supports_interface(
             <Erc1155MetadataUri as IErc1155MetadataUri>::interface_id()
         ));

@@ -6,7 +6,6 @@ use alloc::{string::String, vec, vec::Vec};
 use alloy_primitives::U256;
 pub use sol::*;
 use stylus_sdk::{
-    evm,
     prelude::*,
     storage::{StorageMap, StorageString},
 };
@@ -64,7 +63,7 @@ impl Erc721UriStorage {
     /// * [`MetadataUpdate`].
     pub fn _set_token_uri(&mut self, token_id: U256, token_uri: String) {
         self.token_uris.setter(token_id).set_str(token_uri);
-        evm::log(MetadataUpdate { token_id });
+        self.vm().log(MetadataUpdate { token_id });
     }
 
     /// Check [`IErc721Metadata::token_uri()`] for more details.
@@ -98,8 +97,8 @@ impl Erc721UriStorage {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{uint, Address};
-    use motsu::prelude::*;
+    use crate::test_support::{test_address, TestContract as TestVMContract};
+    use alloy_primitives::uint;
     use stylus_sdk::prelude::*;
 
     use super::*;
@@ -159,18 +158,19 @@ mod tests {
 
     unsafe impl TopLevelStorage for Erc721MetadataExample {}
 
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual = <Erc721MetadataExample as IErc721Metadata>::interface_id();
         let expected: B32 = 0x5b5e139f_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
-    fn supports_interface(
-        contract: Contract<Erc721MetadataExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn supports_interface() {
+        let contract =
+            TestVMContract::<Erc721MetadataExample>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         assert!(contract.sender(alice).supports_interface(
             <Erc721MetadataExample as IErc721Metadata>::interface_id()
         ));
@@ -181,11 +181,12 @@ mod tests {
         let fake_interface_id: B32 = 0x12345678_u32.into();
         assert!(!contract.sender(alice).supports_interface(fake_interface_id));
     }
-    #[motsu::test]
-    fn token_uri_works(
-        contract: Contract<Erc721MetadataExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn token_uri_works() {
+        let contract =
+            TestVMContract::<Erc721MetadataExample>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         contract
             .sender(alice)
             .erc721

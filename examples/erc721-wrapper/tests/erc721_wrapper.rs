@@ -1,10 +1,12 @@
 #![cfg(feature = "e2e")]
+#[path = "../../devnet_test_support.rs"]
+mod devnet_test_support;
 
-use abi::{Erc721, Erc721Wrapper};
-use alloy::primitives::{uint, Address};
-use e2e::{
-    constructor, receipt, watch, Account, Constructor, EventExt, Revert,
+use crate::devnet_test_support::{
+    constructor, receipt, send, watch, Account, Constructor, EventExt, Revert,
 };
+use abi::{Erc721, Erc721Wrapper, LegacyErc721WrapperBurn};
+use alloy::primitives::{uint, Address};
 use eyre::Result;
 
 mod abi;
@@ -28,8 +30,10 @@ async fn deploy(account: &Account) -> Result<(Address, Address)> {
     Ok((asset_addr, contract_addr))
 }
 
-#[e2e::test]
-async fn constructs(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn constructs() -> Result<()> {
+    let alice = Account::new().await?;
+
     let asset_address = erc721::deploy(&alice.wallet).await?;
     let contract_addr = alice
         .as_deployer()
@@ -39,14 +43,16 @@ async fn constructs(alice: Account) -> Result<()> {
         .contract_address;
     let contract = Erc721Wrapper::new(contract_addr, alice.wallet);
 
-    let underlying = contract.underlying().call().await?.underlying;
+    let underlying = contract.underlying().call().await?;
     assert_eq!(underlying, asset_address);
 
     Ok(())
 }
 
-#[e2e::test]
-async fn deposit_for_success(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn deposit_for_success() -> Result<()> {
+    let alice = Account::new().await?;
+
     let token_id = uint!(1_U256);
     let (asset_addr, contract_addr) = deploy(&alice).await?;
     let alice_address = alice.address();
@@ -56,11 +62,11 @@ async fn deposit_for_success(alice: Account) -> Result<()> {
     watch!(asset.safeMint(alice_address, token_id))?;
     watch!(asset.approve(contract_addr, token_id))?;
 
-    let initial_alice_balance = asset.balanceOf(alice_address).call().await?._0;
+    let initial_alice_balance = asset.balanceOf(alice_address).call().await?;
     let initial_contract_balance =
-        asset.balanceOf(contract_addr).call().await?._0;
+        asset.balanceOf(contract_addr).call().await?;
     let initial_wrapped_balance =
-        contract.balanceOf(alice_address).call().await?.balance;
+        contract.balanceOf(alice_address).call().await?;
 
     let receipt = receipt!(contract.depositFor(alice_address, vec![token_id]))?;
 
@@ -76,32 +82,88 @@ async fn deposit_for_success(alice: Account) -> Result<()> {
         tokenId: token_id,
     }));
 
-    let wrapped_owner = contract.ownerOf(token_id).call().await?.owner;
+    let wrapped_owner = contract.ownerOf(token_id).call().await?;
     assert_eq!(wrapped_owner, alice_address);
 
-    let underlying_owner = asset.ownerOf(token_id).call().await?._0;
+    let underlying_owner = asset.ownerOf(token_id).call().await?;
     assert_eq!(underlying_owner, contract_addr);
 
     let one = uint!(1_U256);
 
     assert_eq!(
         initial_alice_balance - one,
-        asset.balanceOf(alice_address).call().await?._0
+        asset.balanceOf(alice_address).call().await?
     );
     assert_eq!(
         initial_contract_balance + one,
-        asset.balanceOf(contract_addr).call().await?._0
+        asset.balanceOf(contract_addr).call().await?
     );
     assert_eq!(
         initial_wrapped_balance + one,
-        contract.balanceOf(alice_address).call().await?.balance
+        contract.balanceOf(alice_address).call().await?
     );
 
     Ok(())
 }
 
-#[e2e::test]
-async fn withdraw_to_success(alice: Account) -> Result<()> {
+#[tokio::test]
+async fn unapproved_operator_cannot_burn_wrapped_token() -> Result<()> {
+    let alice = Account::new().await?;
+    let bob = Account::new().await?;
+
+    let token_id = uint!(1_U256);
+    let (asset_addr, contract_addr) = deploy(&alice).await?;
+    let alice_addr = alice.address();
+    let asset = ERC721Mock::new(asset_addr, &alice.wallet);
+    let wrapper = Erc721Wrapper::new(contract_addr, &alice.wallet);
+
+    watch!(asset.safeMint(alice_addr, token_id))?;
+    watch!(asset.approve(contract_addr, token_id))?;
+    watch!(wrapper.depositFor(alice_addr, vec![token_id]))?;
+
+    let attacker_wrapper =
+        LegacyErc721WrapperBurn::new(contract_addr, &bob.wallet);
+    send!(attacker_wrapper.burn(token_id))
+        .expect_err("the wrapper must not expose standalone burn");
+
+    assert_eq!(alice_addr, wrapper.ownerOf(token_id).call().await?);
+    assert_eq!(contract_addr, asset.ownerOf(token_id).call().await?);
+
+    watch!(wrapper.withdrawTo(alice_addr, vec![token_id]))?;
+    assert_eq!(alice_addr, asset.ownerOf(token_id).call().await?);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn deposit_for_reverts_when_unsupported_token() -> Result<()> {
+    let alice = Account::new().await?;
+    let unsupported_token = alice.address();
+    let contract_addr = alice
+        .as_deployer()
+        .with_constructor(ctr(unsupported_token))
+        .deploy()
+        .await?
+        .contract_address;
+    let contract = Erc721Wrapper::new(contract_addr, &alice.wallet);
+
+    let err = contract
+        .depositFor(alice.address(), vec![uint!(1_U256)])
+        .call()
+        .await
+        .expect_err("should return `ERC721UnsupportedToken`");
+
+    assert!(err.reverted_with(Erc721Wrapper::ERC721UnsupportedToken {
+        token: unsupported_token
+    }));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn withdraw_to_success() -> Result<()> {
+    let alice = Account::new().await?;
+
     let token_id = uint!(1_U256);
     let (asset_addr, contract_addr) = deploy(&alice).await?;
     let alice_address = alice.address();
@@ -112,11 +174,11 @@ async fn withdraw_to_success(alice: Account) -> Result<()> {
     watch!(asset.approve(contract_addr, token_id))?;
     watch!(contract.depositFor(alice_address, vec![token_id]))?;
 
-    let initial_alice_balance = asset.balanceOf(alice_address).call().await?._0;
+    let initial_alice_balance = asset.balanceOf(alice_address).call().await?;
     let initial_contract_balance =
-        asset.balanceOf(contract_addr).call().await?._0;
+        asset.balanceOf(contract_addr).call().await?;
     let initial_wrapped_balance =
-        contract.balanceOf(alice_address).call().await?.balance;
+        contract.balanceOf(alice_address).call().await?;
 
     let receipt = receipt!(contract.withdrawTo(alice_address, vec![token_id]))?;
 
@@ -142,22 +204,22 @@ async fn withdraw_to_success(alice: Account) -> Result<()> {
         tokenId: token_id
     }));
 
-    let underlying_owner = asset.ownerOf(token_id).call().await?._0;
+    let underlying_owner = asset.ownerOf(token_id).call().await?;
     assert_eq!(underlying_owner, alice_address);
 
     let one = uint!(1_U256);
 
     assert_eq!(
         initial_alice_balance + one,
-        asset.balanceOf(alice_address).call().await?._0
+        asset.balanceOf(alice_address).call().await?
     );
     assert_eq!(
         initial_contract_balance - one,
-        asset.balanceOf(contract_addr).call().await?._0
+        asset.balanceOf(contract_addr).call().await?
     );
     assert_eq!(
         initial_wrapped_balance - one,
-        contract.balanceOf(alice_address).call().await?.balance
+        contract.balanceOf(alice_address).call().await?
     );
 
     Ok(())

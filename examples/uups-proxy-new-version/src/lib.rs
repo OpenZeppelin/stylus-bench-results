@@ -35,7 +35,6 @@ use openzeppelin_stylus::{
 use stylus_sdk::{
     abi::Bytes,
     alloy_primitives::{Address, B256, U256},
-    call::Call,
     prelude::*,
     storage::{StorageBool, StorageU32},
 };
@@ -123,17 +122,33 @@ impl UUPSProxyErc20ExampleNewVersion {
         Ok(())
     }
 
-    fn mint(&mut self, to: Address, value: U256) -> Result<(), erc20::Error> {
-        self.erc20._mint(to, value)
+    fn mint(&mut self, to: Address, value: U256) -> Result<(), Vec<u8>> {
+        self.ownable.only_owner()?;
+        self.erc20._mint(to, value).map_err(Into::into)
     }
 
     fn initialize(&mut self, owner: Address) -> Result<(), Error> {
-        self.set_version()?;
+        if self.version.get() >= VERSION_NUMBER {
+            return Err(Error::InvalidInitialization(
+                uups_upgradeable::InvalidInitialization {},
+            ));
+        }
         self.ownable.constructor(owner)?;
-        Ok(())
+        self.set_version_for_upgrade()
     }
 
     fn set_version(&mut self) -> Result<(), Error> {
+        self.ownable.only_owner()?;
+        self.set_version_for_upgrade()
+    }
+
+    pub fn get_version(&self) -> U32 {
+        VERSION_NUMBER
+    }
+}
+
+impl UUPSProxyErc20ExampleNewVersion {
+    fn set_version_for_upgrade(&mut self) -> Result<(), Error> {
         if self.not_delegated().is_ok() {
             return Err(Error::UnauthorizedCallContext(
                 UUPSUnauthorizedCallContext {},
@@ -147,10 +162,6 @@ impl UUPSProxyErc20ExampleNewVersion {
 
         self.version.set(VERSION_NUMBER);
         Ok(())
-    }
-
-    pub fn get_version(&self) -> U32 {
-        VERSION_NUMBER
     }
 }
 
@@ -186,7 +197,7 @@ impl IUUPSUpgradeable for UUPSProxyErc20ExampleNewVersion {
 
 impl UUPSProxyErc20ExampleNewVersion {
     pub fn logic_flag(&self) -> StorageBool {
-        StorageSlot::get_slot::<StorageBool>(LOGIC_FLAG_SLOT)
+        StorageSlot::get_slot::<StorageBool>(self, LOGIC_FLAG_SLOT)
     }
 
     pub fn is_logic(&self) -> bool {
@@ -195,7 +206,7 @@ impl UUPSProxyErc20ExampleNewVersion {
 
     pub fn only_proxy(&self) -> Result<(), Error> {
         if self.is_logic()
-            || Erc1967Utils::get_implementation() == Address::ZERO
+            || Erc1967Utils::get_implementation(self) == Address::ZERO
             || U32::from(self.get_version()) != self.version.get()
         {
             Err(Error::UnauthorizedCallContext(UUPSUnauthorizedCallContext {}))
@@ -230,7 +241,7 @@ impl UUPSProxyErc20ExampleNewVersion {
     ) -> Result<(), Error> {
         #[allow(deprecated)]
         let slot = Erc1822ProxiableInterface::new(new_implementation)
-            .proxiable_uuid(Call::new_in(self))
+            .proxiable_uuid(self.vm(), Call::new())
             .map_err(|_e| {
                 Error::InvalidImplementation(ERC1967InvalidImplementation {
                     implementation: new_implementation,
@@ -246,6 +257,44 @@ impl UUPSProxyErc20ExampleNewVersion {
                 slot,
             }))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use stylus_test::{TestVM, TestVMBuilder};
+
+    use super::*;
+
+    fn proxy_storage(tag: u8) -> (TestVM, UUPSProxyErc20ExampleNewVersion) {
+        let vm = TestVMBuilder::new()
+            .contract_address(Address::repeat_byte(tag))
+            .build();
+        let contract = UUPSProxyErc20ExampleNewVersion::from(&vm);
+        (vm, contract)
+    }
+
+    #[test]
+    fn initializer_rejects_reinitialization_after_upgrade() {
+        let alice = Address::repeat_byte(1);
+        let bob = Address::repeat_byte(2);
+        let (vm, mut contract) = proxy_storage(102);
+
+        // Model the proxy state after v1 initialization and the v2 upgrade
+        // hook, which advances the stored version while preserving its owner.
+        vm.set_sender(alice);
+        contract.ownable.constructor(alice).expect("valid owner");
+        contract.version.set(uups_upgradeable::VERSION_NUMBER);
+        contract.set_version().expect("upgrade hook should advance version");
+        assert_eq!(VERSION_NUMBER, contract.version.get());
+
+        vm.set_sender(bob);
+        let error = contract
+            .initialize(bob)
+            .expect_err("reinitialization should revert");
+
+        assert!(matches!(error, Error::InvalidInitialization(_)));
+        assert_eq!(alice, contract.owner());
     }
 }
 
@@ -265,7 +314,7 @@ impl IErc20 for UUPSProxyErc20ExampleNewVersion {
         &mut self,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer(to, value)
     }
 
@@ -274,7 +323,7 @@ impl IErc20 for UUPSProxyErc20ExampleNewVersion {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer_from(from, to, value)
     }
 
@@ -286,7 +335,7 @@ impl IErc20 for UUPSProxyErc20ExampleNewVersion {
         &mut self,
         spender: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.approve(spender, value)
     }
 }

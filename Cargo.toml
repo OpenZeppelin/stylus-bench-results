@@ -1,14 +1,14 @@
 [workspace]
 members = [
   "benches",
+  "tools/devnet-node",
   "contracts",
   "contracts-proc",
   "lib/crypto",
-  "lib/e2e",
-  "lib/e2e-proc",
   "examples/access-control",
   "examples/precompiles",
   "examples/erc1967",
+  "examples/erc1967-beacon-rollback",
   "examples/erc1967-invalid",
   "examples/erc20",
   "examples/erc20-permit",
@@ -45,10 +45,11 @@ default-members = [
   "contracts",
   "contracts-proc",
   "lib/crypto",
-  "lib/e2e-proc",
+  "tools/devnet-node",
   "examples/access-control",
   "examples/precompiles",
   "examples/erc1967",
+  "examples/erc1967-beacon-rollback",
   "examples/erc1967-invalid",
   "examples/erc20",
   "examples/erc20-permit",
@@ -97,7 +98,7 @@ version = "0.3.0"
 missing_docs = "warn"
 unreachable_pub = "warn"
 rust_2021_compatibility = { level = "warn", priority = -1 }
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage_nightly)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage_nightly)', 'cfg(feature, values("contract-client-gen"))'] }
 
 [workspace.lints.clippy]
 pedantic = "warn"
@@ -105,9 +106,9 @@ all = "warn"
 
 [workspace.dependencies]
 # Stylus SDK related
-stylus-sdk = "=0.9.0"
+stylus-sdk = "=0.10.10"
 
-alloy = { version = "=0.7.3", features = [
+alloy = { version = "=1.7.3", features = [
   "contract",
   "network",
   "providers",
@@ -117,18 +118,17 @@ alloy = { version = "=0.7.3", features = [
   "signer-local",
   "getrandom",
 ] }
-# Even though `alloy` includes `alloy-primitives` and `alloy-sol-types` we need
-# to keep both versions for compatibility with the Stylus SDK. Once they start
-# using `alloy` we can remove these.
-alloy-primitives = { version = "=0.8.20", default-features = false, features = [
+# `alloy` follows the Stylus tools provider API. Keep these core crates aligned
+# with the types exposed directly by Stylus SDK 0.10.10.
+alloy-primitives = { version = "=1.5.7", default-features = false, features = [
   "tiny-keccak",
 ] }
-alloy-sol-types = { version = "=0.8.20", default-features = false }
-alloy-sol-macro = { version = "=0.8.20", default-features = false }
-alloy-sol-macro-expander = { version = "=0.8.20", default-features = false }
-alloy-sol-macro-input = { version = "=0.8.20", default-features = false }
+alloy-sol-types = { version = "=1.5.7", default-features = false }
+alloy-sol-macro = { version = "=1.5.7", default-features = false }
+alloy-sol-macro-expander = { version = "=1.5.7", default-features = false }
+alloy-sol-macro-input = { version = "=1.5.7", default-features = false }
 
-ruint = "^1.12.3"
+ruint = { version = "^1.17.1", default-features = false }
 
 eyre = "0.6.8"
 keccak-const = "0.2.0"
@@ -150,14 +150,12 @@ syn = { version = "2.0.58", features = ["full"] }
 proc-macro2 = "1.0.79"
 quote = "1.0.35"
 
-motsu = "=0.10.0"
+stylus-test = "=0.10.10"
 
 # members
 openzeppelin-stylus = { path = "contracts" }
 openzeppelin-stylus-proc = { path = "contracts-proc", version = "=0.3.0" }
 openzeppelin-crypto = { path = "lib/crypto" }
-e2e = { path = "lib/e2e" }
-e2e-proc = { path = "lib/e2e-proc" }
 
 [profile.release]
 codegen-units = 1

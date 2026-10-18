@@ -1,15 +1,16 @@
 //! Implementation of the ERC-2309 "Consecutive Transfer Extension" as defined
 //! in [ERC-2309].
 //!
-//! This extension allows the minting large batches of tokens, during
-//! contract construction only. For upgradeable contracts, this implies that
-//! batch minting is only available during proxy deployment, and not in
-//! subsequent upgrades. These batches are limited to 5000 tokens at a time by
-//! default to accommodate off-chain indexers.
+//! This extension allows minting large batches of tokens during an explicit
+//! construction phase. Consumers must open the phase before their constructor
+//! batches and close it afterwards. For upgradeable contracts, batch minting
+//! should only be enabled by the proxy's one-time initializer. These batches
+//! are limited to 5000 tokens at a time by default to accommodate off-chain
+//! indexers.
 //!
 //! Using this extension removes the ability to mint single tokens during
-//! contract construction. This ability is regained after construction. During
-//! construction, only batch minting is allowed.
+//! contract construction. This ability is regained after construction. While
+//! the explicit construction phase is open, only batch minting is allowed.
 //!
 //! Fields `first_consecutive_id` (used to offset first token id) and
 //! `max_batch_size` (used to restrict maximum batch size) can be assigned
@@ -21,9 +22,9 @@ use alloc::{vec, vec::Vec};
 
 use alloy_primitives::{
     aliases::{B32, U96},
-    uint, Address, U256,
+    uint, Address, B256, U256, U8,
 };
-use stylus_sdk::{abi::Bytes, call::MethodError, evm, msg, prelude::*};
+use stylus_sdk::{abi::Bytes, prelude::*, storage::StorageU8};
 
 use crate::{
     token::erc721::{
@@ -35,6 +36,7 @@ use crate::{
     utils::{
         introspection::erc165::IErc165,
         math::storage::{AddAssignUnchecked, SubAssignUnchecked},
+        storage_slot::StorageSlot,
         structs::{
             bitmap::BitMap,
             checkpoints::{
@@ -45,6 +47,25 @@ use crate::{
 };
 
 type StorageU96 = <S160 as Size>::KeyStorage;
+
+// Namespaced storage keeps the phase state out of Erc721Consecutive's
+// sequential layout, so adding it does not move storage in consumer contracts.
+const CONSTRUCTION_PHASE_SLOT: B256 = {
+    const HASH: [u8; 32] = keccak_const::Keccak256::new()
+        .update(
+            b"openzeppelin.stylus.token.erc721.consecutive.construction-phase",
+        )
+        .finalize();
+    B256::new(
+        U256::from_be_bytes(HASH)
+            .wrapping_sub(uint!(1_U256))
+            .to_be_bytes::<32>(),
+    )
+};
+
+const CONSTRUCTION_NOT_STARTED: U8 = uint!(0_U8);
+const CONSTRUCTION_IN_PROGRESS: U8 = uint!(1_U8);
+const CONSTRUCTION_FINISHED: U8 = uint!(2_U8);
 
 pub use sol::*;
 #[cfg_attr(coverage_nightly, coverage(off))]
@@ -205,11 +226,11 @@ unsafe impl TopLevelStorage for Erc721Consecutive {}
 impl IErc721 for Erc721Consecutive {
     type Error = Error;
 
-    fn balance_of(&self, owner: Address) -> Result<U256, Self::Error> {
+    fn balance_of(&self, owner: Address) -> Result<U256, Error> {
         Ok(self.erc721.balance_of(owner)?)
     }
 
-    fn owner_of(&self, token_id: U256) -> Result<Address, Self::Error> {
+    fn owner_of(&self, token_id: U256) -> Result<Address, Error> {
         self._require_owned(token_id)
     }
 
@@ -218,7 +239,7 @@ impl IErc721 for Erc721Consecutive {
         from: Address,
         to: Address,
         token_id: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         // TODO: Once the SDK supports the conversion,
         // use alloy_primitives::bytes!("") here.
         self.safe_transfer_from_with_data(from, to, token_id, vec![].into())
@@ -230,10 +251,10 @@ impl IErc721 for Erc721Consecutive {
         to: Address,
         token_id: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         self.transfer_from(from, to, token_id)?;
         Ok(self.erc721._check_on_erc721_received(
-            msg::sender(),
+            self.vm().msg_sender(),
             from,
             to,
             token_id,
@@ -246,7 +267,7 @@ impl IErc721 for Erc721Consecutive {
         from: Address,
         to: Address,
         token_id: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         if to.is_zero() {
             return Err(erc721::Error::InvalidReceiver(
                 ERC721InvalidReceiver { receiver: Address::ZERO },
@@ -257,7 +278,8 @@ impl IErc721 for Erc721Consecutive {
         // Setting an "auth" argument enables the `_is_authorized` check which
         // verifies that the token exists (`!from.is_zero()`). Therefore, it is
         // not needed to verify that the return value is not 0 here.
-        let previous_owner = self._update(to, token_id, msg::sender())?;
+        let previous_owner =
+            self._update(to, token_id, self.vm().msg_sender())?;
         if previous_owner != from {
             return Err(erc721::Error::IncorrectOwner(ERC721IncorrectOwner {
                 sender: from,
@@ -269,23 +291,19 @@ impl IErc721 for Erc721Consecutive {
         Ok(())
     }
 
-    fn approve(
-        &mut self,
-        to: Address,
-        token_id: U256,
-    ) -> Result<(), Self::Error> {
-        self._approve(to, token_id, msg::sender(), true)
+    fn approve(&mut self, to: Address, token_id: U256) -> Result<(), Error> {
+        self._approve(to, token_id, self.vm().msg_sender(), true)
     }
 
     fn set_approval_for_all(
         &mut self,
         operator: Address,
         approved: bool,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         Ok(self.erc721.set_approval_for_all(operator, approved)?)
     }
 
-    fn get_approved(&self, token_id: U256) -> Result<Address, Self::Error> {
+    fn get_approved(&self, token_id: U256) -> Result<Address, Error> {
         self._require_owned(token_id)?;
         Ok(self.erc721._get_approved(token_id))
     }
@@ -314,6 +332,62 @@ impl Erc721Consecutive {
 // ************** Consecutive **************
 
 impl Erc721Consecutive {
+    /// Mints consecutive batches during the consumer's constructor or an
+    /// authorized one-time migration initializer.
+    ///
+    /// The constructor-only phase is opened and closed around the iterator, so
+    /// it cannot remain open if a batch returns an error. Existing proxies
+    /// default to the closed state because the phase uses a separate
+    /// namespaced slot absent from earlier versions. Do not expose this method
+    /// through a public entrypoint; an upgrade initializer that calls it must
+    /// enforce the consumer's upgrade authorization.
+    ///
+    /// # Errors
+    ///
+    /// * [`Error::ForbiddenBatchMint`] - If the phase has already been
+    ///   opened or completed.
+    /// * [`Error::InvalidReceiver`] - If a batch has a zero receiver.
+    /// * [`Error::ExceededMaxBatchMint`] - If a batch exceeds the configured
+    ///   maximum.
+    pub fn _mint_consecutive_batches(
+        &mut self,
+        batches: impl IntoIterator<Item = (Address, U96)>,
+    ) -> Result<(), Error> {
+        self._begin_consecutive_minting()?;
+        let mint_result =
+            batches.into_iter().try_for_each(|(receiver, amount)| {
+                self._mint_consecutive(receiver, amount).map(|_| ())
+            });
+        let finish_result = self._finish_consecutive_minting();
+
+        mint_result?;
+        finish_result
+    }
+
+    fn _begin_consecutive_minting(&mut self) -> Result<(), Error> {
+        let mut phase = self._construction_phase();
+        if phase.get() != CONSTRUCTION_NOT_STARTED {
+            return Err(ERC721ForbiddenBatchMint {}.into());
+        }
+
+        phase.set(CONSTRUCTION_IN_PROGRESS);
+        Ok(())
+    }
+
+    fn _finish_consecutive_minting(&mut self) -> Result<(), Error> {
+        let mut phase = self._construction_phase();
+        if phase.get() != CONSTRUCTION_IN_PROGRESS {
+            return Err(ERC721ForbiddenBatchMint {}.into());
+        }
+
+        phase.set(CONSTRUCTION_FINISHED);
+        Ok(())
+    }
+
+    fn _construction_phase(&self) -> StorageU8 {
+        StorageSlot::get_slot(self, CONSTRUCTION_PHASE_SLOT)
+    }
+
     /// Override of [`Erc721::_owner_of`] that checks the sequential
     /// ownership structure for tokens that have been minted as part of a
     /// batch, and not yet transferred.
@@ -349,8 +423,8 @@ impl Erc721Consecutive {
     /// far.
     ///
     /// CAUTION: Does not emit a [`Transfer`] event. This is ERC-721 compliant
-    /// as long as it is done inside of the constructor, which is enforced by
-    /// this function.
+    /// only while the consumer's constructor-only consecutive minting phase is
+    /// open.
     ///
     /// CAUTION: Does not invoke
     /// [`erc721::IErc721Receiver::on_erc721_received`] on the receiver.
@@ -362,6 +436,8 @@ impl Erc721Consecutive {
     ///
     /// # Errors
     ///
+    /// * [`Error::ForbiddenBatchMint`] - If the constructor minting phase is
+    ///   not open.
     /// * [`erc721::Error::InvalidReceiver`] - If `to` is [`Address::ZERO`].
     /// * [`Error::ExceededMaxBatchMint`] - If `batch_size` exceeds
     ///   `max_batch_size` of the contract.
@@ -374,6 +450,10 @@ impl Erc721Consecutive {
         to: Address,
         batch_size: U96,
     ) -> Result<U96, Error> {
+        if self._construction_phase().get() != CONSTRUCTION_IN_PROGRESS {
+            return Err(ERC721ForbiddenBatchMint {}.into());
+        }
+
         let next = self._next_consecutive_id();
 
         // Minting a batch of size 0 is a no-op.
@@ -405,7 +485,7 @@ impl Erc721Consecutive {
                 alloy_primitives::U128::from(batch_size),
             );
 
-            evm::log(ConsecutiveTransfer {
+            self.vm().log(ConsecutiveTransfer {
                 from_token_id: next.to::<U256>(),
                 to_token_id: last.to::<U256>(),
                 from_address: Address::ZERO,
@@ -538,7 +618,7 @@ impl Erc721Consecutive {
         }
 
         self.erc721.owners.setter(token_id).set(to);
-        evm::log(Transfer { from, to, token_id });
+        self.vm().log(Transfer { from, to, token_id });
         Ok(from)
     }
 
@@ -557,6 +637,8 @@ impl Erc721Consecutive {
     ///
     /// * [`erc721::Error::InvalidSender`] - If `token_id` already exists.
     /// * [`erc721::Error::InvalidReceiver`] - If `to` is [`Address::ZERO`].
+    /// * [`Error::ForbiddenMint`] - If called while the consecutive
+    ///   constructor minting phase is open.
     ///
     /// # Events
     ///
@@ -567,6 +649,10 @@ impl Erc721Consecutive {
                 ERC721InvalidReceiver { receiver: Address::ZERO },
             )
             .into());
+        }
+
+        if self._construction_phase().get() == CONSTRUCTION_IN_PROGRESS {
+            return Err(ERC721ForbiddenMint {}.into());
         }
 
         let previous_owner = self._update(to, token_id, Address::ZERO)?;
@@ -611,7 +697,7 @@ impl Erc721Consecutive {
     ) -> Result<(), Error> {
         self._mint(to, token_id)?;
         Ok(self.erc721._check_on_erc721_received(
-            msg::sender(),
+            self.vm().msg_sender(),
             Address::ZERO,
             to,
             token_id,
@@ -652,7 +738,7 @@ impl Erc721Consecutive {
     /// Transfers `token_id` from `from` to `to`.
     ///
     /// As opposed to [`Self::transfer_from`], this imposes no restrictions on
-    /// `msg::sender`.
+    /// the caller.
     ///
     /// # Arguments
     ///
@@ -742,7 +828,7 @@ impl Erc721Consecutive {
     ) -> Result<(), Error> {
         self._transfer(from, to, token_id)?;
         Ok(self.erc721._check_on_erc721_received(
-            msg::sender(),
+            self.vm().msg_sender(),
             from,
             to,
             token_id,
@@ -795,7 +881,7 @@ impl Erc721Consecutive {
             }
 
             if emit_event {
-                evm::log(Approval { owner, approved: to, token_id });
+                self.vm().log(Approval { owner, approved: to, token_id });
             }
         }
 
@@ -836,10 +922,13 @@ impl IErc165 for Erc721Consecutive {
     }
 }
 
+use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
+    use crate::test_support::{
+        mock_code, test_address, TestContract as TestVMContract,
+    };
     use alloy_primitives::{uint, Address, U256};
-    use motsu::prelude::Contract;
 
     use super::*;
 
@@ -848,19 +937,28 @@ mod tests {
     const TOKEN_ID: U256 = uint!(1_U256);
     const NON_CONSECUTIVE_TOKEN_ID: U256 = uint!(10001_U256);
 
+    fn deployed_contract() -> TestVMContract<Erc721Consecutive> {
+        let contract =
+            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        mock_code(contract.vm(), contract.address());
+        contract
+    }
+
     impl Erc721Consecutive {
         fn init(&mut self, receivers: Vec<Address>, batches: Vec<U96>) {
             self.first_consecutive_id.set(FIRST_CONSECUTIVE_TOKEN_ID);
             self.max_batch_size.set(MAX_BATCH_SIZE);
-            for (to, batch_size) in receivers.into_iter().zip(batches) {
-                self._mint_consecutive(to, batch_size)
-                    .expect("should mint consecutively");
-            }
+            self._mint_consecutive_batches(receivers.into_iter().zip(batches))
+                .expect("should mint consecutive batches");
         }
     }
 
-    #[motsu::test]
-    fn mints(contract: Contract<Erc721Consecutive>, alice: Address) {
+    #[test]
+    fn mints() {
+        let contract =
+            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let initial_balance = contract
             .sender(alice)
             .balance_of(alice)
@@ -868,6 +966,7 @@ mod tests {
 
         let init_tokens_count = uint!(10_U96);
         contract.sender(alice).init(vec![alice], vec![init_tokens_count]);
+        mock_code(contract.vm(), contract.address());
 
         let balance1 = contract
             .sender(alice)
@@ -895,11 +994,32 @@ mod tests {
         assert_eq!(balance2, balance1 + uint!(1_U256));
     }
 
-    #[motsu::test]
-    fn error_when_minting_token_id_twice(
-        contract: Contract<Erc721Consecutive>,
-        alice: Address,
-    ) {
+    #[test]
+    fn individual_mint_is_forbidden_during_constructor() {
+        let contract =
+            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        contract
+            .sender(alice)
+            ._begin_consecutive_minting()
+            .expect("should open constructor minting phase");
+
+        let error = contract.sender(alice)._mint(alice, TOKEN_ID).expect_err(
+            "individual mint must be unavailable during construction",
+        );
+
+        assert!(matches!(error, Error::ForbiddenMint(_)));
+        assert_eq!(
+            U256::ZERO,
+            contract.sender(alice).balance_of(alice).expect("balance query"),
+        );
+    }
+
+    #[test]
+    fn error_when_minting_token_id_twice() {
+        let contract = deployed_contract();
+        let alice = test_address(stringify!(alice));
+
         contract
             .sender(alice)
             ._mint(alice, TOKEN_ID)
@@ -915,11 +1035,12 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_minting_token_invalid_receiver(
-        contract: Contract<Erc721Consecutive>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_minting_token_invalid_receiver() {
+        let contract =
+            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let invalid_receiver = Address::ZERO;
 
         let err = contract
@@ -935,11 +1056,16 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_to_is_zero(
-        contract: Contract<Erc721Consecutive>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_to_is_zero() {
+        let contract =
+            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        contract
+            .sender(alice)
+            ._begin_consecutive_minting()
+            .expect("should open constructor minting phase");
+
         let err = contract
             .sender(alice)
             ._mint_consecutive(Address::ZERO, uint!(11_U96))
@@ -952,13 +1078,18 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_exceed_batch_size(
-        contract: Contract<Erc721Consecutive>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_exceed_batch_size() {
+        let contract =
+            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let batch_size =
             contract.sender(alice)._max_batch_size() + uint!(1_U96);
+        contract
+            .sender(alice)
+            ._begin_consecutive_minting()
+            .expect("should open constructor minting phase");
         let err = contract
             .sender(alice)
             ._mint_consecutive(alice, batch_size)
@@ -973,16 +1104,18 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn transfers_from(
-        contract: Contract<Erc721Consecutive>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn transfers_from() {
+        let contract =
+            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         // Mint batches of 1000 tokens to Alice and Bob.
         contract
             .sender(alice)
             .init(vec![alice, bob], vec![uint!(1000_U96), uint!(1000_U96)]);
+        mock_code(contract.vm(), contract.address());
 
         // Transfer first consecutive token from Alice to Bob.
         contract
@@ -1031,10 +1164,15 @@ mod tests {
         assert_eq!(alice_balance, uint!(1000_U256) - uint!(1_U256));
     }
 
-    #[motsu::test]
-    fn burns(contract: Contract<Erc721Consecutive>, alice: Address) {
+    #[test]
+    fn burns() {
+        let contract =
+            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         // Mint batch of 1000 tokens to Alice.
         contract.sender(alice).init(vec![alice], vec![uint!(1000_U96)]);
+        mock_code(contract.vm(), contract.address());
 
         // Check consecutive token burn.
         contract
@@ -1107,12 +1245,12 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn safe_transfer_from(
-        contract: Contract<Erc721Consecutive>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn safe_transfer_from() {
+        let contract = deployed_contract();
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         contract
             .sender(alice)
             ._mint(alice, TOKEN_ID)
@@ -1131,12 +1269,12 @@ mod tests {
         assert_eq!(owner, bob);
     }
 
-    #[motsu::test]
-    fn safe_transfers_from_approved_token(
-        contract: Contract<Erc721Consecutive>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn safe_transfers_from_approved_token() {
+        let contract = deployed_contract();
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         contract
             .sender(alice)
             ._mint(bob, TOKEN_ID)
@@ -1156,13 +1294,13 @@ mod tests {
         assert_eq!(owner, alice);
     }
 
-    #[motsu::test]
-    fn error_when_safe_transfer_from_incorrect_owner(
-        contract: Contract<Erc721Consecutive>,
-        alice: Address,
-        bob: Address,
-        dave: Address,
-    ) {
+    #[test]
+    fn error_when_safe_transfer_from_incorrect_owner() {
+        let contract = deployed_contract();
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+        let dave = test_address(stringify!(dave));
+
         contract
             .sender(alice)
             ._mint(alice, TOKEN_ID)
@@ -1183,12 +1321,13 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_internal_safe_transfer_nonexistent_token(
-        contract: Contract<Erc721Consecutive>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn error_when_internal_safe_transfer_nonexistent_token() {
+        let contract =
+            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         let err = contract
             .sender(alice)
             ._safe_transfer(alice, bob, TOKEN_ID, &vec![0, 1, 2, 3].into())
@@ -1202,11 +1341,11 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_safe_transfer_to_invalid_receiver(
-        contract: Contract<Erc721Consecutive>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_safe_transfer_to_invalid_receiver() {
+        let contract = deployed_contract();
+        let alice = test_address(stringify!(alice));
+
         let invalid_receiver = Address::ZERO;
 
         contract
@@ -1233,12 +1372,12 @@ mod tests {
         assert_eq!(alice, owner);
     }
 
-    #[motsu::test]
-    fn safe_transfers_from_with_data(
-        contract: Contract<Erc721Consecutive>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn safe_transfers_from_with_data() {
+        let contract = deployed_contract();
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         contract
             .sender(alice)
             ._mint(alice, TOKEN_ID)
@@ -1262,11 +1401,11 @@ mod tests {
         assert_eq!(owner, bob);
     }
 
-    #[motsu::test]
-    fn error_when_internal_safe_transfer_to_invalid_receiver(
-        contract: Contract<Erc721Consecutive>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_internal_safe_transfer_to_invalid_receiver() {
+        let contract = deployed_contract();
+        let alice = test_address(stringify!(alice));
+
         let invalid_receiver = Address::ZERO;
 
         contract
@@ -1298,13 +1437,13 @@ mod tests {
         assert_eq!(alice, owner);
     }
 
-    #[motsu::test]
-    fn error_when_internal_safe_transfer_from_incorrect_owner(
-        contract: Contract<Erc721Consecutive>,
-        alice: Address,
-        bob: Address,
-        dave: Address,
-    ) {
+    #[test]
+    fn error_when_internal_safe_transfer_from_incorrect_owner() {
+        let contract = deployed_contract();
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+        let dave = test_address(stringify!(dave));
+
         contract
             .sender(alice)
             ._mint(alice, TOKEN_ID)
@@ -1324,8 +1463,11 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn safe_mints(contract: Contract<Erc721Consecutive>, alice: Address) {
+    #[test]
+    fn safe_mints() {
+        let contract = deployed_contract();
+        let alice = test_address(stringify!(alice));
+
         let initial_balance = contract
             .sender(alice)
             .balance_of(alice)
@@ -1350,12 +1492,13 @@ mod tests {
         assert_eq!(initial_balance + uint!(1_U256), balance);
     }
 
-    #[motsu::test]
-    fn error_when_approve_for_nonexistent_token(
-        contract: Contract<Erc721Consecutive>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn error_when_approve_for_nonexistent_token() {
+        let contract =
+            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         let err = contract
             .sender(alice)
             .approve(bob, TOKEN_ID)
@@ -1369,13 +1512,13 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_approve_by_invalid_approver(
-        contract: Contract<Erc721Consecutive>,
-        alice: Address,
-        bob: Address,
-        dave: Address,
-    ) {
+    #[test]
+    fn error_when_approve_by_invalid_approver() {
+        let contract = deployed_contract();
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+        let dave = test_address(stringify!(dave));
+
         contract
             .sender(alice)
             ._mint(bob, TOKEN_ID)
@@ -1394,12 +1537,13 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn approval_for_all(
-        contract: Contract<Erc721Consecutive>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn approval_for_all() {
+        let contract =
+            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         contract
             .sender(alice)
             .set_approval_for_all(bob, true)
@@ -1412,11 +1556,12 @@ mod tests {
         assert!(!contract.sender(alice).is_approved_for_all(alice, bob));
     }
 
-    #[motsu::test]
-    fn error_when_get_approved_of_nonexistent_token(
-        contract: Contract<Erc721Consecutive>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_get_approved_of_nonexistent_token() {
+        let contract =
+            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let err = contract
             .sender(alice)
             .get_approved(TOKEN_ID)
@@ -1430,11 +1575,12 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn supports_interface(
-        contract: Contract<Erc721Consecutive>,
-        alice: Address,
-    ) {
+    #[test]
+    fn supports_interface() {
+        let contract =
+            TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         assert!(
             contract.sender(alice).supports_interface(
                 <Erc721Consecutive as IErc721>::interface_id()

@@ -1,3 +1,5 @@
+use crate::devnet_test_support::receipt;
+use crate::devnet_test_support::Account;
 use alloy::{
     network::{AnyNetwork, EthereumWallet},
     primitives::Address,
@@ -6,7 +8,6 @@ use alloy::{
     sol_types::SolCall,
 };
 use alloy_primitives::uint;
-use e2e::{receipt, Account};
 
 use crate::report::{ContractReport, FunctionReport};
 
@@ -22,7 +23,7 @@ pub async fn bench() -> eyre::Result<ContractReport> {
     let reports = run().await?;
     let report = reports.into_iter().try_fold(
         ContractReport::new("Sol:Asm:Poseidon"),
-        ContractReport::add,
+        ContractReport::push,
     )?;
 
     Ok(report)
@@ -32,9 +33,8 @@ pub async fn run() -> eyre::Result<Vec<FunctionReport>> {
     let alice = Account::new().await?;
     let alice_wallet = ProviderBuilder::new()
         .network::<AnyNetwork>()
-        .with_recommended_fillers()
         .wallet(EthereumWallet::from(alice.signer.clone()))
-        .on_http(alice.url().parse()?);
+        .connect_http(alice.rpc_url().parse()?);
 
     let contract_addr = deploy(&alice).await?;
 

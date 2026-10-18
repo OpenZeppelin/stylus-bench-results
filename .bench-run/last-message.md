@@ -1,0 +1,5 @@
+The SDK migration is committed, and the worktree is clean. The reports are [MIGRATION.md](/tmp/bench/ws/MIGRATION.md) and [SECURITY-REVIEW.md](/tmp/bench/ws/SECURITY-REVIEW.md).
+
+The final runs passed root check, strict clippy, fmt, and all-target tests: **738 passed, 0 failed, 0 ignored**. The devnet suite passed **521 E2E cases across 30 packages**, all **11 benchmark groups** completed, all **33 examples plus the template activated**, and ABI export passed for **35 projects**. The fuzz smoke runs found no crashes.
+
+Remaining limits are documented: coverage improved from **82.61% to 88.16%**, short of the 100% goal; `cargo audit` reports five unresolved SDK devnet/test dependency advisories; the combined all-features/all-targets check hits duplicate SDK macro exports in test fixtures; and the host’s AddressSanitizer runtime hung, so fuzz smoke used `--sanitizer none`. The rustdoc run also reports 14 ignored snippet fences.

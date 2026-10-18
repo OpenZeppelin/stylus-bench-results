@@ -130,6 +130,43 @@ mod tests {
 
     use super::*;
 
+    fn reference_add(a: Limb, b: Limb, carry: bool) -> (Limb, bool) {
+        let sum = WideLimb::from(a)
+            + WideLimb::from(b)
+            + WideLimb::from(u8::from(carry));
+        (sum as Limb, sum >> Limb::BITS != 0)
+    }
+
+    fn reference_sub(a: Limb, b: Limb, borrow: bool) -> (Limb, bool) {
+        let difference =
+            i128::from(a) - i128::from(b) - i128::from(u8::from(borrow));
+        let modulus = 1_i128 << Limb::BITS;
+        let wrapped_difference = Limb::try_from(difference.rem_euclid(modulus))
+            .expect("a limb-sized modular difference fits in a limb");
+        (wrapped_difference, difference < 0)
+    }
+
+    fn assert_add_matches_reference(a: Limb, b: Limb, carry: bool) {
+        let expected = reference_add(a, b, carry);
+        assert_eq!(adc(a, b, carry), expected);
+
+        let mut assigned = a;
+        let carry_out = adc_assign(&mut assigned, b, carry);
+        assert_eq!((assigned, carry_out), expected);
+    }
+
+    fn assert_sub_matches_reference(a: Limb, b: Limb, borrow: bool) {
+        let expected = reference_sub(a, b, borrow);
+        assert_eq!(sbb(a, b, borrow), expected);
+
+        let mut assigned = a;
+        let borrow_out = sbb_assign(&mut assigned, b, borrow);
+        assert_eq!((assigned, borrow_out), expected);
+    }
+
+    const LIMB_EDGE_CASES: [Limb; 7] =
+        [0, 1, 2, Limb::MAX / 2, Limb::MAX / 2 + 1, Limb::MAX - 1, Limb::MAX];
+
     #[test]
     fn check_widening_mul() {
         proptest!(|(a: Limb, b: Limb)|{
@@ -137,5 +174,39 @@ mod tests {
             let wasm_mul_result = widening_mul_wasm(a, b);
             prop_assert_eq!(std_mul_result, wasm_mul_result);
         });
+    }
+
+    proptest! {
+        #[test]
+        fn check_adc_and_adc_assign(a in any::<Limb>(), b in any::<Limb>(), carry in any::<bool>()) {
+            assert_add_matches_reference(a, b, carry);
+        }
+
+        #[test]
+        fn check_sbb_and_sbb_assign(a in any::<Limb>(), b in any::<Limb>(), borrow in any::<bool>()) {
+            assert_sub_matches_reference(a, b, borrow);
+        }
+    }
+
+    #[test]
+    fn check_add_edge_cases() {
+        for a in LIMB_EDGE_CASES {
+            for b in LIMB_EDGE_CASES {
+                for carry in [false, true] {
+                    assert_add_matches_reference(a, b, carry);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn check_sub_edge_cases() {
+        for a in LIMB_EDGE_CASES {
+            for b in LIMB_EDGE_CASES {
+                for borrow in [false, true] {
+                    assert_sub_matches_reference(a, b, borrow);
+                }
+            }
+        }
     }
 }

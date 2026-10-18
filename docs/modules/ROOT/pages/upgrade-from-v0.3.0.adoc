@@ -1,0 +1,421 @@
+= Upgrading from v0.3.0
+
+This guide covers the Rust API, testing, build, and storage changes required to
+move a v0.3.0 contract to Stylus SDK 0.10.10. Review the storage and initializer
+sections before upgrading a live proxy.
+
+== Toolchain and dependencies
+
+Use stable Rust 1.91.0, the `wasm32-unknown-unknown` target, and Stylus SDK
+0.10.10. The SDK's `alloy` facade is 1.7.3 and its primitive and Solidity ABI
+types are 1.5.7. Keep direct Alloy dependencies aligned with those versions;
+mixing primitive versions can make ABI and storage types incompatible.
+
+Keep the workspace-level `Stylus.toml` as the source of optimizer defaults.
+Add an empty `[wasm-opt]` table to every contract crate's `Stylus.toml` to opt
+that crate in; without the contract-level table, SDK 0.10.10 does not run the
+optimizer for that contract. Pin the recipe so local builds, deployment, and
+verification use the same artifact:
+
+[source,toml]
+----
+[workspace]
+
+[wasm-opt]
+version = "116"
+flags = ["--enable-bulk-memory", "-O3"]
+----
+
+In each contract's `Stylus.toml`, the opt-in can inherit those workspace
+defaults:
+
+[source,toml]
+----
+[wasm-opt]
+----
+
+SDK 0.10.9 and later include the effective recipe in the project hash. Keep
+the optimizer settings consistent across contracts in a Cargo workspace.
+
+== SDK changes from 0.9.0 to 0.10.10
+
+The migration adopts the SDK changes that affect contract composition, host
+access, testing, and deployment:
+
+* Cargo Stylus is workspace-aware. Put shared dependencies and `Stylus.toml`
+  at the workspace root, and use `--contract` when selecting among contracts.
+  The pinned optimizer recipe is included in the project hash so verification
+  uses the same build inputs.
+* The host I/O API is VM-based. Read context and emit logs through `self.vm()`;
+  use the SDK call contexts for calls and deployment. This library and its
+  examples no longer use global host accessors.
+* Public routing traits use `#[public]`. The SDK now supports pure trait
+  methods, nested structs and tuples in return values, associated types in ABI
+  export, and compile-time selector and constructor collision checks. The
+  selector check compares actual four-byte selectors within one `#[public]`
+  block. It does not check collisions across separate public blocks or methods
+  inherited through `#[implements]`; client-generation builds also skip router
+  checks. Keep selectors unique across the complete contract. Use
+  concrete error types in public implementation signatures where ABI
+  generation requires them.
+* ABI decoding uses validating variants and rejects malformed encodings,
+  including trailing bytes that the old decoding variants could ignore.
+  Callers should encode canonical Solidity ABI values and remove trailing
+  calldata and return bytes rather than depend on permissive decoding.
+* `stylus_sdk::abi::Bytes` is now Alloy's `Bytes` type. Replace tuple
+  construction such as `Bytes(vec)` with `Bytes::from(vec)` and `.0` access
+  with `as_ref()` or the relevant Alloy method. The Solidity ABI remains
+  `bytes`; a Rust `Vec<u8>` encodes as `uint8[]`.
+* Large Wasm modules can deploy in fragments, including constructor execution.
+  `cargo stylus deploy --wasm-file` can deploy a prebuilt artifact. The SDK
+  tooling also fixes verification of fragmented deployments and supports
+  reproducible workspace builds in Docker.
+* SDK 0.10.10 detects when Stylus activation is paused on the target chain and
+  reports an `ActivationsPaused` error. Treat this as a chain deployment
+  condition and retry after activations resume; it is not a contract error.
+* SDK 0.10.10 can generate typed clients from plain SDK `#[public]` traits.
+  That mode rewrites public implementations into host-call stubs. The library's
+  `#[interface_id]` traits carry ERC-165 IDs, associated contract error types,
+  and component interfaces; they are not SDK `#[public]` client declarations.
+  Do not enable `contract-client-gen` while compiling this library or its
+  examples. Downstream contracts can use SDK client generation for separate
+  plain `#[public]` interfaces, but should keep OpenZeppelin component
+  interfaces in the normal contract build. Never deploy an artifact built as a
+  generated client.
+* Storage cache flushing around high-level external calls provides storage
+  coherence across reentrancy. SDK 0.10.5 deprecated its `reentrant` feature
+  and entrypoint guard, but SDK 0.10.10 still rejects reentrant entrypoint
+  calls unless the feature is enabled. For flows that require callbacks into
+  the contract, enable `openzeppelin-stylus`'s `reentrant` feature on the
+  consumer dependency. The FlashMint example does this because its borrower
+  approves repayment during the callback. Leave the feature disabled when a
+  contract does not need reentrant calls, and keep checks-effects-interactions
+  and application-specific reentrancy protection; cache flushing only keeps
+  storage coherent across external calls.
+  `RawCall` does not flush the cache by default. Choose its cache policy
+  explicitly with `flush_storage_cache()` or `clear_storage_cache()` when
+  using raw calls.
+* Mini-alloc is maintained as a separate crate. Keep the SDK's default
+  allocator unless the contract deliberately supplies a different allocator.
+  Several SDK host I/O helpers call `Vec::set_len` on fresh buffers, which is
+  sound only when their memory is zeroed. A custom allocator must zero new pages
+  or audit every SDK `set_len` call site for initialization safety.
+* The toolchain baseline is Rust 1.91.0. Keep `ruint` at 1.17.1 or later with
+  default features disabled so `std` does not leak into Wasm, and align Alloy
+  primitive and ABI types with the SDK.
+* SDK 0.10.2 pins `keccak` to 0.1.6 or later to avoid resolving the broken
+  0.1.5 release. Refresh and retain a lockfile at a compatible version. SDK
+  0.9.2 also fixed an Alloy Keccak test segfault relevant to crypto tests.
+* SDK 0.10.0 also added `cargo stylus codehash-keepalive` for contracts that
+  need their code hash kept available on-chain. This is an operator action for
+  deployed contracts, so the library does not invoke it during builds or tests.
+
+The SDK changelog has the release-by-release list, including custom storage
+slots and codehash-keepalive tooling added in 0.10.0. The storage-slot support
+is used by the library's typed proxy utilities; the keepalive command is an
+operator action. Neither changes this library's existing storage layout or
+runtime behavior. See the
+https://github.com/OffchainLabs/stylus-sdk-rs/blob/v0.10.10/CHANGELOG.md[SDK
+0.10.10 changelog] for the complete release history.
+
+== VM access and external calls
+
+The SDK now exposes execution context through the contract's VM host. Replace
+global calls such as `msg::sender()` and `evm::log(event)` with
+`self.vm().msg_sender()` and `self.vm().log(event)`. Other context reads, such as
+timestamp, chain ID, code size, and contract address, also come from `self.vm()`.
+This makes host access explicit in methods and keeps it available to the SDK
+TestVM.
+
+Use the 0.10 call context constructors for external calls. Mutating calls use
+`Call::new_mutating(self)`; static calls use the static call context. Pass the
+VM reference required by the generated interface call. For example, a receiver
+call follows this shape:
+
+[source,rust]
+----
+let vm = self.vm().clone();
+let call = Call::new_mutating(self);
+receiver.on_erc_721_received(&vm, call, operator, from, token_id, data)
+----
+
+Code-presence checks now use `self.vm().code_size(address) != 0` instead of the
+old address helper. Events are emitted through the same VM instance that owns
+the contract call.
+
+== Public implementations and ABI errors
+
+SDK 0.10 requires `#[public]` on traits used for trait-based contract routing.
+Add it to consumer-defined routing traits and their implementations. The SDK
+also adds compile-time selector-collision checks to `#[public]` blocks.
+
+In an implementation block, use a concrete error type in method signatures when
+the SDK must export the ABI, for example `Result<bool, erc20::Error>`. Keep the
+associated type on the trait implementation (`type Error = erc20::Error`) and
+keep generic associated error types in public trait definitions. This avoids
+the old `Self::Error` expansion trouble in generated router and ABI code.
+
+`IProxy` is now an `unsafe trait`; implement it with `unsafe impl` and keep
+delegation calls in explicit `unsafe` blocks. The implementation must guarantee
+that the storage context and implementation address passed to `delegate_call`
+are valid. Do not expose delegation to an untrusted implementation address.
+
+The `#[interface_id]` macro computes an interface ID from selectors declared
+on the trait. The SDK does not verify that a custom selector is repeated on a
+corresponding `#[public]` implementation, so keep those selectors identical
+and check the exported ABI. The macro rejects duplicate signatures and actual
+four-byte selector collisions within the trait; the SDK's router check does
+not cover separate `#[public]` blocks or inherited methods.
+
+== Testing
+
+Replace v0.3.0 mock-framework tests with the SDK's `stylus-test` `TestVM`.
+Create contracts with `TestVMContract::<Contract>::new(...)`, set callers with
+`.sender(...)`, and use `.vm()` to configure host results, code, call mocks,
+and block values.
+Add `stylus-test = "=0.10.10"` as a development dependency when tests use it.
+
+TestVM does not execute implementation bytecode through a delegate call, and
+it does not emulate EVM transaction rollback when a method returns an error.
+Keep unit tests for component logic, but test proxy fallback, UUPS upgrade,
+constructor behavior, and state rollback against a Nitro devnode. The old
+`lib/e2e` and `lib/e2e-proc` crates have been removed. The examples use Tokio,
+Alloy, and `cargo stylus deploy` against the SDK devnet started by
+`scripts/devnet.sh`.
+
+== Storage and proxy upgrades
+
+The migration keeps the existing contract storage fields, field order, mapping
+derivations, and ERC-1967 slots. Do not reorder or replace those fields while
+upgrading. Compare the generated storage layout of the implementation you
+intend to deploy before submitting a proxy upgrade.
+
+`Erc721Enumerable` now records each owner's token count at the reserved inner
+mapping key `U256::MAX`; valid owner indices are always smaller than this key.
+This avoids adding a storage field that would change the surrounding contract's
+layout. The original zero-token sentinel bug is fixed for new state. The v0.3.0
+implementation treated token ID zero as an empty owner-index slot, so existing
+ID-zero holdings were not enumerable before the upgrade either. To make those
+holdings enumerable after upgrading, call
+`Erc721Enumerable::_initialize_owner_enumeration(owner, erc721)` once for each
+existing owner whose legacy holdings include ID zero. The helper reads the
+paired ERC-721 balance and writes the reserved count entry. Legacy nonzero token
+IDs remain readable without a backfill. `token_by_index` continues to work
+because global enumeration already stores its length in `all_tokens`.
+
+The UUPS examples reject repeat initialization, and their public
+`set_version()` wrappers now require the owner. The shared UUPS component
+cannot choose an application's authorization policy; consumers must protect
+any public wrapper with their upgrade authority and initialize privileged
+state before recording the implementation version. Deploy a proxy with its
+initializer calldata atomically: an empty-init proxy remains available for
+anyone to initialize, so pass the intended owner and initialization data in the
+proxy constructor. For a new implementation version, permit its initializer
+once when the proxy still stores the previous version, then reject calls once
+the proxy version reaches the new implementation's version.
+
+== Consecutive ERC-721 minting
+
+Stylus SDK 0.10.10 routes `stylus_constructor` after activation, so contract
+code size no longer identifies whether a constructor is running. Consumers
+must call `_mint_consecutive_batches` from their constructor; it opens a
+namespaced one-time phase, processes every batch, and closes the phase before
+returning, including when a batch returns an error. A call after the phase has
+closed returns `ERC721ForbiddenBatchMint`. The existing `Erc721Consecutive`
+storage layout is unchanged. Existing proxies start with the new namespaced
+phase closed, so batch minting remains unavailable; ordinary `_mint` remains
+available at runtime. If an authorized proxy initializer needs a consecutive
+batch, it may call the helper once, atomically with the upgrade. Do not expose
+the helper through a public entrypoint, and protect any initializer that calls
+it with the consumer's upgrade authorization.
+
+== Security behavior changes
+
+The migration includes security and correctness fixes that preserve the public
+ABI in the library, while intentionally rejecting or correcting behavior that
+v0.3.0 accepted. The ERC-721 wrapper example has the ABI change listed below:
+
+* The EdDSA verifier rejects identity and small-order public keys or `R`
+  points. The example's ABI decoder also rejects non-canonical coordinate and
+  scalar encodings, including scalars at or above the Ed25519 subgroup order.
+  Consumers that decode their own key and signature formats should apply the
+  same checks before constructing verifier inputs.
+* ERC-721 enumeration now returns token ID zero correctly. Existing proxies
+  which minted token ID zero before upgrading need the owner's new enumeration
+  count initialized as described in the storage section below.
+* `_mint_consecutive` now returns `ERC721ForbiddenBatchMint` unless the
+  consumer's one-time construction phase is open. Use
+  `_mint_consecutive_batches` from the constructor; do not call it from a
+  public method. Runtime minting continues through `_mint`, which emits
+  ordinary `Transfer` events.
+* The UUPS examples reject a second initializer call for the same implementation
+  version and require the owner to call their public `set_version()` wrapper.
+  Consumer initializers must likewise guard their own privileged state;
+  `set_version()` only tracks implementation versions and is not an
+  owner-initialization guard.
+* The ERC-721 wrapper example removes `burn(uint256)` from its public ABI. In
+  v0.3.0 this method called unauthenticated `_burn`, allowing any account to
+  destroy another user's wrapped receipt and strand the escrowed NFT. Use
+  `withdraw_to` to burn a receipt and return its underlying token atomically.
+  Existing proxies retain the same storage layout, and intact positions remain
+  redeemable after upgrade. Underlying tokens whose receipts were already
+  burned cannot be attributed or redeemed by this change. A directly deployed
+  v0.3.0 example cannot have its ABI changed; migrate intact positions to a new
+  wrapper before retiring it.
+* `Erc721Wrapper` now rejects deposit, withdrawal, and receiver-hook calls when
+  the configured underlying address has no code. These calls return the
+  existing `ERC721UnsupportedToken` error instead of treating an empty return
+  as a successful token call.
+* `IErc1155Supply::burn` and `burn_batch` now require the caller to own the
+  account or be its approved operator. Unauthorized calls return
+  `ERC1155MissingApprovalForAll`; direct balance or supply mutation through
+  those entrypoints is no longer possible.
+* The `access-control` example's `set_role_admin` helper now requires the
+  default admin role. It remains an example-only method and is not part of the
+  library's `AccessControl` ABI.
+* `Erc2981` treats a zero stored fee denominator as the default 10,000 basis
+  points, matching its documented default. Royalty multiplication now uses a
+  full-precision intermediate and rounds down instead of reverting when the
+  intermediate product overflows `U256`. A configured nonzero denominator is
+  unchanged.
+* The ECDSA helper now rejects malformed or empty `ecrecover` return data with
+  an error instead of interpreting it as the zero address.
+* Read-only `IErc4626` methods now take `&self`; implementations that used the
+  former `&mut self` signatures must update their Rust trait implementations.
+* The `erc721-metadata` and `erc721-consecutive` examples keep
+  `burn(uint256)` in their ABI, but it now checks ERC-721 ownership or approval.
+  An unauthorized burn reverts with `ERC721InsufficientApproval`; existing
+  holders and approved operators retain the previous successful behavior.
+* The `erc721-metadata` example's `setTokenURI(uint256,string)` and the
+  `erc1155-metadata-uri` example's `setTokenURI(uint256,string)` and
+  `setBaseURI(string)` now require the owner. Their selectors remain unchanged.
+  The examples expose `owner`, `transferOwnership`, and `renounceOwnership`
+  through `IOwnable`, plus a one-time `initializeOwner` function.
+  `OwnableUnauthorizedAccount` and
+  `OwnableInvalidOwner` are added errors. New deployments set the owner to the
+  deployer, and existing constructor arguments are unchanged. The ERC-721
+  metadata owner can still set a URI before minting.
+* The `erc721-metadata` and `erc721-consecutive` examples now require the owner
+  to call `mint(address,uint256)`. The selector is unchanged. The consecutive
+  example appends `Ownable` and its one-time initialization flag after its
+  existing storage component, and exposes the standard `IOwnable` methods plus
+  `initializeOwner(address)`. New deployments initialize the owner to the
+  deployer; existing proxies must initialize atomically with the upgrade.
+* The `erc20-flash-mint` example keeps `setFlashFeeReceiver(address)` and
+  `setFlashFeeValue(uint256)` but now requires the owner to call them. Its
+  no-argument constructor initializes the owner to the deployer. It also
+  exposes the `IOwnable` methods and `initializeOwner(address)`.
+* The `basic/token`, `erc20`, `erc20-permit`, `erc1155`,
+  `erc1155-supply`, and `erc721` examples now restrict their mint methods to
+  the owner. ERC-20 `pause()` and `unpause()` are owner-only. ERC-1155
+  `mintBatch` follows the same owner check as `mint`. These examples expose
+  `IOwnable` and a one-time `initializeOwner(address)`; their constructors
+  accept an explicit final `initial_owner` argument for new deployments.
+* The `uups-proxy` V1 and V2 implementations restrict their example mint
+  methods to the proxy owner. The `erc1967-beacon-rollback` fixture now
+  restricts `upgrade_beacon_to_and_call(address,bytes)` to its owner. It
+  exposes `IOwnable` and `initializeOwner(address)` for old proxy state.
+* Token, approval, permit, burn, vault withdrawal, and flash-loan repayment
+  helpers validate local failure conditions before committing local state.
+  Their successful ABI behavior and error types remain the same. When a helper
+  invokes a receiver, callback, or external token, propagate its error so the
+  EVM rolls back the entire call; catching that error can still preserve earlier
+  writes across contracts.
+
+The library storage layout is unchanged. The examples with new owner-controlled
+settings append an `Ownable` component and a `StorageBool` initializer guard
+after their existing storage fields; no previous field is reordered. This
+applies to `basic/token`, `erc20`, `erc20-permit`, `erc1155`,
+`erc1155-supply`, `erc721`, `erc721-consecutive`, `erc721-metadata`,
+`erc1155-metadata-uri`, `erc20-flash-mint`, and
+`erc1967-beacon-rollback`. The UUPS examples already stored an owner. SDK
+0.10 runs the Stylus constructor through the configured deployer contract, so
+`msg.sender()` there is the deployer contract rather than the EOA that signed
+the deployment transaction. These constructors take an explicit final
+`initial_owner` argument, preserving earlier constructor arguments in their
+original order:
+
+[cols="1,2",options="header"]
+|===
+|Example |Constructor arguments in the new version
+|`basic/token` |`name, symbol, initial_owner`
+|`erc20` |`name, symbol, cap, initial_owner`
+|`erc20-permit`, `erc1155`, `erc1155-supply`, `erc721`, `erc20-flash-mint` |`initial_owner`
+|`erc721-consecutive` |`receivers, amounts, first_consecutive_id, max_batch_size, initial_owner`
+|`erc721-metadata` |`name, symbol, base_uri, initial_owner`
+|`erc1155-metadata-uri` |`uri, initial_owner`
+|`erc1967-beacon-rollback` |`implementation, initial_owner`
+|===
+
+For an existing proxy using one of these examples, invoke
+`initializeOwner(address)` through
+the proxy atomically with the implementation upgrade and pass the intended
+owner. The initializer is deliberately first-caller-wins and can be called
+only once, so do not leave a gap between upgrading and initializing. An
+uninitialized proxy must never be exposed to public calls between those two
+operations. The consecutive extension's constructor phase uses a separate
+namespaced slot. The ERC-721 enumerable count continues to use an otherwise
+unused key in the existing nested mapping; the owner initialization and the
+ID-zero-enumeration backfill above are the only state reconciliation required
+by these example and library changes.
+
+== Build, deploy, and verify
+
+Use the pinned SDK tools and the workspace scripts:
+
+[source,shell]
+----
+cargo +1.91.0 test --workspace --all-targets --locked
+./scripts/devnet.sh run -- ./scripts/e2e-tests.sh
+./scripts/devnet.sh run -- ./scripts/check-wasm.sh
+cargo stylus export-abi --contract <contract-package>
+----
+
+The local devnode rejects a Binaryen `DataCount` section even when a module has
+no `memory.init` or `data.drop` instructions. The repository optimizer wrapper
+validates the optimized module, removes that unneeded section, and validates
+the deployable module again. Source the wrapper environment in custom deploy
+or verification scripts with `scripts/wasm-opt-wrapper/env.sh`.
+
+== Design notes
+
+Extensions remain storage components with internal helper methods and
+explicitly composed public interfaces. Keep authorization and entrypoint
+exposure in the consuming contract, and route token policy through the shared
+update path. Like Solidity's `_update` hooks and Cairo's composable components,
+this keeps balance changes in one path. Rust consumers choose which storage
+components and public traits to compose; pause and mint permissions remain
+explicit application decisions. A contract crate's package-level
+SDK client generation remains available for plain SDK public interfaces. It
+cannot be enabled for this library's `#[interface_id]` component traits because
+SDK client generation changes their method signatures and does not preserve
+the ERC-165 trait shape.
+
+This composition model also reflects the useful parts of the other
+OpenZeppelin contract libraries while keeping Rust's storage and trait rules
+visible to consumers. Solidity centralizes token balance changes in
+`_update` hooks and composes behavior through inheritance;
+https://docs.openzeppelin.com/contracts/5.x/api/token/erc20[its ERC20
+extensions] are the reference for the shared update path. Cairo uses explicit
+storage components assembled into a contract with `component!`; see the
+https://docs.openzeppelin.com/contracts-cairo/3.x/components[Cairo component
+model]. Stellar Pausable uses an attribute macro to place checks around
+contract methods; see the
+https://docs.openzeppelin.com/stellar-contracts/utils/pausable[Stellar
+Pausable pattern]. Sui Move packages use objects and capabilities to make
+authority explicit; see
+https://docs.openzeppelin.com/contracts-sui/1.x/api/access[Sui access
+control].
+
+For this library, storage-bearing extensions remain ordinary Rust components
+and their public interfaces remain explicitly composed traits. Shared token
+state changes go through `_update`; extension policy checks belong before that
+write path. Authorization and entrypoint exposure stay in the consumer, so
+including a storage component cannot silently expose a privileged ABI method.
+This keeps composition inspectable in Rust and avoids hiding storage or
+authorization behavior behind inheritance or method attributes.
+
+As in Solidity, pause and unpause methods are not exposed by the Pausable
+component itself. A consumer must expose them and add its own authorization.
+Likewise, including `Capped` does not secure a custom mint function by itself;
+the mint path must check the cap before minting.

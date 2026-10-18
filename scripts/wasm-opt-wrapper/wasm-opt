@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -z "${OZ_WASM_OPT_REAL:-}" ]]; then
+  printf 'Source scripts/wasm-opt-wrapper/env.sh before running cargo stylus.\n' >&2
+  exit 1
+fi
+
+"${OZ_WASM_OPT_REAL}" "$@"
+
+arguments=("$@")
+output=''
+for ((index = 0; index < ${#arguments[@]}; index++)); do
+  case "${arguments[index]}" in
+    -o|--output)
+      if ((index + 1 < ${#arguments[@]})); then
+        output="${arguments[index + 1]}"
+      fi
+      ;;
+    --output=*)
+      output="${arguments[index]#--output=}"
+      ;;
+  esac
+done
+
+if [[ -z "${output}" || ! -f "${output}" ]]; then
+  exit 0
+fi
+
+wat_file="${output}.wat"
+stripped_file="${output}.without-datacount"
+cleanup() {
+  rm -f "${wat_file}" "${stripped_file}"
+}
+trap cleanup EXIT
+
+"${OZ_WASM_TOOLS}" validate "${output}"
+"${OZ_WASM_TOOLS}" print "${output}" -o "${wat_file}"
+if rg -q '\(memory\.init|\(data\.drop' "${wat_file}"; then
+  printf 'Refusing to strip DataCount: WASM uses memory.init or data.drop.\n' >&2
+  exit 1
+fi
+
+python3 "${OZ_WASM_TOOLS_ROOT}/scripts/strip-wasm-datacount.py" \
+  "${output}" "${stripped_file}"
+"${OZ_WASM_TOOLS}" validate "${stripped_file}"
+mv "${stripped_file}" "${output}"
+rm -f "${wat_file}"

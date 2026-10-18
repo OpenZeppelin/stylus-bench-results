@@ -1,8 +1,7 @@
 name: test
 # This is the main CI workflow that runs the test suite on all pushes to main
 # and all pull requests. It runs the following jobs:
-# - required: runs the test suite on ubuntu with stable and beta rust
-# toolchains.
+# - required: runs the test suite on Ubuntu with stable Rust 1.91.0.
 # - os-check: runs the test suite on mac and windows.
 # - coverage: runs the test suite and collects coverage information.
 # See `check.yml` for information about how the concurrency cancellation and
@@ -27,21 +26,16 @@ env:
 jobs:
   required:
     runs-on: ubuntu-latest
-    name: ubuntu / ${{ matrix.toolchain }}
-    strategy:
-      matrix:
-        # Run on stable and beta to ensure that tests won't break on the next
-        # version of the rust toolchain.
-        toolchain: [stable, beta]
+    name: ubuntu / stable 1.91.0
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
 
-      - name: Install rust ${{ matrix.toolchain }}
+      - name: Install stable Rust 1.91.0
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: ${{ matrix.toolchain }}
+          toolchain: 1.91.0
           rustflags: ""
 
       - name: "Install nextest"
@@ -65,7 +59,7 @@ jobs:
   os-check:
     # Run cargo test on MacOS and Windows.
     runs-on: ${{ matrix.os }}
-    name: ${{ matrix.os }} / stable
+    name: ${{ matrix.os }} / stable 1.91.0
     strategy:
       fail-fast: false
       matrix:
@@ -80,7 +74,7 @@ jobs:
       - name: Install rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.91.0
           rustflags: ""
 
       - name: "Install nextest"
@@ -118,19 +112,16 @@ jobs:
     #
     # for lots of more discussion.
     runs-on: ubuntu-latest
-    name: ubuntu / nightly / coverage
+    name: ubuntu / stable 1.91.0 / coverage
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
 
-      - name: Install rust
-        # We run in nightly to make use of the `#[coverage(off)]` attribute (see _contracts/src/lib.rs_)
-        # We'll return to stable release after the tracking issue is merged (and the feature is stable)
-        # See: https://github.com/rust-lang/rust/issues/84605
+      - name: Install stable Rust 1.91.0
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: nightly-2025-08-01
+          toolchain: 1.91.0
           components: llvm-tools-preview
           rustflags: ""
 
@@ -147,7 +138,7 @@ jobs:
         run: cargo generate-lockfile
 
       - name: Cargo llvm-cov
-        run: cargo llvm-cov --locked --lcov --output-path lcov.info -p openzeppelin-stylus -p openzeppelin-stylus-proc -p openzeppelin-crypto
+        run: cargo llvm-cov --locked --lcov --output-path lcov.info -p openzeppelin-stylus -p openzeppelin-stylus-proc -p openzeppelin-crypto --features ruint
 
       - name: Record Rust version
         run: echo "RUST=$(rustc --version)" >> "$GITHUB_ENV"

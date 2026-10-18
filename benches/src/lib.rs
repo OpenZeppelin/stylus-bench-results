@@ -2,9 +2,12 @@ use std::process::Command;
 
 use alloy::primitives::Address;
 use alloy_primitives::U128;
-use e2e::{Account, Constructor};
+use devnet_test_support::{Account, Constructor};
 use eyre::WrapErr;
 use serde::Deserialize;
+
+#[path = "../../examples/devnet_test_support.rs"]
+pub mod devnet_test_support;
 
 pub mod access_control;
 pub mod erc1155;
@@ -32,12 +35,11 @@ struct ArbOtherFields {
 
 /// Optimisation options for the contract.
 ///
-/// Cache or cache optimized WASM.
+/// Cache the deployed contract, or leave it uncached.
 #[derive(Clone)]
 pub enum Opt {
     None,
     Cache,
-    CacheWasmOpt,
 }
 
 async fn deploy(
@@ -46,35 +48,14 @@ async fn deploy(
     constructor: Option<Constructor>,
     opt: Opt,
 ) -> eyre::Result<Address> {
-    let manifest_dir =
-        std::env::current_dir().context("should get current dir from env")?;
-
-    let contract_type = match opt {
-        Opt::CacheWasmOpt => "example_opt",
-        Opt::None | Opt::Cache => "example",
-    };
-
-    let wasm_path = manifest_dir
-        .join("target")
-        .join("wasm32-unknown-unknown")
-        .join("release")
-        .join(format!(
-            "{}_{}.wasm",
-            contract_name.replace('-', "_"),
-            contract_type
-        ));
-
-    let deployer = match constructor {
-        Some(constructor) => {
-            account.as_deployer().with_constructor(constructor)
-        }
-        None => account.as_deployer(),
-    };
-
-    let address = deployer.deploy_wasm(&wasm_path).await?.contract_address;
+    let mut deployer = account.as_deployer().with_example_name(contract_name);
+    if let Some(constructor) = constructor {
+        deployer = deployer.with_constructor(constructor);
+    }
+    let address = deployer.deploy().await?.contract_address;
 
     match opt {
-        Opt::Cache | Opt::CacheWasmOpt => {
+        Opt::Cache => {
             cache_contract(account, address, 0)?;
         }
         Opt::None => {}
@@ -97,7 +78,7 @@ fn cache_contract(
     Command::new("cargo")
         .args(["stylus", "cache", "bid"])
         .args(["-e", &env("RPC_URL")?])
-        .args(["--private-key", &format!("0x{}", account.pk())])
+        .args(["--private-key", &format!("0x{}", account.private_key())])
         .arg(contract_addr.to_string())
         .arg(bid.to_string())
         .status()

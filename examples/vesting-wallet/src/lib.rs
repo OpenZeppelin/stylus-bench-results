@@ -49,11 +49,11 @@ impl IVestingWallet for VestingWalletExample {
     fn transfer_ownership(
         &mut self,
         new_owner: Address,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), vesting_wallet::Error> {
         self.vesting_wallet.transfer_ownership(new_owner)
     }
 
-    fn renounce_ownership(&mut self) -> Result<(), Self::Error> {
+    fn renounce_ownership(&mut self) -> Result<(), vesting_wallet::Error> {
         self.vesting_wallet.renounce_ownership()
     }
 
@@ -88,17 +88,20 @@ impl IVestingWallet for VestingWalletExample {
     fn releasable_erc20(
         &mut self,
         token: Address,
-    ) -> Result<U256, Self::Error> {
+    ) -> Result<U256, vesting_wallet::Error> {
         self.vesting_wallet.releasable_erc20(token)
     }
 
     #[selector(name = "release")]
-    fn release_eth(&mut self) -> Result<(), Self::Error> {
+    fn release_eth(&mut self) -> Result<(), vesting_wallet::Error> {
         self.vesting_wallet.release_eth()
     }
 
     #[selector(name = "release")]
-    fn release_erc20(&mut self, token: Address) -> Result<(), Self::Error> {
+    fn release_erc20(
+        &mut self,
+        token: Address,
+    ) -> Result<(), vesting_wallet::Error> {
         self.vesting_wallet.release_erc20(token)
     }
 
@@ -112,7 +115,7 @@ impl IVestingWallet for VestingWalletExample {
         &mut self,
         token: Address,
         timestamp: u64,
-    ) -> Result<U256, Self::Error> {
+    ) -> Result<U256, vesting_wallet::Error> {
         self.vesting_wallet.vested_amount_erc20(token, timestamp)
     }
 }

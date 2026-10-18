@@ -10,7 +10,7 @@ use alloc::{vec, vec::Vec};
 use alloy_primitives::U256;
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
-use stylus_sdk::{call::MethodError, prelude::*, storage::StorageU256};
+use stylus_sdk::{prelude::*, storage::StorageU256};
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -86,6 +86,44 @@ impl Capped {
     }
 }
 
+impl Capped {
+    /// Checks whether increasing the current supply by `increase` stays
+    /// within the configured cap.
+    ///
+    /// Call this before minting in the consuming contract. Including
+    /// [`Capped`] does not automatically route an
+    /// [`Erc20`](crate::token::erc20::Erc20) mint through this
+    /// check.
+    ///
+    /// # Errors
+    ///
+    /// * [`Error::ExceededCap`] - If the resulting supply is greater than the
+    ///   configured cap.
+    ///
+    /// # Panics
+    ///
+    /// Panics if adding `increase` to `current_supply` overflows `U256`.
+    pub fn _check_cap(
+        &self,
+        current_supply: U256,
+        increase: U256,
+    ) -> Result<(), Error> {
+        let increased_supply = current_supply
+            .checked_add(increase)
+            .expect("increased supply should not overflow U256");
+        let cap = self.cap.get();
+
+        if increased_supply > cap {
+            return Err(Error::ExceededCap(ERC20ExceededCap {
+                increased_supply,
+                cap,
+            }));
+        }
+
+        Ok(())
+    }
+}
+
 #[public]
 impl ICapped for Capped {
     fn cap(&self) -> U256 {
@@ -93,18 +131,22 @@ impl ICapped for Capped {
     }
 }
 
+use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{uint, Address};
-    use motsu::prelude::Contract;
+    use crate::test_support::{test_address, TestContract as TestVMContract};
+    use alloy_primitives::uint;
     use stylus_sdk::prelude::*;
 
     use super::*;
 
     unsafe impl TopLevelStorage for Capped {}
 
-    #[motsu::test]
-    fn cap_works(contract: Contract<Capped>, alice: Address) {
+    #[test]
+    fn cap_works() {
+        let contract = TestVMContract::<Capped>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let value = uint!(2024_U256);
         contract.sender(alice).constructor(value).expect("should set cap");
         assert_eq!(contract.sender(alice).cap(), value);
@@ -121,6 +163,29 @@ mod tests {
         assert!(matches!(
             err,
             Error::InvalidCap(ERC20InvalidCap { cap }) if cap == value
+        ));
+    }
+
+    #[test]
+    fn check_cap_validates_proposed_supply() {
+        let contract = TestVMContract::<Capped>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let cap = uint!(100_U256);
+
+        contract.sender(alice).constructor(cap).expect("should set cap");
+        contract
+            .sender(alice)
+            ._check_cap(uint!(40_U256), uint!(60_U256))
+            .expect("supply at cap should be accepted");
+
+        let err = contract
+            .sender(alice)
+            ._check_cap(uint!(40_U256), uint!(61_U256))
+            .expect_err("supply over cap should be rejected");
+        assert!(matches!(
+            err,
+            Error::ExceededCap(ERC20ExceededCap { increased_supply, cap })
+                if increased_supply == uint!(101_U256) && cap == uint!(100_U256)
         ));
     }
 }

@@ -15,7 +15,6 @@ use alloy_primitives::{uint, U256, U32};
 pub use generic_size::{Size, S160, S208, S224};
 pub use sol::*;
 use stylus_sdk::{
-    call::MethodError,
     prelude::*,
     storage::{StorageGuard, StorageGuardMut, StorageVec},
 };
@@ -373,9 +372,10 @@ impl<S: Size> Trace<S> {
     }
 }
 
+use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{uint, Address};
+    use alloy_primitives::uint;
     use stylus_sdk::prelude::*;
 
     use super::{
@@ -387,10 +387,14 @@ mod tests {
     #[public]
     impl Trace<S160> {}
 
-    use motsu::prelude::Contract;
+    use crate::test_support::{test_address, TestContract as TestVMContract};
 
-    #[motsu::test]
-    fn push(checkpoint: Contract<Trace<S160>>, alice: Address) {
+    #[test]
+    fn push() {
+        let checkpoint =
+            TestVMContract::<Trace<S160>>::new(stringify!(checkpoint));
+        let alice = test_address(stringify!(alice));
+
         let first_key = uint!(1_U96);
         let first_value = uint!(11_U160);
 
@@ -429,8 +433,12 @@ mod tests {
         );
     }
 
-    #[motsu::test]
-    fn push_same_value(checkpoint: Contract<Trace<S160>>, alice: Address) {
+    #[test]
+    fn push_same_value() {
+        let checkpoint =
+            TestVMContract::<Trace<S160>>::new(stringify!(checkpoint));
+        let alice = test_address(stringify!(alice));
+
         let first_key = uint!(1_U96);
         let first_value = uint!(11_U160);
 
@@ -468,8 +476,12 @@ mod tests {
             (third_key, third_value)
         );
     }
-    #[motsu::test]
-    fn lower_lookup(checkpoint: Contract<Trace<S160>>, alice: Address) {
+    #[test]
+    fn lower_lookup() {
+        let checkpoint =
+            TestVMContract::<Trace<S160>>::new(stringify!(checkpoint));
+        let alice = test_address(stringify!(alice));
+
         checkpoint
             .sender(alice)
             .push(uint!(1_U96), uint!(11_U160))
@@ -501,8 +513,12 @@ mod tests {
         );
     }
 
-    #[motsu::test]
-    fn upper_lookup(checkpoint: Contract<Trace<S160>>, alice: Address) {
+    #[test]
+    fn upper_lookup() {
+        let checkpoint =
+            TestVMContract::<Trace<S160>>::new(stringify!(checkpoint));
+        let alice = test_address(stringify!(alice));
+
         checkpoint
             .sender(alice)
             .push(uint!(1_U96), uint!(11_U160))
@@ -534,8 +550,12 @@ mod tests {
         );
     }
 
-    #[motsu::test]
-    fn upper_lookup_recent(checkpoint: Contract<Trace<S160>>, alice: Address) {
+    #[test]
+    fn upper_lookup_recent() {
+        let checkpoint =
+            TestVMContract::<Trace<S160>>::new(stringify!(checkpoint));
+        let alice = test_address(stringify!(alice));
+
         // `upper_lookup_recent` has different optimizations for "short" (<=5)
         // and "long" (>5) checkpoint arrays.
         //
@@ -599,8 +619,12 @@ mod tests {
         );
     }
 
-    #[motsu::test]
-    fn latest(checkpoint: Contract<Trace<S160>>, alice: Address) {
+    #[test]
+    fn latest() {
+        let checkpoint =
+            TestVMContract::<Trace<S160>>::new(stringify!(checkpoint));
+        let alice = test_address(stringify!(alice));
+
         assert_eq!(checkpoint.sender(alice).latest(), uint!(0_U160));
         checkpoint
             .sender(alice)
@@ -617,8 +641,12 @@ mod tests {
         assert_eq!(checkpoint.sender(alice).latest(), uint!(55_U160));
     }
 
-    #[motsu::test]
-    fn latest_checkpoint(checkpoint: Contract<Trace<S160>>, alice: Address) {
+    #[test]
+    fn latest_checkpoint() {
+        let checkpoint =
+            TestVMContract::<Trace<S160>>::new(stringify!(checkpoint));
+        let alice = test_address(stringify!(alice));
+
         assert_eq!(checkpoint.sender(alice).latest_checkpoint(), None);
         checkpoint
             .sender(alice)
@@ -638,11 +666,12 @@ mod tests {
         );
     }
 
-    #[motsu::test]
-    fn error_when_unordered_insertion(
-        checkpoint: Contract<Trace<S160>>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_unordered_insertion() {
+        let checkpoint =
+            TestVMContract::<Trace<S160>>::new(stringify!(checkpoint));
+        let alice = test_address(stringify!(alice));
+
         checkpoint
             .sender(alice)
             .push(uint!(1_U96), uint!(11_U160))

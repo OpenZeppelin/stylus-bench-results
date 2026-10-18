@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 
 use alloy_primitives::{Address, U256};
 use openzeppelin_stylus_proc::interface_id;
-use stylus_sdk::{msg, prelude::*};
+use stylus_sdk::prelude::*;
 
 use crate::token::erc721::{self, Erc721};
 
@@ -36,21 +36,21 @@ pub trait IErc721Burnable {
 impl IErc721Burnable for Erc721 {
     type Error = erc721::Error;
 
-    fn burn(&mut self, token_id: U256) -> Result<(), Self::Error> {
+    fn burn(&mut self, token_id: U256) -> Result<(), erc721::Error> {
         // Setting an "auth" arguments enables the
         // [`super::super::Erc721::_is_authorized`] check which verifies that
         // the token exists (from != [`Address::ZERO`]).
         //
         // Therefore, it is not needed to verify that the return value is not 0
         // here.
-        self._update(Address::ZERO, token_id, msg::sender())?;
+        self._update(Address::ZERO, token_id, self.vm().msg_sender())?;
         Ok(())
     }
 }
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{uint, Address};
-    use motsu::prelude::*;
+    use crate::test_support::{test_address, TestContract as TestVMContract};
+    use alloy_primitives::uint;
 
     use super::*;
     use crate::token::erc721::{
@@ -60,8 +60,11 @@ mod tests {
 
     const TOKEN_ID: U256 = uint!(1_U256);
 
-    #[motsu::test]
-    fn burns(contract: Contract<Erc721>, alice: Address) {
+    #[test]
+    fn burns() {
+        let contract = TestVMContract::<Erc721>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let one = uint!(1_U256);
 
         contract
@@ -97,12 +100,12 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn burns_with_approval(
-        contract: Contract<Erc721>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn burns_with_approval() {
+        let contract = TestVMContract::<Erc721>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         contract
             .sender(alice)
             ._mint(bob, TOKEN_ID)
@@ -141,12 +144,12 @@ mod tests {
         assert_eq!(initial_balance - uint!(1_U256), balance);
     }
 
-    #[motsu::test]
-    fn burns_with_approval_for_all(
-        contract: Contract<Erc721>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn burns_with_approval_for_all() {
+        let contract = TestVMContract::<Erc721>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         contract
             .sender(alice)
             ._mint(bob, TOKEN_ID)
@@ -186,12 +189,12 @@ mod tests {
         assert_eq!(initial_balance - uint!(1_U256), balance);
     }
 
-    #[motsu::test]
-    fn error_when_get_approved_of_previous_approval_burned(
-        contract: Contract<Erc721>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn error_when_get_approved_of_previous_approval_burned() {
+        let contract = TestVMContract::<Erc721>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         contract
             .sender(alice)
             ._mint(alice, TOKEN_ID)
@@ -219,12 +222,12 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_burn_without_approval(
-        contract: Contract<Erc721>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn error_when_burn_without_approval() {
+        let contract = TestVMContract::<Erc721>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+        let bob = test_address(stringify!(bob));
+
         contract
             .sender(alice)
             ._mint(bob, TOKEN_ID)
@@ -244,11 +247,11 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn error_when_burn_nonexistent_token(
-        contract: Contract<Erc721>,
-        alice: Address,
-    ) {
+    #[test]
+    fn error_when_burn_nonexistent_token() {
+        let contract = TestVMContract::<Erc721>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let err = contract
             .sender(alice)
             .burn(TOKEN_ID)

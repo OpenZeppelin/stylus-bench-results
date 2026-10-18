@@ -1,0 +1,2 @@
+# Inherit the workspace-pinned Binaryen version and optimization flags.
+[wasm-opt]

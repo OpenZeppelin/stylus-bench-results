@@ -24,7 +24,6 @@ use alloy_sol_types::SolCall;
 pub use sol::*;
 use stylus_sdk::{
     abi::Bytes,
-    call::{Call, MethodError},
     prelude::*,
     storage::{StorageBool, StorageU32},
 };
@@ -133,7 +132,7 @@ pub enum Error {
     /// of the proxy is invalid.
     InvalidBeacon(ERC1967InvalidBeacon),
     /// Indicates an error related to the fact that an upgrade function
-    /// sees [`stylus_sdk::msg::value()`] > [`alloy_primitives::U256::ZERO`]
+    /// sees the call value > [`alloy_primitives::U256::ZERO`]
     /// that may be lost.
     NonPayable(ERC1967NonPayable),
     /// There's no code at `target` (it is not a contract).
@@ -182,6 +181,8 @@ unsafe impl TopLevelStorage for UUPSUpgradeable {}
 
 /// Interface for a UUPS (Universal Upgradeable Proxy Standard) upgradeable
 /// contract.
+#[allow(missing_docs)]
+#[public]
 pub trait IUUPSUpgradeable: IErc1822Proxiable {
     /// Returns the version of the upgrade interface of the contract.
     ///
@@ -312,14 +313,18 @@ pub trait IUUPSUpgradeable: IErc1822Proxiable {
 /// ```rust
 /// extern crate alloc;
 ///
-/// use openzeppelin_stylus::proxy::utils::uups_upgradeable::UUPSUpgradeable;
-/// use stylus_sdk::{prelude::*, storage::StorageU256};
+/// use openzeppelin_stylus::{
+///     access::ownable::Ownable,
+///     proxy::utils::uups_upgradeable::UUPSUpgradeable,
+/// };
+/// use stylus_sdk::{alloy_primitives::Address, prelude::*, storage::StorageU256};
 ///
 /// #[storage]
 /// #[entrypoint]
 /// pub struct MyUpgradeableContract {
 ///     // Must include UUPSUpgradeable as the first field
 ///     uups: UUPSUpgradeable,
+///     ownable: Ownable,
 ///
 ///     // Your contract's state variables
 ///     value: StorageU256,
@@ -328,9 +333,13 @@ pub trait IUUPSUpgradeable: IErc1822Proxiable {
 ///
 /// #[public]
 /// impl MyUpgradeableContract {
-///     // Call this via the proxy once to align the proxy's version with the logic.
+///     // Only expose this wrapper when needed, and restrict it to the upgrade
+///     // authority. Prefer calling `uups.set_version()` inside an authorized
+///     // initializer so the authority and version are set atomically.
+///     // Initialize `ownable` before this function can be called.
 ///     pub fn set_version(&mut self) -> Result<(), Vec<u8>> {
-///         self.uups.set_version().map_err(Into::into)
+///         self.ownable.only_owner()?;
+///         Ok(self.uups.set_version()?)
 ///     }
 ///
 ///     // Your contract's functions
@@ -367,6 +376,9 @@ impl UUPSUpgradeable {
     ///
     /// Intended to be called via a proxy ([`delegate_call`][delegate_call]) to
     /// record `VERSION_NUMBER` in the proxy’s storage.
+    /// A consumer that exposes a public wrapper must restrict it to the
+    /// contract's upgrade authority. Initializers can call this method
+    /// internally after initializing the authority state.
     ///
     /// # Arguments
     ///
@@ -442,7 +454,7 @@ impl UUPSUpgradeable {
     /// * `&self` - Read access to the contract's state.
     #[must_use]
     pub fn logic_flag(&self) -> StorageBool {
-        StorageSlot::get_slot::<StorageBool>(LOGIC_FLAG_SLOT)
+        StorageSlot::get_slot::<StorageBool>(self, LOGIC_FLAG_SLOT)
     }
 
     /// Return the value stored in the logic flag slot.
@@ -494,7 +506,7 @@ impl UUPSUpgradeable {
     /// [delegate_call]: stylus_sdk::call::delegate_call
     pub fn only_proxy(&self) -> Result<(), Error> {
         if self.is_logic()
-            || Erc1967Utils::get_implementation() == Address::ZERO
+            || Erc1967Utils::get_implementation(self) == Address::ZERO
             || U32::from(self.get_version()) != self.version.get()
         {
             Err(Error::UnauthorizedCallContext(UUPSUnauthorizedCallContext {}))
@@ -577,7 +589,7 @@ impl UUPSUpgradeable {
         data: &Bytes,
     ) -> Result<(), Error> {
         let slot = Erc1822ProxiableInterface::new(new_implementation)
-            .proxiable_uuid(Call::new_in(self))
+            .proxiable_uuid(self.vm(), Call::new())
             .map_err(|_e| {
                 Error::InvalidImplementation(ERC1967InvalidImplementation {
                     implementation: new_implementation,
@@ -595,19 +607,19 @@ impl UUPSUpgradeable {
     }
 }
 
-// TODO: In order to add more tests and ignore existing ones, we need to fix
-// these issues with motsu. See:
-// https://github.com/OpenZeppelin/stylus-test-helpers/issues/114
-// https://github.com/OpenZeppelin/stylus-test-helpers/issues/112
+// The TestVM cannot execute implementation code during delegate calls or roll
+// back storage after a revert. Proxy state-transition scenarios are covered by
+// the devnet suite.
+
+use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::U256;
+    use crate::test_support::{test_address, TestContract as TestVMContract};
+    use alloy_primitives::{keccak256, U256};
     use alloy_sol_types::{SolCall, SolError, SolValue};
-    use motsu::prelude::*;
     use test_contracts::*;
 
     use super::*;
-    use crate::token::erc20;
 
     #[cfg_attr(coverage_nightly, coverage(off))]
     mod test_contracts {
@@ -617,7 +629,7 @@ mod tests {
         use super::*;
         use crate::{
             proxy::{self, erc1967::Erc1967Proxy, IProxy},
-            token::erc20::{Erc20, IErc20},
+            token::erc20::{self, Erc20, IErc20},
         };
 
         #[entrypoint]
@@ -781,31 +793,50 @@ mod tests {
         }
     }
 
-    #[motsu::test]
-    #[ignore = "Motsu not reliable enough for proxy testing"]
-    fn constructs(
-        proxy: Contract<Erc1967ProxyExample>,
-        logic: Contract<UUPSErc20Example>,
-        alice: Address,
-    ) {
+    #[test]
+    fn constructs() {
+        let proxy =
+            TestVMContract::<Erc1967ProxyExample>::new(stringify!(proxy));
+        let logic = TestVMContract::<UUPSErc20Example>::new(stringify!(logic));
+        let alice = test_address(stringify!(alice));
+
         logic.sender(alice).constructor();
+
+        let initialize = ERC20Interface::setVersionCall {}.abi_encode();
+        let total_supply_call = ERC20Interface::totalSupplyCall {}.abi_encode();
+        proxy.vm().set_code(logic.address(), vec![1]);
+        let proxiable_uuid_selector = keccak256(b"proxiableUUID()");
+        proxy.vm().mock_static_call(
+            logic.address(),
+            proxiable_uuid_selector[..4].to_vec(),
+            Ok(IMPLEMENTATION_SLOT.abi_encode()),
+        );
+        proxy.vm().mock_delegate_call(
+            logic.address(),
+            initialize,
+            Ok(Vec::new()),
+        );
+        proxy.vm().mock_delegate_call(
+            logic.address(),
+            total_supply_call.clone(),
+            Ok(U256::ZERO.abi_encode()),
+        );
 
         proxy
             .sender(alice)
             .constructor(logic.address())
-            .motsu_expect("should be able to construct");
+            .expect("should be able to construct");
 
         let implementation = proxy
             .sender(alice)
             .implementation()
-            .motsu_expect("should be able to get implementation");
+            .expect("should be able to get implementation");
         assert_eq!(implementation, logic.address());
 
-        let total_supply_call = ERC20Interface::totalSupplyCall {}.abi_encode();
         let total_supply = proxy
             .sender(alice)
             .fallback(&total_supply_call)
-            .motsu_expect("should be able to get total supply");
+            .expect("should be able to get total supply");
         assert_eq!(total_supply, U256::ZERO.abi_encode());
 
         assert_eq!(
@@ -814,134 +845,42 @@ mod tests {
         );
     }
 
-    #[motsu::test]
-    #[ignore = "Motsu not reliable enough for proxy testing"]
-    fn fallback(
-        proxy: Contract<Erc1967ProxyExample>,
-        logic: Contract<UUPSErc20Example>,
-        alice: Address,
-        bob: Address,
-    ) {
-        logic.sender(alice).constructor();
+    #[test]
+    fn upgrade_via_direct_call_reverts() {
+        let logic = TestVMContract::<UUPSErc20Example>::new(stringify!(logic));
+        let logic_v2 =
+            TestVMContract::<UUPSErc20Example>::new(stringify!(logic_v2));
+        let alice = test_address(stringify!(alice));
 
-        proxy
-            .sender(alice)
-            .constructor(logic.address())
-            .motsu_expect("should be able to construct");
-
-        // verify initial balance is [`U256::ZERO`].
-        let balance_of_alice_call =
-            ERC20Interface::balanceOfCall { account: alice }.abi_encode();
-        let balance = proxy
-            .sender(alice)
-            .fallback(&balance_of_alice_call)
-            .motsu_expect("should be able to get balance");
-        assert_eq!(balance, U256::ZERO.abi_encode());
-
-        let total_supply_call = ERC20Interface::totalSupplyCall {}.abi_encode();
-        let total_supply = proxy
-            .sender(alice)
-            .fallback(&total_supply_call)
-            .motsu_expect("should be able to get total supply");
-        assert_eq!(total_supply, U256::ZERO.abi_encode());
-
-        // mint 1000 tokens.
-        let amount = U256::from(1000);
-
-        let mint_call =
-            ERC20Interface::mintCall { to: alice, value: amount }.abi_encode();
-        proxy
-            .sender(alice)
-            .fallback(&mint_call)
-            .motsu_expect("should be able to mint");
-
-        proxy.assert_emitted(&erc20::Transfer {
-            from: Address::ZERO,
-            to: alice,
-            value: amount,
-        });
-
-        // check that the balance can be accurately fetched through the proxy.
-        let balance = proxy
-            .sender(alice)
-            .fallback(&balance_of_alice_call)
-            .motsu_expect("should be able to get balance");
-        assert_eq!(balance, amount.abi_encode());
-
-        let total_supply = proxy
-            .sender(alice)
-            .fallback(&total_supply_call)
-            .motsu_expect("should be able to get total supply");
-        assert_eq!(total_supply, amount.abi_encode());
-
-        // check that the balance can be transferred through the proxy.
-        let transfer_call =
-            ERC20Interface::transferCall { to: bob, value: amount }
-                .abi_encode();
-        proxy
-            .sender(alice)
-            .fallback(&transfer_call)
-            .motsu_expect("should be able to transfer");
-
-        proxy.assert_emitted(&erc20::Transfer {
-            from: alice,
-            to: bob,
-            value: amount,
-        });
-
-        let balance = proxy
-            .sender(alice)
-            .fallback(&balance_of_alice_call)
-            .motsu_expect("should be able to get balance");
-        assert_eq!(balance, U256::ZERO.abi_encode());
-
-        let balance_of_bob_call =
-            ERC20Interface::balanceOfCall { account: bob }.abi_encode();
-        let balance = proxy
-            .sender(alice)
-            .fallback(&balance_of_bob_call)
-            .motsu_expect("should be able to get balance");
-        assert_eq!(balance, amount.abi_encode());
-
-        let total_supply = proxy
-            .sender(alice)
-            .fallback(&total_supply_call)
-            .motsu_expect("should be able to get total supply");
-        assert_eq!(total_supply, amount.abi_encode());
-    }
-
-    #[motsu::test]
-    fn upgrade_via_direct_call_reverts(
-        logic: Contract<UUPSErc20Example>,
-        logic_v2: Contract<UUPSErc20Example>,
-        alice: Address,
-    ) {
         logic.sender(alice).constructor();
 
         let err = logic
             .sender(alice)
             .upgrade_to_and_call(logic_v2.address(), vec![].into())
-            .motsu_expect_err("should revert on upgrade");
+            .expect_err("should revert on upgrade");
 
         assert_eq!(err, UUPSUnauthorizedCallContext {}.abi_encode());
     }
 
-    #[motsu::test]
-    fn proxiable_uuid_direct_check(
-        logic: Contract<UUPSErc20Example>,
-        alice: Address,
-    ) {
+    #[test]
+    fn proxiable_uuid_direct_check() {
+        let logic = TestVMContract::<UUPSErc20Example>::new(stringify!(logic));
+        let alice = test_address(stringify!(alice));
+
         logic.sender(alice).constructor();
 
         let result = logic
             .sender(alice)
             .proxiable_uuid()
-            .motsu_expect("should be able to get proxiable uuid");
+            .expect("should be able to get proxiable uuid");
         assert_eq!(result, IMPLEMENTATION_SLOT);
     }
 
-    #[motsu::test]
-    fn get_version_number_v2(uups: Contract<UUPSUpgradeable>, alice: Address) {
+    #[test]
+    fn get_version_number_v2() {
+        let uups = TestVMContract::<UUPSUpgradeable>::new(stringify!(uups));
+        let alice = test_address(stringify!(alice));
+
         uups.sender(alice).constructor();
         assert_eq!(VERSION_NUMBER, uups.sender(alice).get_version());
     }

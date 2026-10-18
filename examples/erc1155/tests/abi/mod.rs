@@ -4,6 +4,7 @@ use alloy::sol;
 sol!(
     #[sol(rpc)]
     contract Erc1155 {
+        function owner() external view returns (address);
         function balanceOf(address account, uint256 id) external view returns (uint256 balance);
         #[derive(Debug)]
         function balanceOfBatch(address[] accounts, uint256[] ids) external view returns (uint256[] memory balances);

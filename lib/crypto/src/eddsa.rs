@@ -10,7 +10,7 @@
 #![allow(non_snake_case)]
 use sha2::{digest::Digest, Sha512};
 use static_assertions::const_assert;
-use zeroize::ZeroizeOnDrop;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::{
     arithmetic::{
@@ -82,7 +82,7 @@ pub const SIGNATURE_LENGTH: usize = 64;
 ///
 /// Instances of this secret are automatically overwritten with zeroes when they
 /// fall out of scope.
-#[derive(Clone, PartialEq, Debug, ZeroizeOnDrop)]
+#[derive(Clone, PartialEq, ZeroizeOnDrop)]
 pub(crate) struct ExpandedSecretKey {
     /// The secret scalar used for signing.
     pub(crate) scalar: Scalar,
@@ -101,10 +101,18 @@ impl ExpandedSecretKey {
         scalar_bytes.copy_from_slice(&bytes[00..32]);
         hash_prefix.copy_from_slice(&bytes[32..64]);
 
-        let scalar = Scalar::from_bigint(U256::from_bytes_le(&clamp_integer(
-            scalar_bytes,
-        )));
-        Self { scalar, hash_prefix }
+        // Clamp in place so the pre-clamped copy is not left in a temporary.
+        scalar_bytes[0] &= 0b1111_1000;
+        scalar_bytes[31] &= 0b0111_1111;
+        scalar_bytes[31] |= 0b0100_0000;
+        let mut scalar_integer = U256::from_bytes_le(&scalar_bytes);
+        let mut scalar = Scalar::from_bigint(scalar_integer);
+        scalar_integer.zeroize();
+        scalar_bytes.zeroize();
+        let expanded = Self { scalar, hash_prefix };
+        scalar.zeroize();
+        hash_prefix.zeroize();
+        expanded
     }
 }
 
@@ -141,8 +149,10 @@ pub const fn clamp_integer(mut bytes: [u8; 32]) -> [u8; 32] {
 impl From<&SecretKey> for ExpandedSecretKey {
     #[allow(clippy::unwrap_used)]
     fn from(secret_key: &SecretKey) -> ExpandedSecretKey {
-        let hash = Sha512::default().chain_update(secret_key).finalize();
-        ExpandedSecretKey::from_bytes(hash.as_ref())
+        let mut hash = Sha512::default().chain_update(secret_key).finalize();
+        let expanded = ExpandedSecretKey::from_bytes(hash.as_ref());
+        hash.as_mut_slice().zeroize();
+        expanded
     }
 }
 
@@ -206,10 +216,13 @@ impl SigningKey {
         h.update(self.signing_key.hash_prefix);
         h.update(message);
 
-        let r = WideScalar::from_bigint(U512::from_bytes_le(
-            h.finalize().as_slice(),
-        ));
-        let r = Scalar::from_fp(r);
+        let mut r_hash = h.finalize();
+        let mut r_integer = U512::from_bytes_le(r_hash.as_slice());
+        let mut r_wide = WideScalar::from_bigint(r_integer);
+        r_integer.zeroize();
+        r_hash.as_mut_slice().zeroize();
+        let mut r = Scalar::from_fp(r_wide);
+        r_wide.zeroize();
 
         let R = ProjectivePoint::generator() * r;
 
@@ -220,11 +233,16 @@ impl SigningKey {
         ));
         h.update(message);
 
-        let k = WideScalar::from_bigint(U512::from_bytes_le(
-            h.finalize().as_slice(),
-        ));
-        let k = Scalar::from_fp(k);
-        let s: Scalar = (k * self.signing_key.scalar) + r;
+        let mut k_hash = h.finalize();
+        let mut k_integer = U512::from_bytes_le(k_hash.as_slice());
+        let k_wide = WideScalar::from_bigint(k_integer);
+        k_integer.zeroize();
+        k_hash.as_mut_slice().zeroize();
+        let k = Scalar::from_fp(k_wide);
+        let mut secret_product = k * self.signing_key.scalar;
+        let s: Scalar = secret_product + r;
+        secret_product.zeroize();
+        r.zeroize();
 
         Signature { R, s }
     }
@@ -345,7 +363,29 @@ impl VerifyingKey {
     /// Verify a signature on a message with this keypair's public key.
     #[must_use]
     pub fn is_valid(&self, message: &[u8], signature: &Signature) -> bool {
-        let expected_r = self.compute_R(signature, message);
+        if self.point.z.is_zero() || signature.R.z.is_zero() {
+            return false;
+        }
+
+        let public_key = self.point.into_affine();
+        let R = signature.R.into_affine();
+
+        if public_key.is_zero()
+            || R.is_zero()
+            || !public_key.is_on_curve()
+            || !R.is_on_curve()
+            || !public_key.is_in_prime_order_subgroup()
+            || !R.is_in_prime_order_subgroup()
+        {
+            return false;
+        }
+
+        // Rebuild projective points from their validated affine coordinates.
+        // This discards any inconsistent T coordinate supplied by callers.
+        let verifying_key = Self::from_affine(public_key);
+        let signature = Signature::from_affine_R_s(R, signature.s);
+
+        let expected_r = verifying_key.compute_R(&signature, message);
         expected_r == signature.R
     }
 
@@ -417,6 +457,61 @@ mod test {
         // Verify with a different message
         let invalid_message = b"I'm not signed!";
         assert!(!signing_key.is_valid_signature(invalid_message, &signature));
+    }
+
+    #[test]
+    fn rejects_identity_public_key_with_identity_signature() {
+        let verifying_key = VerifyingKey::from_affine(AffinePoint::zero());
+        let signature = Signature::from_affine_R_s(
+            AffinePoint::zero(),
+            Scalar::from_bigint(U256::ZERO),
+        );
+
+        assert!(!verifying_key.is_valid(b"any message", &signature));
+    }
+
+    #[test]
+    fn rejects_order_two_public_key_and_signature() {
+        use crate::curve::te::instance::curve25519::Curve25519FqParam;
+
+        // T = (0, -1) is a nonidentity point of order two. With this fixed
+        // message the reduced EdDSA challenge is even, so [−k]T = T while
+        // [s]B = 0. The verifier must reject points outside the prime-order
+        // subgroup even though the signature equation holds.
+        let order_two = AffinePoint::new_unchecked(
+            Fp256::<Curve25519FqParam>::ZERO,
+            -Fp256::<Curve25519FqParam>::ONE,
+        );
+        let verifying_key = VerifyingKey::from_affine(order_two);
+        let signature = Signature::from_affine_R_s(
+            order_two,
+            Scalar::from_bigint(U256::ZERO),
+        );
+
+        assert!(!verifying_key.is_valid(&[1u8, 0, 0, 0], &signature));
+    }
+
+    #[test]
+    fn rejects_off_curve_points_and_zero_projective_z() {
+        use crate::curve::te::instance::curve25519::Curve25519FqParam;
+
+        let field_zero = Fp256::<Curve25519FqParam>::ZERO;
+        let off_curve = AffinePoint::new_unchecked(field_zero, field_zero);
+        let signature = Signature::from_affine_R_s(
+            ProjectivePoint::generator().into_affine(),
+            Scalar::from_bigint(U256::ZERO),
+        );
+        assert!(!VerifyingKey::from_affine(off_curve)
+            .is_valid(b"message", &signature));
+
+        let malformed_R = ProjectivePoint::new_unchecked(
+            field_zero, field_zero, field_zero, field_zero,
+        );
+        let signature = Signature { R: malformed_R, s: signature.s };
+        assert!(!VerifyingKey::from_affine(
+            ProjectivePoint::generator().into_affine()
+        )
+        .is_valid(b"message", &signature));
     }
 
     #[test]
@@ -566,14 +661,20 @@ mod test {
     }
 
     #[test]
-    fn zeroize_signing_key() {
-        let ptr = {
-            let secret = SigningKey::from_bytes(&[4u8; 32]);
-            &raw const secret.signing_key
-        };
-        let secret_key = unsafe { ptr.as_ref().unwrap() };
+    fn expanded_secret_key_uses_zeroize_on_drop() {
+        fn assert_zeroize_on_drop<T: ZeroizeOnDrop>() {}
 
-        assert!(secret_key.scalar.is_zero());
-        assert_eq!(secret_key.hash_prefix, [0u8; 32]);
+        assert_zeroize_on_drop::<ExpandedSecretKey>();
+        assert!(core::mem::needs_drop::<ExpandedSecretKey>());
+        assert!(core::mem::needs_drop::<SigningKey>());
+
+        // These are the field types zeroized by the derived Drop implementation.
+        let mut scalar = Scalar::from_bigint(U256::from(42u64));
+        scalar.zeroize();
+        assert!(scalar.is_zero());
+
+        let mut hash_prefix = [0xA5u8; 32];
+        hash_prefix.zeroize();
+        assert_eq!(hash_prefix, [0u8; 32]);
     }
 }

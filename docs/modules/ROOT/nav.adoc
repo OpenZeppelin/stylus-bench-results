@@ -1,4 +1,5 @@
 * xref:index.adoc[Overview]
+* xref:upgrade-from-v0.3.0.adoc[Upgrading from v0.3.0]
 
 * xref:access-control.adoc[Access Control]
 

@@ -128,7 +128,8 @@ use crate::storage::refs::Refs;
 use crate::storage::RemoteId;
 ```
 
-This is enforced by `rustfmt`. Note that this is a `nightly` feature.
+Keep these groups in this order when adding imports. The repository uses the
+stable formatter from the toolchain pinned in `rust-toolchain.toml`.
 
 ### Variable naming
 
@@ -206,16 +207,19 @@ Some other examples of automation are:
 
 ### Linting & formatting
 
-Always check your code with the linter (`clippy`), by running:
+Always check the full workspace with the linter (`clippy`), by running:
 
 ```shell
-    cargo clippy --tests --all-features
+    cargo +1.91.0 clippy --workspace --all-targets --locked -- \
+        -D warnings -D clippy::all -D clippy::pedantic
 ```
 
 And make sure your code is formatted with, using:
 
 ```shell
-    cargo +nightly fmt
+    cargo +1.91.0 fmt --all --check
+    cargo +1.91.0 fmt --manifest-path fuzz/Cargo.toml --all -- --check
+    cargo +1.91.0 fmt --manifest-path templates/crypto-erc20/Cargo.toml --all -- --check
 ```
 
 Finally, ensure there is no trailing whitespace anywhere.
@@ -225,22 +229,22 @@ Finally, ensure there is no trailing whitespace anywhere.
 Make sure all tests are passing with:
 
 ```shell
-    cargo test --all-features
+    cargo +1.91.0 test --workspace --all-targets --locked
 ```
 
 ### Running end-to-end tests
 
-To run e2e tests, you need to have a local nitro test node up and running.
-Run the following command and wait till script exit successfully:
+End-to-end tests run against the SDK's pinned Nitro devnode. The runner starts
+and stops it automatically; Docker and Foundry's `cast` must be available.
 
 ```shell
-./scripts/nitro-testnode.sh -i -d
+./scripts/e2e-tests.sh
 ```
 
-Then you will be able to run e2e tests:
+To run the gas benchmarks against a fresh devnode:
 
 ```shell
-./scripts/e2e-tests.sh "*"
+./scripts/devnet.sh run -- ./scripts/bench.sh
 ```
 
 ### Running fuzz tests

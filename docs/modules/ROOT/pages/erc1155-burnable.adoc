@@ -3,6 +3,10 @@
 Extension of xref:erc1155.adoc[ERC-1155] that allows token holders to destroy both their
 own tokens and those that they have been approved to use.
 
+The extension's `burn` and `burn_batch` methods check that the caller owns the
+tokens or has been approved for all tokens. `Erc1155Supply` implements these
+methods directly and updates tracked supply when a burn succeeds.
+
 [[usage]]
 == Usage
 
@@ -86,7 +90,7 @@ impl IErc1155 for Erc1155Example {
         &self,
         accounts: Vec<Address>,
         ids: Vec<U256>,
-    ) -> Result<Vec<U256>, Self::Error> {
+    ) -> Result<Vec<U256>, erc1155::Error> {
         self.erc1155.balance_of_batch(accounts, ids)
     }
 
@@ -94,7 +98,7 @@ impl IErc1155 for Erc1155Example {
         &mut self,
         operator: Address,
         approved: bool,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc1155::Error> {
         self.erc1155.set_approval_for_all(operator, approved)
     }
 
@@ -109,7 +113,7 @@ impl IErc1155 for Erc1155Example {
         id: U256,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc1155::Error> {
         self.erc1155.safe_transfer_from(from, to, id, value, data)
     }
 
@@ -120,7 +124,7 @@ impl IErc1155 for Erc1155Example {
         ids: Vec<U256>,
         values: Vec<U256>,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc1155::Error> {
         self.erc1155.safe_batch_transfer_from(from, to, ids, values, data)
     }
 }

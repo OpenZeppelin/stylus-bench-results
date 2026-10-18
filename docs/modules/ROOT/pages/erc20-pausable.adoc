@@ -116,7 +116,7 @@ impl IErc20 for Erc20Example {
         &mut self,
         spender: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, Error> {
         Ok(self.erc20.approve(spender, value)?)
     }
 }

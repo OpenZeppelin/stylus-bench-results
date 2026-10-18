@@ -16,7 +16,7 @@ use alloc::{vec, vec::Vec};
 
 use alloy_primitives::{aliases::B32, keccak256, Address, B256, U256, U8};
 use alloy_sol_types::SolType;
-use stylus_sdk::{block, call::MethodError, function_selector, prelude::*};
+use stylus_sdk::{function_selector, prelude::*};
 
 use crate::{
     token::erc20::{self, Erc20},
@@ -137,6 +137,8 @@ pub struct Erc20Permit<T: IEip712 + StorageType> {
 unsafe impl<T: IEip712 + StorageType> TopLevelStorage for Erc20Permit<T> {}
 
 /// Interface for [`Erc20Permit`]
+#[allow(missing_docs)]
+#[public]
 pub trait IErc20Permit: INonces {
     /// The error type associated to this interface.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -233,16 +235,17 @@ impl<T: IEip712 + StorageType> Erc20Permit<T> {
         erc20: &mut Erc20,
         nonces: &mut Nonces,
     ) -> Result<(), Error> {
-        if U256::from(block::timestamp()) > deadline {
+        if U256::from(self.vm().block_timestamp()) > deadline {
             return Err(ERC2612ExpiredSignature { deadline }.into());
         }
 
+        let nonce = nonces.nonces(owner);
         let struct_hash = keccak256(StructHashTuple::abi_encode(&(
             PERMIT_TYPEHASH,
             owner,
             spender,
             value,
-            nonces.use_nonce(owner),
+            nonce,
             deadline,
         )));
 
@@ -255,7 +258,10 @@ impl<T: IEip712 + StorageType> Erc20Permit<T> {
         }
 
         erc20._approve(owner, spender, value, true)?;
+        nonces.use_nonce(owner);
 
         Ok(())
     }
 }
+
+use stylus_sdk::prelude::errors::MethodError;

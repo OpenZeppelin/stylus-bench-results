@@ -1,32 +1,38 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-mydir=$(dirname "$0")
-cd "$mydir" || exit
-cd ..
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "${ROOT_DIR}"
+source "${ROOT_DIR}/scripts/wasm-opt-wrapper/env.sh"
 
-# Check contract wasm binary by crate name
-check_wasm() {
-  local CONTRACT_CRATE_NAME=$1
-  local CONTRACT_BIN_NAME="${CONTRACT_CRATE_NAME//-/_}.wasm"
+endpoint=${RPC_URL:-http://localhost:8547}
+contracts=()
+while IFS=$'\t' read -r contract package_directory; do
+  [[ -n "${contract}" ]] && contracts+=("${contract}|${package_directory}")
+done < <(
+  cargo metadata --no-deps --format-version 1 |
+    python3 -c 'import json,sys; data=json.load(sys.stdin); print("\n".join(p["name"]+"\t"+p["manifest_path"].rsplit("/",1)[0] for p in data["packages"] if "/examples/" in p["manifest_path"] and any("cdylib" in t["kind"] for t in p["targets"])))'
+)
 
-  echo
-  echo "Checking contract $CONTRACT_CRATE_NAME"
-  cargo stylus check -e https://sepolia-rollup.arbitrum.io/rpc --wasm-file ./target/wasm32-unknown-unknown/release/"$CONTRACT_BIN_NAME"
-}
+if [[ ${#contracts[@]} -eq 0 ]]; then
+  printf 'No example cdylib contracts found.\n' >&2
+  exit 1
+fi
 
-# Retrieve all alphanumeric contract's crate names in `./examples` directory.
-get_example_crate_names() {
-  # shellcheck disable=SC2038
-  # NOTE: optimistically relying on the 'name = ' string at Cargo.toml file
-  find ./examples -maxdepth 2 -type f -name "Cargo.toml" | xargs grep -m 1 'name = ' | grep -oE '".*"' | tr -d "'\""
-}
-
-cargo build --release --target wasm32-unknown-unknown \
-  -Z build-std=std,panic_abort \
-  -Z build-std-features=panic_immediate_abort
-
-for CRATE_NAME in $(get_example_crate_names); do
-  check_wasm "$CRATE_NAME"
-  sleep 2
+for entry in "${contracts[@]}"; do
+  contract=${entry%%|*}
+  package_directory=${entry#*|}
+  printf '\nChecking and activating %s on %s\n' "${contract}" "${endpoint}"
+  (
+    cd "${package_directory}"
+    cargo stylus check --contract "${contract}" --endpoint "${endpoint}"
+  )
 done
+
+# The crypto-ERC20 starter template is intentionally outside the main Cargo
+# workspace, so check it from its own project directory.
+printf '\nChecking and activating crypto-erc20 template on %s\n' "${endpoint}"
+(
+  cd templates/crypto-erc20
+  cargo stylus check --endpoint "${endpoint}"
+)

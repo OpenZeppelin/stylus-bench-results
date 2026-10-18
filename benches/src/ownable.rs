@@ -1,3 +1,5 @@
+use crate::devnet_test_support::Account;
+use crate::devnet_test_support::{constructor, receipt};
 use alloy::{
     network::{AnyNetwork, EthereumWallet},
     primitives::Address,
@@ -5,7 +7,6 @@ use alloy::{
     sol,
     sol_types::SolCall,
 };
-use e2e::{constructor, receipt, Account};
 
 use crate::{
     report::{ContractReport, FunctionReport},
@@ -29,17 +30,15 @@ pub async fn run(cache_opt: Opt) -> eyre::Result<Vec<FunctionReport>> {
     let alice = Account::new().await?;
     let alice_wallet = ProviderBuilder::new()
         .network::<AnyNetwork>()
-        .with_recommended_fillers()
         .wallet(EthereumWallet::from(alice.signer.clone()))
-        .on_http(alice.url().parse()?);
+        .connect_http(alice.rpc_url().parse()?);
 
     let bob = Account::new().await?;
     let bob_addr = bob.address();
     let bob_wallet = ProviderBuilder::new()
         .network::<AnyNetwork>()
-        .with_recommended_fillers()
         .wallet(EthereumWallet::from(bob.signer.clone()))
-        .on_http(bob.url().parse()?);
+        .connect_http(bob.rpc_url().parse()?);
 
     let contract_addr = deploy(&alice, cache_opt).await?;
 

@@ -26,36 +26,37 @@ env:
 jobs:
   fmt:
     runs-on: ubuntu-latest
-    name: nightly / fmt
+    name: stable 1.91.0 / fmt
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
 
       - name: Install rust
-        # We run in nightly to make use of some features only available there.
-        # Check out `rustfmt.toml` to see which ones.
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: nightly-2025-08-01
+          toolchain: 1.91.0
           components: rustfmt
           rustflags: ""
 
       - name: Check formatting
         run: cargo fmt --all --check
 
+      - name: Check formatting for excluded workspaces
+        run: |
+          cargo fmt --manifest-path fuzz/Cargo.toml --all -- --check
+          cargo fmt --manifest-path templates/crypto-erc20/Cargo.toml --all -- --check
+
   clippy:
     runs-on: ubuntu-latest
-    name: ${{ matrix.toolchain }} / clippy
+    name: stable 1.91.0 / clippy
     permissions:
       contents: read
       checks: write
     strategy:
       fail-fast: false
       matrix:
-        # Get early warning of new lints which are regularly introduced in beta
-        # channels.
-        toolchain: [stable, beta]
+        toolchain: [1.91.0]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,14 +74,15 @@ jobs:
         with:
           reporter: "github-pr-check"
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          clippy_flags: --all-targets --all-features -- -D warnings -D clippy::all -D clippy::pedantic
+          clippy_flags: --all-targets -- -D warnings -D clippy::all -D clippy::pedantic
+
+      - name: Clippy excluded workspaces
+        run: |
+          cargo clippy --manifest-path fuzz/Cargo.toml --all-targets -- -D warnings
+          cargo clippy --manifest-path templates/crypto-erc20/Cargo.toml --all-targets -- -D warnings
   doc:
-    # Run docs generation on nightly rather than stable. This enables features
-    # like https://doc.rust-lang.org/beta/unstable-book/language-features/doc-cfg.html
-    # which allows an API be documented as only available in some specific
-    # platforms.
     runs-on: ubuntu-latest
-    name: nightly / doc
+    name: stable 1.91.0 / doc
     steps:
       - uses: actions/checkout@v4
         with:
@@ -89,13 +91,11 @@ jobs:
       - name: Install rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: nightly-2025-08-01
+          toolchain: 1.91.0
           rustflags: ""
 
       - name: Cargo doc
         run: cargo doc --no-deps --all-features
-        env:
-          RUSTDOCFLAGS: --cfg docsrs
 
   hack:
     # `cargo-hack` checks combinations of feature flags to ensure that features
@@ -110,7 +110,7 @@ jobs:
       - name: Install rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.91.0
           target: wasm32-unknown-unknown
           rustflags: ""
 
@@ -121,7 +121,7 @@ jobs:
         # target in this context means one of `--lib`, `--bin`, etc, and not the
         # target triple.
       - name: Cargo hack
-        run: cargo hack check --feature-powerset --depth 2 --release --target wasm32-unknown-unknown --workspace --exclude e2e --exclude basic-script-example --exclude benches
+        run: cargo hack check --feature-powerset --depth 2 --release --target wasm32-unknown-unknown --workspace --exclude basic-script-example --exclude benches
 
   typos:
     runs-on: ubuntu-latest
@@ -149,7 +149,7 @@ jobs:
       - name: Install rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.91.0
           rustflags: ""
 
       - name: Add rust targets ${{ matrix.target }}

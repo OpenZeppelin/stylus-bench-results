@@ -21,6 +21,10 @@ sol!(
         function safeMint(address to, uint256 tokenId, bytes calldata data) external;
         function mint(address to, uint256 tokenId) external;
         function burn(uint256 tokenId) external;
+        function owner() external view returns (address);
+        function initializeOwner(address initialOwner) external;
+        function transferOwnership(address newOwner) external;
+        function renounceOwnership() external;
 
         #[derive(Debug)]
         function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256 tokenId);
@@ -43,6 +47,8 @@ sol!(
         error ERC721NonexistentToken(uint256 tokenId);
         error ERC721OutOfBoundsIndex(address owner, uint256 index);
         error ERC721EnumerableForbiddenBatchMint();
+        error OwnableUnauthorizedAccount(address account);
+        error OwnableInvalidOwner(address owner);
 
         #[derive(Debug, PartialEq)]
         event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
@@ -50,5 +56,7 @@ sol!(
         event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
         #[derive(Debug, PartialEq)]
         event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
+        #[derive(Debug, PartialEq)]
+        event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
    }
 );

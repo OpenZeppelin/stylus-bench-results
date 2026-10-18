@@ -6,7 +6,6 @@ use alloc::{vec, vec::Vec};
 
 use alloy_primitives::{uint, Address, U256};
 use stylus_sdk::{
-    call::MethodError,
     prelude::*,
     storage::{StorageMap, StorageU256},
 };
@@ -49,6 +48,8 @@ pub struct Nonces {
 }
 
 /// Interface for [`Nonces`]
+#[allow(missing_docs)]
+#[public]
 pub trait INonces {
     /// Returns the unused nonce for the given account.
     ///
@@ -127,10 +128,11 @@ impl Nonces {
     }
 }
 
+use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{Address, U256};
-    use motsu::prelude::Contract;
+    use crate::test_support::{test_address, TestContract as TestVMContract};
+    use alloy_primitives::U256;
     use stylus_sdk::prelude::*;
 
     use super::ONE;
@@ -138,13 +140,19 @@ mod tests {
 
     unsafe impl TopLevelStorage for Nonces {}
 
-    #[motsu::test]
-    fn initiate_nonce(contract: Contract<Nonces>, alice: Address) {
+    #[test]
+    fn initiate_nonce() {
+        let contract = TestVMContract::<Nonces>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         assert_eq!(contract.sender(alice).nonces(alice), U256::ZERO);
     }
 
-    #[motsu::test]
-    fn use_nonce(contract: Contract<Nonces>, alice: Address) {
+    #[test]
+    fn use_nonce() {
+        let contract = TestVMContract::<Nonces>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let use_nonce = contract.sender(alice).use_nonce(alice);
         assert_eq!(use_nonce, U256::ZERO);
 
@@ -152,8 +160,11 @@ mod tests {
         assert_eq!(nonce, ONE);
     }
 
-    #[motsu::test]
-    fn use_checked_nonce(contract: Contract<Nonces>, alice: Address) {
+    #[test]
+    fn use_checked_nonce() {
+        let contract = TestVMContract::<Nonces>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let use_checked_nonce =
             contract.sender(alice).use_checked_nonce(alice, U256::ZERO);
         assert!(use_checked_nonce.is_ok());
@@ -162,11 +173,11 @@ mod tests {
         assert_eq!(nonce, ONE);
     }
 
-    #[motsu::test]
-    fn use_checked_nonce_invalid_nonce(
-        contract: Contract<Nonces>,
-        alice: Address,
-    ) {
+    #[test]
+    fn use_checked_nonce_invalid_nonce() {
+        let contract = TestVMContract::<Nonces>::new(stringify!(contract));
+        let alice = test_address(stringify!(alice));
+
         let use_checked_nonce =
             contract.sender(alice).use_checked_nonce(alice, ONE);
         assert!(matches!(
