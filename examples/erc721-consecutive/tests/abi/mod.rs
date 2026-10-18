@@ -18,6 +18,10 @@ sol!(
         function mint(address to, uint256 tokenId) external;
 
         function burn(uint256 tokenId) external;
+        function owner() external view returns (address);
+        function initializeOwner(address initialOwner) external;
+        function transferOwnership(address newOwner) external;
+        function renounceOwnership() external;
 
         error ERC721InvalidOwner(address owner);
         error ERC721NonexistentToken(uint256 tokenId);
@@ -33,6 +37,7 @@ sol!(
         error ERC721ForbiddenMint();
         error ERC721ForbiddenBatchBurn();
         error OwnableUnauthorizedAccount(address account);
+        error OwnableInvalidOwner(address owner);
 
         #[derive(Debug, PartialEq)]
         event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);

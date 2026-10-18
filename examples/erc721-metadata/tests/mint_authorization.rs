@@ -3,7 +3,7 @@
 #[path = "../../devnet_test_support.rs"]
 mod devnet_test_support;
 
-use crate::devnet_test_support::{constructor, send, Account, Revert};
+use crate::devnet_test_support::{Account, Revert, constructor, send};
 use abi::Erc721;
 use alloy::primitives::U256;
 use eyre::Result;
@@ -16,6 +16,7 @@ async fn non_owner_cannot_mint() -> Result<()> {
     let bob = Account::new().await?;
     let contract_address = alice
         .as_deployer()
+        .with_signer(&alice)
         .with_constructor(constructor!(
             "Test Token".to_owned(),
             "NFT".to_owned(),

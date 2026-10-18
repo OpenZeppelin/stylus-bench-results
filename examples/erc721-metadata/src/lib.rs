@@ -6,18 +6,17 @@ use alloc::{string::String, vec::Vec};
 use openzeppelin_stylus::access::ownable::{self, IOwnable, Ownable};
 use openzeppelin_stylus::{
     token::erc721::{
-        self,
+        self, Erc721, IErc721,
         extensions::{
             Erc721Metadata, Erc721UriStorage, IErc721Burnable, IErc721Metadata,
             IErc721UriStorage,
         },
-        Erc721, IErc721,
     },
     utils::introspection::erc165::IErc165,
 };
 use stylus_sdk::{
     abi::Bytes,
-    alloy_primitives::{aliases::B32, Address, U256},
+    alloy_primitives::{Address, U256, aliases::B32},
     prelude::*,
     storage::StorageBool,
 };
@@ -68,12 +67,9 @@ impl Erc721MetadataExample {
         Ok(())
     }
 
-    fn mint(
-        &mut self,
-        to: Address,
-        token_id: U256,
-    ) -> Result<(), erc721::Error> {
-        self.erc721._mint(to, token_id)
+    fn mint(&mut self, to: Address, token_id: U256) -> Result<(), Vec<u8>> {
+        self.ownable.only_owner()?;
+        self.erc721._mint(to, token_id).map_err(Into::into)
     }
 
     #[selector(name = "setTokenURI")]

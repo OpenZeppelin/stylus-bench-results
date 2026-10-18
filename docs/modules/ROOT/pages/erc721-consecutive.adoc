@@ -39,9 +39,9 @@ impl Erc721ConsecutiveExample {
     ) -> Result<(), consecutive::Error> {
         self.erc721_consecutive.first_consecutive_id.set(first_consecutive_id);
         self.erc721_consecutive.max_batch_size.set(max_batch_size);
-        for (&receiver, &amount) in receivers.iter().zip(amounts.iter()) {
-            self.erc721_consecutive._mint_consecutive(receiver, amount)?;
-        }
+        self.erc721_consecutive._mint_consecutive_batches(
+            receivers.iter().copied().zip(amounts.iter().copied()),
+        )?;
         Ok(())
     }
 }

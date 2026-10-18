@@ -3,27 +3,31 @@
 
 extern crate alloc;
 
+use alloc::vec::Vec;
 use alloy_primitives::{
-    aliases::{B32, U96},
     Address, U256,
+    aliases::{B32, U96},
 };
 use openzeppelin_stylus::{
+    access::ownable::{self, IOwnable, Ownable},
     token::erc721::{
-        extensions::{consecutive, Erc721Consecutive, IErc721Burnable},
         IErc721,
+        extensions::{Erc721Consecutive, IErc721Burnable, consecutive},
     },
     utils::introspection::erc165::IErc165,
 };
-use stylus_sdk::{abi::Bytes, prelude::*};
+use stylus_sdk::{abi::Bytes, prelude::*, storage::StorageBool};
 
 #[entrypoint]
 #[storage]
 struct Erc721ConsecutiveExample {
     erc721: Erc721Consecutive,
+    ownable: Ownable,
+    owner_initialized: StorageBool,
 }
 
 #[public]
-#[implements(IErc721<Error = consecutive::Error>, IErc721Burnable<Error = consecutive::Error>, IErc165)]
+#[implements(IErc721<Error = consecutive::Error>, IErc721Burnable<Error = consecutive::Error>, IErc165, IOwnable)]
 impl Erc721ConsecutiveExample {
     #[constructor]
     fn constructor(
@@ -32,21 +36,59 @@ impl Erc721ConsecutiveExample {
         amounts: Vec<U96>,
         first_consecutive_id: U96,
         max_batch_size: U96,
-    ) -> Result<(), consecutive::Error> {
+    ) -> Result<(), Vec<u8>> {
+        self.ownable.constructor(self.vm().msg_sender())?;
+        self.owner_initialized.set(true);
         self.erc721.first_consecutive_id.set(first_consecutive_id);
         self.erc721.max_batch_size.set(max_batch_size);
-        for (&receiver, &amount) in receivers.iter().zip(amounts.iter()) {
-            self.erc721._mint_consecutive(receiver, amount)?;
-        }
+        self.erc721
+            ._mint_consecutive_batches(
+                receivers.iter().copied().zip(amounts.iter().copied()),
+            )
+            .map_err(Into::into)?;
         Ok(())
     }
 
-    fn mint(
+    /// Initializes ownership when upgrading a proxy created by the v0.3.0
+    /// example. Call this atomically with the implementation upgrade.
+    fn initialize_owner(
         &mut self,
-        to: Address,
-        token_id: U256,
-    ) -> Result<(), consecutive::Error> {
-        self.erc721._mint(to, token_id)
+        initial_owner: Address,
+    ) -> Result<(), Vec<u8>> {
+        if self.owner_initialized.get() {
+            return Err(ownable::Error::UnauthorizedAccount(
+                ownable::OwnableUnauthorizedAccount {
+                    account: self.vm().msg_sender(),
+                },
+            )
+            .into());
+        }
+        self.ownable.constructor(initial_owner)?;
+        self.owner_initialized.set(true);
+        Ok(())
+    }
+
+    fn mint(&mut self, to: Address, token_id: U256) -> Result<(), Vec<u8>> {
+        self.ownable.only_owner()?;
+        self.erc721._mint(to, token_id).map_err(Into::into)
+    }
+}
+
+#[public]
+impl IOwnable for Erc721ConsecutiveExample {
+    fn owner(&self) -> Address {
+        self.ownable.owner()
+    }
+
+    fn transfer_ownership(
+        &mut self,
+        new_owner: Address,
+    ) -> Result<(), Vec<u8>> {
+        Ok(self.ownable.transfer_ownership(new_owner)?)
+    }
+
+    fn renounce_ownership(&mut self) -> Result<(), Vec<u8>> {
+        Ok(self.ownable.renounce_ownership()?)
     }
 }
 

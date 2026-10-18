@@ -90,6 +90,7 @@ async fn mints() -> eyre::Result<()> {
     let amounts = vec![batch_size];
     let receipt = alice
         .as_deployer()
+        .with_signer(&alice)
         .with_constructor(ctr(&receivers, &amounts))
         .deploy()
         .await?;
@@ -166,6 +167,7 @@ async fn transfers_from() -> eyre::Result<()> {
     // Deploy and mint batches of 1000 tokens to Alice and Bob.
     let receipt = alice
         .as_deployer()
+        .with_signer(&alice)
         .with_constructor(ctr(&receivers, &amounts))
         .deploy()
         .await?;
@@ -211,6 +213,7 @@ async fn burns() -> eyre::Result<()> {
     // Mint batch of 1000 tokens to Alice.
     let receipt = alice
         .as_deployer()
+        .with_signer(&alice)
         .with_constructor(ctr(&receivers, &amounts))
         .deploy()
         .await?;

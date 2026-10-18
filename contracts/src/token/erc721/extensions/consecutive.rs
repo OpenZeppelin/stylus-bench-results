@@ -1,15 +1,16 @@
 //! Implementation of the ERC-2309 "Consecutive Transfer Extension" as defined
 //! in [ERC-2309].
 //!
-//! This extension allows the minting large batches of tokens, during
-//! contract construction only. For upgradeable contracts, this implies that
-//! batch minting is only available during proxy deployment, and not in
-//! subsequent upgrades. These batches are limited to 5000 tokens at a time by
-//! default to accommodate off-chain indexers.
+//! This extension allows minting large batches of tokens during an explicit
+//! construction phase. Consumers must open the phase before their constructor
+//! batches and close it afterwards. For upgradeable contracts, batch minting
+//! should only be enabled by the proxy's one-time initializer. These batches
+//! are limited to 5000 tokens at a time by default to accommodate off-chain
+//! indexers.
 //!
 //! Using this extension removes the ability to mint single tokens during
-//! contract construction. This ability is regained after construction. During
-//! construction, only batch minting is allowed.
+//! contract construction. This ability is regained after construction. While
+//! the explicit construction phase is open, only batch minting is allowed.
 //!
 //! Fields `first_consecutive_id` (used to offset first token id) and
 //! `max_batch_size` (used to restrict maximum batch size) can be assigned
@@ -20,10 +21,11 @@
 use alloc::{vec, vec::Vec};
 
 use alloy_primitives::{
+    Address, B256, U8, U256,
     aliases::{B32, U96},
-    uint, Address, U256,
+    uint,
 };
-use stylus_sdk::{abi::Bytes, prelude::*};
+use stylus_sdk::{abi::Bytes, prelude::*, storage::StorageU8};
 
 use crate::{
     token::erc721::{
@@ -35,16 +37,36 @@ use crate::{
     utils::{
         introspection::erc165::IErc165,
         math::storage::{AddAssignUnchecked, SubAssignUnchecked},
+        storage_slot::StorageSlot,
         structs::{
             bitmap::BitMap,
             checkpoints::{
-                self, CheckpointUnorderedInsertion, Size, Trace, S160,
+                self, CheckpointUnorderedInsertion, S160, Size, Trace,
             },
         },
     },
 };
 
 type StorageU96 = <S160 as Size>::KeyStorage;
+
+// Namespaced storage keeps the phase state out of Erc721Consecutive's
+// sequential layout, so adding it does not move storage in consumer contracts.
+const CONSTRUCTION_PHASE_SLOT: B256 = {
+    const HASH: [u8; 32] = keccak_const::Keccak256::new()
+        .update(
+            b"openzeppelin.stylus.token.erc721.consecutive.construction-phase",
+        )
+        .finalize();
+    B256::new(
+        U256::from_be_bytes(HASH)
+            .wrapping_sub(uint!(1_U256))
+            .to_be_bytes::<32>(),
+    )
+};
+
+const CONSTRUCTION_NOT_STARTED: U8 = uint!(0_U8);
+const CONSTRUCTION_IN_PROGRESS: U8 = uint!(1_U8);
+const CONSTRUCTION_FINISHED: U8 = uint!(2_U8);
 
 pub use sol::*;
 #[cfg_attr(coverage_nightly, coverage(off))]
@@ -311,6 +333,62 @@ impl Erc721Consecutive {
 // ************** Consecutive **************
 
 impl Erc721Consecutive {
+    /// Mints consecutive batches during the consumer's constructor or an
+    /// authorized one-time migration initializer.
+    ///
+    /// The constructor-only phase is opened and closed around the iterator, so
+    /// it cannot remain open if a batch returns an error. Existing proxies
+    /// default to the closed state because the phase uses a separate
+    /// namespaced slot absent from earlier versions. Do not expose this method
+    /// through a public entrypoint; an upgrade initializer that calls it must
+    /// enforce the consumer's upgrade authorization.
+    ///
+    /// # Errors
+    ///
+    /// * [`Error::ForbiddenBatchMint`] - If the phase has already been
+    ///   opened or completed.
+    /// * [`Error::InvalidReceiver`] - If a batch has a zero receiver.
+    /// * [`Error::ExceededMaxBatchMint`] - If a batch exceeds the configured
+    ///   maximum.
+    pub fn _mint_consecutive_batches(
+        &mut self,
+        batches: impl IntoIterator<Item = (Address, U96)>,
+    ) -> Result<(), Error> {
+        self._begin_consecutive_minting()?;
+        let mint_result =
+            batches.into_iter().try_for_each(|(receiver, amount)| {
+                self._mint_consecutive(receiver, amount).map(|_| ())
+            });
+        let finish_result = self._finish_consecutive_minting();
+
+        mint_result?;
+        finish_result
+    }
+
+    fn _begin_consecutive_minting(&mut self) -> Result<(), Error> {
+        let mut phase = self._construction_phase();
+        if phase.get() != CONSTRUCTION_NOT_STARTED {
+            return Err(ERC721ForbiddenBatchMint {}.into());
+        }
+
+        phase.set(CONSTRUCTION_IN_PROGRESS);
+        Ok(())
+    }
+
+    fn _finish_consecutive_minting(&mut self) -> Result<(), Error> {
+        let mut phase = self._construction_phase();
+        if phase.get() != CONSTRUCTION_IN_PROGRESS {
+            return Err(ERC721ForbiddenBatchMint {}.into());
+        }
+
+        phase.set(CONSTRUCTION_FINISHED);
+        Ok(())
+    }
+
+    fn _construction_phase(&self) -> StorageU8 {
+        StorageSlot::get_slot(self, CONSTRUCTION_PHASE_SLOT)
+    }
+
     /// Override of [`Erc721::_owner_of`] that checks the sequential
     /// ownership structure for tokens that have been minted as part of a
     /// batch, and not yet transferred.
@@ -346,8 +424,8 @@ impl Erc721Consecutive {
     /// far.
     ///
     /// CAUTION: Does not emit a [`Transfer`] event. This is ERC-721 compliant
-    /// as long as it is done inside of the constructor, which is enforced by
-    /// this function.
+    /// only while the consumer's constructor-only consecutive minting phase is
+    /// open.
     ///
     /// CAUTION: Does not invoke
     /// [`erc721::IErc721Receiver::on_erc721_received`] on the receiver.
@@ -359,6 +437,8 @@ impl Erc721Consecutive {
     ///
     /// # Errors
     ///
+    /// * [`Error::ForbiddenBatchMint`] - If the constructor minting phase is
+    ///   not open.
     /// * [`erc721::Error::InvalidReceiver`] - If `to` is [`Address::ZERO`].
     /// * [`Error::ExceededMaxBatchMint`] - If `batch_size` exceeds
     ///   `max_batch_size` of the contract.
@@ -371,8 +451,7 @@ impl Erc721Consecutive {
         to: Address,
         batch_size: U96,
     ) -> Result<U96, Error> {
-        let vm = self.vm();
-        if vm.code_size(vm.contract_address()) != 0 {
+        if self._construction_phase().get() != CONSTRUCTION_IN_PROGRESS {
             return Err(ERC721ForbiddenBatchMint {}.into());
         }
 
@@ -559,7 +638,8 @@ impl Erc721Consecutive {
     ///
     /// * [`erc721::Error::InvalidSender`] - If `token_id` already exists.
     /// * [`erc721::Error::InvalidReceiver`] - If `to` is [`Address::ZERO`].
-    /// * [`Error::ForbiddenMint`] - If called during construction.
+    /// * [`Error::ForbiddenMint`] - If called while the consecutive
+    ///   constructor minting phase is open.
     ///
     /// # Events
     ///
@@ -572,8 +652,7 @@ impl Erc721Consecutive {
             .into());
         }
 
-        let vm = self.vm();
-        if vm.code_size(vm.contract_address()) == 0 {
+        if self._construction_phase().get() == CONSTRUCTION_IN_PROGRESS {
             return Err(ERC721ForbiddenMint {}.into());
         }
 
@@ -848,9 +927,9 @@ use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
     use crate::test_support::{
-        mock_code, test_address, TestContract as TestVMContract,
+        TestContract as TestVMContract, mock_code, test_address,
     };
-    use alloy_primitives::{uint, Address, U256};
+    use alloy_primitives::{Address, U256, uint};
 
     use super::*;
 
@@ -870,10 +949,8 @@ mod tests {
         fn init(&mut self, receivers: Vec<Address>, batches: Vec<U96>) {
             self.first_consecutive_id.set(FIRST_CONSECUTIVE_TOKEN_ID);
             self.max_batch_size.set(MAX_BATCH_SIZE);
-            for (to, batch_size) in receivers.into_iter().zip(batches) {
-                self._mint_consecutive(to, batch_size)
-                    .expect("should mint consecutively");
-            }
+            self._mint_consecutive_batches(receivers.into_iter().zip(batches))
+                .expect("should mint consecutive batches");
         }
     }
 
@@ -923,6 +1000,10 @@ mod tests {
         let contract =
             TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
         let alice = test_address(stringify!(alice));
+        contract
+            .sender(alice)
+            ._begin_consecutive_minting()
+            .expect("should open constructor minting phase");
 
         let error = contract.sender(alice)._mint(alice, TOKEN_ID).expect_err(
             "individual mint must be unavailable during construction",
@@ -981,6 +1062,10 @@ mod tests {
         let contract =
             TestVMContract::<Erc721Consecutive>::new(stringify!(contract));
         let alice = test_address(stringify!(alice));
+        contract
+            .sender(alice)
+            ._begin_consecutive_minting()
+            .expect("should open constructor minting phase");
 
         let err = contract
             .sender(alice)
@@ -1002,6 +1087,10 @@ mod tests {
 
         let batch_size =
             contract.sender(alice)._max_batch_size() + uint!(1_U96);
+        contract
+            .sender(alice)
+            ._begin_consecutive_minting()
+            .expect("should open constructor minting phase");
         let err = contract
             .sender(alice)
             ._mint_consecutive(alice, batch_size)

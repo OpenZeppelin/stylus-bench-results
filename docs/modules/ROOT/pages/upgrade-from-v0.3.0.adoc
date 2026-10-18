@@ -205,11 +205,18 @@ the proxy version reaches the new implementation's version.
 
 == Consecutive ERC-721 minting
 
-`_mint_consecutive` is restricted to construction by checking that the current
-contract has no deployed code. A runtime call returns
-`ERC721ForbiddenBatchMint`. For proxy deployments, construction means the proxy
-constructor; upgrades are runtime calls and cannot use this mint path. Use
-ordinary `_mint` after deployment.
+Stylus SDK 0.10.10 routes `stylus_constructor` after activation, so contract
+code size no longer identifies whether a constructor is running. Consumers
+must call `_mint_consecutive_batches` from their constructor; it opens a
+namespaced one-time phase, processes every batch, and closes the phase before
+returning, including when a batch returns an error. A call after the phase has
+closed returns `ERC721ForbiddenBatchMint`. The existing `Erc721Consecutive`
+storage layout is unchanged. Existing proxies start with the new namespaced
+phase closed, so batch minting remains unavailable; ordinary `_mint` remains
+available at runtime. If an authorized proxy initializer needs a consecutive
+batch, it may call the helper once, atomically with the upgrade. Do not expose
+the helper through a public entrypoint, and protect any initializer that calls
+it with the consumer's upgrade authorization.
 
 == Security behavior changes
 
@@ -225,8 +232,11 @@ v0.3.0 accepted. The ERC-721 wrapper example has the ABI change listed below:
 * ERC-721 enumeration now returns token ID zero correctly. Existing proxies
   which minted token ID zero before upgrading need the owner's new enumeration
   count initialized as described in the storage section below.
-* `_mint_consecutive` now returns `ERC721ForbiddenBatchMint` after deployment.
-  Move post-deployment minting to `_mint` and emit ordinary `Transfer` events.
+* `_mint_consecutive` now returns `ERC721ForbiddenBatchMint` unless the
+  consumer's one-time construction phase is open. Use
+  `_mint_consecutive_batches` from the constructor; do not call it from a
+  public method. Runtime minting continues through `_mint`, which emits
+  ordinary `Transfer` events.
 * The UUPS examples reject a second initializer call for the same implementation
   version and require the owner to call their public `set_version()` wrapper.
   Consumer initializers must likewise guard their own privileged state;
@@ -254,6 +264,12 @@ v0.3.0 accepted. The ERC-721 wrapper example has the ABI change listed below:
   `OwnableInvalidOwner` are added errors. New deployments set the owner to the
   deployer, and existing constructor arguments are unchanged. The ERC-721
   metadata owner can still set a URI before minting.
+* The `erc721-metadata` and `erc721-consecutive` examples now require the owner
+  to call `mint(address,uint256)`. The selector is unchanged. The consecutive
+  example appends `Ownable` and its one-time initialization flag after its
+  existing storage component, and exposes the standard `IOwnable` methods plus
+  `initializeOwner(address)`. New deployments initialize the owner to the
+  deployer; existing proxies must initialize atomically with the upgrade.
 * The `erc20-flash-mint` example keeps `setFlashFeeReceiver(address)` and
   `setFlashFeeValue(uint256)` but now requires the owner to call them. Its
   no-argument constructor initializes the owner to the deployer. It also
@@ -265,10 +281,11 @@ v0.3.0 accepted. The ERC-721 wrapper example has the ABI change listed below:
   EVM rolls back the entire call; catching that error can still preserve earlier
   writes across contracts.
 
-The library storage layout is unchanged. The three examples with new
-owner-controlled settings append an `Ownable` component and a `StorageBool`
-initializer guard after their existing storage fields; no previous field is
-reordered. New deployments initialize this state in their constructors. For an
+The library storage layout is unchanged. The examples with new owner-controlled
+settings append an `Ownable` component and a `StorageBool` initializer guard
+after their existing storage fields; no previous field is reordered. The
+consecutive extension's constructor phase uses a separate namespaced slot.
+New deployments initialize this state in their constructors. For an
 existing proxy using one of these examples, invoke `initializeOwner(address)`
 through the proxy atomically with the implementation upgrade and pass the
 intended owner. The initializer can be called only once. Do not leave a gap

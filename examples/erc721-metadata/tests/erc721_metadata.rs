@@ -4,10 +4,10 @@
 mod devnet_test_support;
 
 use crate::devnet_test_support::{
-    constructor, receipt, send, watch, Account, Constructor, EventExt, Revert,
+    Account, Constructor, EventExt, Revert, constructor, receipt, send, watch,
 };
 use abi::Erc721;
-use alloy::primitives::{aliases::B32, Address, U256};
+use alloy::primitives::{Address, U256, aliases::B32};
 
 mod abi;
 
@@ -37,6 +37,7 @@ async fn constructs() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
+        .with_signer(&alice)
         .with_constructor(ctr(
             "https://github.com/OpenZeppelin/rust-contracts-stylus",
         ))
@@ -59,12 +60,13 @@ async fn constructs() -> eyre::Result<()> {
 // ============================================================================
 
 #[tokio::test]
-async fn error_when_checking_token_uri_for_nonexistent_token(
-) -> eyre::Result<()> {
+async fn error_when_checking_token_uri_for_nonexistent_token()
+-> eyre::Result<()> {
     let alice = Account::new().await?;
 
     let contract_addr = alice
         .as_deployer()
+        .with_signer(&alice)
         .with_constructor(ctr(""))
         .deploy()
         .await?
@@ -87,12 +89,13 @@ async fn error_when_checking_token_uri_for_nonexistent_token(
 }
 
 #[tokio::test]
-async fn return_empty_token_uri_when_without_base_uri_and_token_uri(
-) -> eyre::Result<()> {
+async fn return_empty_token_uri_when_without_base_uri_and_token_uri()
+-> eyre::Result<()> {
     let alice = Account::new().await?;
 
     let contract_addr = alice
         .as_deployer()
+        .with_signer(&alice)
         .with_constructor(ctr(""))
         .deploy()
         .await?
@@ -112,14 +115,15 @@ async fn return_empty_token_uri_when_without_base_uri_and_token_uri(
 }
 
 #[tokio::test]
-async fn return_token_uri_with_base_uri_and_without_token_uri(
-) -> eyre::Result<()> {
+async fn return_token_uri_with_base_uri_and_without_token_uri()
+-> eyre::Result<()> {
     let alice = Account::new().await?;
 
     let base_uri = "https://github.com/OpenZeppelin/rust-contracts-stylus/";
 
     let contract_addr = alice
         .as_deployer()
+        .with_signer(&alice)
         .with_constructor(ctr(base_uri))
         .deploy()
         .await?
@@ -145,6 +149,7 @@ async fn return_token_uri_with_base_uri_and_token_uri() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
+        .with_signer(&alice)
         .with_constructor(ctr(base_uri))
         .deploy()
         .await?
@@ -179,6 +184,7 @@ async fn set_token_uri_before_mint() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
+        .with_signer(&alice)
         .with_constructor(ctr(base_uri))
         .deploy()
         .await?
@@ -222,6 +228,7 @@ async fn unauthorized_account_cannot_change_token_uri() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
+        .with_signer(&alice)
         .with_constructor(ctr(""))
         .deploy()
         .await?
@@ -234,10 +241,10 @@ async fn unauthorized_account_cannot_change_token_uri() -> eyre::Result<()> {
     watch!(contract_alice.mint(alice.address(), token_id))?;
     receipt!(contract_alice.setTokenURI(token_id, original_uri.clone()))?;
 
-    let err =
-        send!(contract_bob
-            .setTokenURI(token_id, "metadata/attacker.json".to_owned()))
-        .expect_err("an unrelated account must not replace token metadata");
+    let err = send!(
+        contract_bob.setTokenURI(token_id, "metadata/attacker.json".to_owned())
+    )
+    .expect_err("an unrelated account must not replace token metadata");
     assert!(err.reverted_with(Erc721::OwnableUnauthorizedAccount {
         account: bob.address(),
     }));
@@ -262,6 +269,7 @@ async fn return_token_uri_after_burn_and_remint() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
+        .with_signer(&alice)
         .with_constructor(ctr(base_uri))
         .deploy()
         .await?
@@ -315,6 +323,7 @@ async fn unauthorized_burn_reverts_and_preserves_token() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
+        .with_signer(&alice)
         .with_constructor(ctr(""))
         .deploy()
         .await?
@@ -346,6 +355,7 @@ async fn supports_interface() -> eyre::Result<()> {
 
     let contract_addr = alice
         .as_deployer()
+        .with_signer(&alice)
         .with_constructor(ctr(
             "https://github.com/OpenZeppelin/rust-contracts-stylus",
         ))

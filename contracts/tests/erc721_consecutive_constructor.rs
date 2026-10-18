@@ -1,10 +1,10 @@
 //! Regression coverage for the ERC721Consecutive constructor-only mint path.
 
-use alloy_primitives::{address, aliases::U96, uint, Address, U256};
+use alloy_primitives::{Address, U256, address, aliases::U96, uint};
 use alloy_sol_types::SolEvent;
 use openzeppelin_stylus::token::erc721::extensions::{
-    consecutive::{self, Error},
     Erc721Consecutive,
+    consecutive::{self, Error},
 };
 use stylus_test::TestVMBuilder;
 
@@ -21,13 +21,11 @@ fn new_contract() -> (stylus_test::TestVM, Erc721Consecutive) {
 }
 
 #[test]
-fn rejects_consecutive_mint_after_deployment() {
-    let (vm, mut contract) = new_contract();
-    vm.set_code(CONTRACT_ADDRESS, vec![0x00]);
-
-    let err = contract
-        ._mint_consecutive(RECIPIENT, uint!(1_U96))
-        .expect_err("runtime consecutive mint should be rejected");
+fn rejects_consecutive_mint_without_construction_phase() {
+    let (_vm, mut contract) = new_contract();
+    let err = contract._mint_consecutive(RECIPIENT, uint!(1_U96)).expect_err(
+        "consecutive mint outside the constructor phase should fail",
+    );
 
     assert!(matches!(err, Error::ForbiddenBatchMint(_)));
 }
@@ -35,11 +33,10 @@ fn rejects_consecutive_mint_after_deployment() {
 #[test]
 fn allows_consecutive_mint_during_construction() {
     let (vm, mut contract) = new_contract();
-
-    let first_token_id = contract
-        ._mint_consecutive(RECIPIENT, uint!(1_U96))
-        .expect("constructor consecutive mint should succeed");
-    assert_eq!(first_token_id, U96::ZERO);
+    contract
+        ._mint_consecutive_batches([(RECIPIENT, uint!(1_U96))])
+        .expect("constructor consecutive batch should succeed");
+    assert_eq!(contract.erc721.balance_of(RECIPIENT), uint!(1_U256));
 
     let expected = consecutive::ConsecutiveTransfer {
         from_token_id: U256::ZERO,
@@ -52,4 +49,17 @@ fn allows_consecutive_mint_during_construction() {
         topics.as_slice() == expected.topics()
             && data.as_slice() == expected.data.as_ref()
     }));
+}
+
+#[test]
+fn completed_construction_phase_cannot_reopen() {
+    let (_vm, mut contract) = new_contract();
+    contract
+        ._mint_consecutive_batches([(RECIPIENT, uint!(1_U96))])
+        .expect("constructor consecutive batch should succeed");
+
+    let error = contract
+        ._mint_consecutive_batches([(RECIPIENT, uint!(1_U96))])
+        .expect_err("completed construction phase must stay closed");
+    assert!(matches!(error, Error::ForbiddenBatchMint(_)));
 }
