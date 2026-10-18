@@ -204,6 +204,7 @@ use stylus_sdk::prelude::errors::MethodError;
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{b256, B256};
+    use stylus_test::TestVMBuilder;
 
     use super::*;
 
@@ -245,5 +246,19 @@ mod tests {
         let invalid_s = B256::from_slice(&valid_s.to_be_bytes_vec());
         let result = check_if_malleable(&invalid_s);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn invalid_ec_recover_output_returns_signature_error() {
+        let vm = TestVMBuilder::new().build();
+        vm.mock_static_call(
+            ECRECOVER_ADDR,
+            encode_calldata(MSG_HASH, V, R, S),
+            Ok(Vec::new()),
+        );
+
+        let error = recover(&vm, MSG_HASH, V, R, S)
+            .expect_err("invalid precompile output must return an error");
+        assert!(matches!(error, Error::InvalidSignature(_)));
     }
 }
