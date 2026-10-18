@@ -451,6 +451,24 @@ mod tests {
     }
 
     #[openzeppelin_stylus_proc::vm_test]
+    fn permit_rejects_zero_recovered_signer(
+        contract: Contract<PermitExample>,
+        alice: Address,
+        bob: Address,
+    ) {
+        contract.vm().set_block_timestamp(100);
+        mock_recover(&contract.vm(), 27, Address::ZERO);
+
+        let err = contract
+            .sender(alice)
+            .permit(alice, bob, U256::from(1), U256::from(100), 27, R, S)
+            .expect_error("a signature recovering the zero address is invalid");
+
+        assert!(matches!(err, Error::InvalidSignature(_)));
+        assert_eq!(contract.sender(alice).nonces.nonces(alice), U256::ZERO);
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn permit_propagates_invalid_spender_without_consuming_nonce(
         contract: Contract<PermitExample>,
         alice: Address,

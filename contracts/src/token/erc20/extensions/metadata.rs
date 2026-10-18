@@ -116,6 +116,21 @@ mod tests {
     }
 
     #[openzeppelin_stylus_proc::vm_test]
+    fn constructor_stores_name_and_symbol_and_uses_default_decimals(
+        contract: Contract<Erc20Metadata>,
+        alice: Address,
+    ) {
+        let name = String::from("Sample Token");
+        let symbol = String::from("SMP");
+
+        contract.sender(alice).constructor(name.clone(), symbol.clone());
+
+        assert_eq!(contract.sender(alice).name(), name);
+        assert_eq!(contract.sender(alice).symbol(), symbol);
+        assert_eq!(contract.sender(alice).decimals(), DEFAULT_DECIMALS);
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn supports_interface(contract: Contract<Erc20Metadata>, alice: Address) {
         assert!(contract.sender(alice).supports_interface(
             <Erc20Metadata as IErc20Metadata>::interface_id()

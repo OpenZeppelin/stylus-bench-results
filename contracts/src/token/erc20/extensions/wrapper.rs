@@ -668,6 +668,40 @@ mod tests {
     }
 
     #[openzeppelin_stylus_proc::vm_test]
+    fn deposit_for_rejects_zero_receiver_after_underlying_transfer(
+        contract: Contract<Erc20WrapperTestExample>,
+        erc20_contract: Contract<Erc20>,
+        alice: Address,
+    ) {
+        let amount = uint!(10_U256);
+        let asset = erc20_contract.address();
+
+        contract.sender(alice).constructor(asset).expect("should construct");
+        mock_transfer_from(
+            contract.vm(),
+            asset,
+            alice,
+            contract.address(),
+            amount,
+            true,
+        );
+
+        let err = contract
+            .sender(alice)
+            .deposit_for(Address::ZERO, amount)
+            .expect_error(
+                "wrapped tokens cannot be minted to the zero address",
+            );
+
+        assert!(matches!(
+            err,
+            Error::InvalidReceiver(erc20::ERC20InvalidReceiver { receiver })
+                if receiver == Address::ZERO
+        ));
+        assert_eq!(contract.sender(alice).erc20.total_supply(), U256::ZERO);
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn deposit_for_reverts_when_insufficient_allowance(
         contract: Contract<Erc20WrapperTestExample>,
         erc20_contract: Contract<Erc20>,
@@ -875,6 +909,44 @@ mod tests {
                 }
             ) if sender == alice && balance == amount && needed == exceeding_value
         ));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
+    fn withdraw_to_reverts_share_burn_when_underlying_transfer_fails(
+        contract: Contract<Erc20WrapperTestExample>,
+        erc20_contract: Contract<Erc20>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let amount = uint!(10_U256);
+        let asset = erc20_contract.address();
+        contract.sender(alice).constructor(asset).expect("should construct");
+        contract
+            .sender(alice)
+            .erc20
+            ._mint(alice, amount)
+            .expect("should seed the wrapper balance");
+
+        let call = ERC20CallMock::transferCall { to: bob, value: amount };
+        contract.vm().mock_call(
+            asset,
+            call.abi_encode(),
+            U256::ZERO,
+            Ok(false.abi_encode()),
+        );
+
+        let err = contract
+            .sender(alice)
+            .withdraw_to(bob, amount)
+            .expect_error("failed underlying transfer must revert the burn");
+
+        assert!(matches!(
+            err,
+            Error::SafeErc20FailedOperation(
+                safe_erc20::SafeErc20FailedOperation { token }
+            ) if token == asset
+        ));
+        assert_eq!(contract.sender(alice).erc20.balance_of(alice), amount);
     }
 
     #[openzeppelin_stylus_proc::vm_test]

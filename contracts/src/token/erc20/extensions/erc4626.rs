@@ -1935,6 +1935,26 @@ mod tests {
     }
 
     #[openzeppelin_stylus_proc::vm_test]
+    fn delegated_zero_share_redeem_rejects_zero_owner(
+        contract: Contract<Erc4626TestExample>,
+        alice: Address,
+        bob: Address,
+    ) {
+        let asset = address!("DeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF");
+        contract.sender(alice).erc4626.asset.set(asset);
+        mock_asset_balance(&contract, asset, U256::ZERO);
+
+        let err = contract
+            .sender(alice)
+            .redeem(U256::ZERO, bob, Address::ZERO)
+            .expect_error(
+                "the zero address cannot authorize a delegated redeem",
+            );
+
+        assert!(matches!(err, Error::InvalidApprover(_)));
+    }
+
+    #[openzeppelin_stylus_proc::vm_test]
     fn delegated_redeem_spends_share_allowance_and_emits_withdrawal(
         contract: Contract<Erc4626TestExample>,
         alice: Address,
