@@ -818,6 +818,34 @@ mod tests {
     }
 
     #[test]
+    fn deposit_for_reverts_when_underlying_reverts_without_reason() {
+        let vm = TestVM::default();
+        let mut contract = Erc721WrapperTestExample::from(&vm);
+        let wrapper = vm.contract_address();
+        vm.set_sender(ALICE);
+        let token_ids = random_token_ids(1);
+
+        contract.constructor(UNDERLYING);
+
+        let calldata = transferFromCall {
+            from: ALICE,
+            to: wrapper,
+            token_id: token_ids[0],
+        }
+        .abi_encode();
+        vm.mock_call(UNDERLYING, calldata, U256::ZERO, Err(vec![]));
+        let err = contract
+            .deposit_for(ALICE, token_ids.clone())
+            .expect_err("should return Error::Erc721FailedOperation");
+
+        assert!(matches!(
+            err,
+            Error::Erc721FailedOperation(Erc721FailedOperation { token })
+                if token == UNDERLYING
+        ));
+    }
+
+    #[test]
     fn deposit_for_works() {
         let vm = TestVM::default();
         let mut contract = Erc721WrapperTestExample::from(&vm);
@@ -1000,6 +1028,51 @@ mod tests {
             Error::InsufficientApproval(
                 erc721::ERC721InsufficientApproval { token_id, operator},
             ) if token_id == token_ids[0] && operator == BOB
+        ));
+    }
+
+    #[test]
+    fn withdraw_to_reverts_when_underlying_reverts_without_reason() {
+        let vm = TestVM::default();
+        let mut contract = Erc721WrapperTestExample::from(&vm);
+        let mut underlying = UnderlyingToken::new();
+        let wrapper = vm.contract_address();
+        vm.set_sender(ALICE);
+        let token_ids = random_token_ids(1);
+
+        contract.constructor(UNDERLYING);
+
+        underlying
+            .sender(ALICE)
+            ._mint(ALICE, token_ids[0])
+            .expect("should mint {token_id} for {alice}");
+
+        underlying
+            .sender(ALICE)
+            .approve(wrapper, token_ids[0])
+            .expect("should approve {token_id} for {contract.address()}");
+
+        underlying.mock_transfer_from(&vm, ALICE, wrapper, token_ids[0]);
+        assert!(contract
+            .deposit_for(ALICE, token_ids.clone())
+            .expect("should deposit"));
+
+        let calldata = safeTransferFromCall {
+            from: wrapper,
+            to: ALICE,
+            token_id: token_ids[0],
+            data: Bytes::new(),
+        }
+        .abi_encode();
+        vm.mock_call(UNDERLYING, calldata, U256::ZERO, Err(vec![]));
+        let err = contract
+            .withdraw_to(ALICE, token_ids.clone())
+            .expect_err("should return Error::Erc721FailedOperation");
+
+        assert!(matches!(
+            err,
+            Error::Erc721FailedOperation(Erc721FailedOperation { token })
+                if token == UNDERLYING
         ));
     }
 
