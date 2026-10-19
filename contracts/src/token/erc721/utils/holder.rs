@@ -30,21 +30,21 @@ impl IErc721Receiver for Erc721Holder {
 
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::Contract;
+    use stylus_sdk::testing::TestVM;
 
     use super::*;
+    use crate::test_utils::ALICE;
 
-    unsafe impl TopLevelStorage for Erc721Holder {}
+    #[test]
+    fn holder_returns_proper_selector() {
+        let vm = TestVM::default();
+        let mut contract = Erc721Holder::from(&vm);
+        vm.set_sender(ALICE);
 
-    #[motsu::test]
-    fn holder_returns_proper_selector(
-        contract: Contract<Erc721Holder>,
-        alice: Address,
-    ) {
         assert_eq!(
-            contract.sender(alice).on_erc721_received(
-                alice,
-                alice,
+            contract.on_erc721_received(
+                ALICE,
+                ALICE,
                 U256::from(1),
                 vec![].into()
             ),
