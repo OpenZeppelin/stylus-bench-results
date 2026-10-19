@@ -209,7 +209,7 @@ unsafe impl TopLevelStorage for Erc721 {}
 /// Required interface of an [`Erc721`] compliant contract.
 #[interface_id]
 #[public]
-// The `#[public]` macro adds an undocumented marker method to the trait.
+// The `#[public]` macro adds an undocumented helper method to the trait.
 #[allow(missing_docs)]
 pub trait IErc721: IErc165 {
     /// The error type associated to this ERC-721 trait implementation.

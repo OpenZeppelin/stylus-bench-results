@@ -29,7 +29,7 @@ pub struct Erc721Metadata {
 /// Interface for the optional metadata functions from the ERC-721 standard.
 #[interface_id]
 #[public]
-// The `#[public]` macro adds an undocumented marker method to the trait.
+// The `#[public]` macro adds an undocumented helper method to the trait.
 #[allow(missing_docs)]
 pub trait IErc721Metadata: IErc165 {
     /// The error type associated to this trait implementation.

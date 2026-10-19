@@ -121,7 +121,7 @@ unsafe impl TopLevelStorage for Erc721Wrapper {}
 /// wrapping.
 #[interface_id]
 #[public]
-// The `#[public]` macro adds an undocumented marker method to the trait.
+// The `#[public]` macro adds an undocumented helper method to the trait.
 #[allow(missing_docs)]
 pub trait IErc721Wrapper: IErc721Receiver {
     /// The error type associated to this trait implementation.

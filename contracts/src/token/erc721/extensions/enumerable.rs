@@ -83,7 +83,7 @@ pub struct Erc721Enumerable {
 /// of the ERC-721 standard.
 #[interface_id]
 #[public]
-// The `#[public]` macro adds an undocumented marker method to the trait.
+// The `#[public]` macro adds an undocumented helper method to the trait.
 #[allow(missing_docs)]
 pub trait IErc721Enumerable {
     /// The error type associated to this ERC-721 enumerable trait

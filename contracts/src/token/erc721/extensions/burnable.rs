@@ -10,7 +10,7 @@ use crate::token::erc721::{self, Erc721};
 /// An [`Erc721`] token that can be burned (destroyed).
 #[interface_id]
 #[public]
-// The `#[public]` macro adds an undocumented marker method to the trait.
+// The `#[public]` macro adds an undocumented helper method to the trait.
 #[allow(missing_docs)]
 pub trait IErc721Burnable {
     /// The error type associated to this trait implementation.
