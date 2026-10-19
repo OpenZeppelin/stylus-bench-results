@@ -2514,4 +2514,48 @@ mod tests {
             .expect("should return the owner of the token");
         assert_eq!(RECEIVER, owner);
     }
+
+    #[test]
+    fn error_when_receiver_returns_wrong_selector() {
+        let vm = TestVM::default();
+        let mut erc721 = Erc721::from(&vm);
+        vm.set_sender(ALICE);
+        let data: Bytes = vec![0, 1, 2, 3].into();
+        let calldata = receiver_calldata(ALICE, Address::ZERO, TOKEN_ID, &data);
+
+        let wrong_answer = fixed_bytes!("12345678");
+        mock_receiver(&vm, calldata, Ok(wrong_answer.abi_encode()));
+        let err = erc721
+            ._safe_mint(RECEIVER, TOKEN_ID, &data)
+            .expect_err("should not accept the token with a wrong selector");
+
+        assert!(matches!(
+            err,
+            Error::InvalidReceiver(ERC721InvalidReceiver {
+                receiver
+            }) if receiver == RECEIVER
+        ));
+    }
+
+    #[test]
+    fn error_when_receiver_reverts_with_reason() {
+        let vm = TestVM::default();
+        let mut erc721 = Erc721::from(&vm);
+        vm.set_sender(ALICE);
+        let data: Bytes = vec![0, 1, 2, 3].into();
+        let calldata = receiver_calldata(ALICE, Address::ZERO, TOKEN_ID, &data);
+
+        let reason = "rejected by the receiver";
+        mock_receiver(&vm, calldata, Err(reason.as_bytes().to_vec()));
+        let err = erc721._safe_mint(RECEIVER, TOKEN_ID, &data).expect_err(
+            "should not accept the token when the receiver reverts",
+        );
+
+        assert!(matches!(
+            err,
+            Error::InvalidReceiverWithReason(InvalidReceiverWithReason {
+                reason: revert_reason
+            }) if revert_reason == reason
+        ));
+    }
 }
