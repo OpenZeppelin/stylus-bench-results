@@ -1144,7 +1144,8 @@ enum Transfer {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{aliases::B32, uint, Address, U256};
+    use alloy_primitives::{address, aliases::B32, uint, Address, U256};
+    use alloy_sol_types::SolValue;
     use stylus_sdk::testing::TestVM;
 
     use super::*;
@@ -1191,6 +1192,65 @@ mod tests {
 
     fn append(values: Vec<U256>, value: u64) -> Vec<U256> {
         values.into_iter().chain(std::iter::once(U256::from(value))).collect()
+    }
+
+    /// Account that the tests turn into a receiver contract with
+    /// [`mock_receiver`].
+    pub(crate) const RECEIVER: Address =
+        address!("0x0000000000000000000000000000000000c0ffee");
+
+    /// Gives [`RECEIVER`] some code, so the acceptance check calls it, and
+    /// makes it answer the call with `calldata` with `response`.
+    pub(crate) fn mock_receiver(
+        vm: &TestVM,
+        calldata: Vec<u8>,
+        response: Result<Vec<u8>, Vec<u8>>,
+    ) {
+        vm.set_code(RECEIVER, vec![0x60, 0x00]);
+        vm.mock_call(RECEIVER, calldata, U256::ZERO, response);
+    }
+
+    /// Calldata of `onERC1155Received(operator, from, id, value, data)`.
+    pub(crate) fn single_call_data(
+        operator: Address,
+        from: Address,
+        id: U256,
+        value: U256,
+        data: &[u8],
+    ) -> Vec<u8> {
+        let args = (
+            operator,
+            from,
+            id,
+            value,
+            alloy_primitives::Bytes::copy_from_slice(data),
+        )
+            .abi_encode_params();
+        [SINGLE_TRANSFER_FN_SELECTOR.as_slice(), &args].concat()
+    }
+
+    /// Calldata of `onERC1155BatchReceived(operator, from, ids, values, data)`.
+    fn batch_call_data(
+        operator: Address,
+        from: Address,
+        ids: Vec<U256>,
+        values: Vec<U256>,
+        data: &[u8],
+    ) -> Vec<u8> {
+        let args = (
+            operator,
+            from,
+            ids,
+            values,
+            alloy_primitives::Bytes::copy_from_slice(data),
+        )
+            .abi_encode_params();
+        [BATCH_TRANSFER_FN_SELECTOR.as_slice(), &args].concat()
+    }
+
+    /// Return data of a receiver hook that answers with `selector`.
+    pub(crate) fn hook_answer(selector: B32) -> Vec<u8> {
+        selector.abi_encode()
     }
 
     #[test]
@@ -2270,6 +2330,179 @@ mod tests {
             Error::InvalidArrayLength(ERC1155InvalidArrayLength {
                 ids_length, values_length
             }) if ids_length == uint!(4_U256) && values_length == uint!(5_U256)
+        ));
+    }
+
+    #[test]
+    fn safe_transfer_from_to_receiver_contract() {
+        let vm = TestVM::default();
+        let mut contract = Erc1155::from(&vm);
+        vm.set_sender(ALICE);
+        let (token_ids, values) = contract.init(BOB, 1);
+
+        vm.set_sender(BOB);
+        contract
+            .set_approval_for_all(ALICE, true)
+            .expect("should approve Bob's tokens to Alice");
+
+        mock_receiver(
+            &vm,
+            single_call_data(
+                ALICE,
+                BOB,
+                token_ids[0],
+                values[0],
+                &[0, 1, 2, 3],
+            ),
+            Ok(hook_answer(SINGLE_TRANSFER_FN_SELECTOR)),
+        );
+
+        vm.set_sender(ALICE);
+        contract
+            .safe_transfer_from(
+                BOB,
+                RECEIVER,
+                token_ids[0],
+                values[0],
+                vec![0, 1, 2, 3].into(),
+            )
+            .expect("should transfer tokens to a receiver contract");
+
+        assert_eq!(values[0], contract.balance_of(RECEIVER, token_ids[0]));
+        assert_eq!(U256::ZERO, contract.balance_of(BOB, token_ids[0]));
+    }
+
+    #[test]
+    fn safe_batch_transfer_from_to_receiver_contract() {
+        let vm = TestVM::default();
+        let mut contract = Erc1155::from(&vm);
+        vm.set_sender(ALICE);
+        let (token_ids, values) = contract.init(BOB, 2);
+
+        vm.set_sender(BOB);
+        contract
+            .set_approval_for_all(ALICE, true)
+            .expect("should approve Bob's tokens to Alice");
+
+        mock_receiver(
+            &vm,
+            batch_call_data(ALICE, BOB, token_ids.clone(), values.clone(), &[]),
+            Ok(hook_answer(BATCH_TRANSFER_FN_SELECTOR)),
+        );
+
+        vm.set_sender(ALICE);
+        contract
+            .safe_batch_transfer_from(
+                BOB,
+                RECEIVER,
+                token_ids.clone(),
+                values.clone(),
+                vec![].into(),
+            )
+            .expect("should transfer tokens to a receiver contract");
+
+        let balances = contract
+            .balance_of_batch(vec![RECEIVER; 2], token_ids.clone())
+            .expect("should return balances");
+        assert_eq!(values, balances);
+    }
+
+    #[test]
+    fn error_when_receiver_contract_returns_wrong_selector() {
+        let vm = TestVM::default();
+        let mut contract = Erc1155::from(&vm);
+        vm.set_sender(ALICE);
+        let (token_ids, values) = contract.init(ALICE, 1);
+
+        mock_receiver(
+            &vm,
+            single_call_data(ALICE, ALICE, token_ids[0], values[0], &[]),
+            Ok(hook_answer(BATCH_TRANSFER_FN_SELECTOR)),
+        );
+
+        let err = contract
+            .safe_transfer_from(
+                ALICE,
+                RECEIVER,
+                token_ids[0],
+                values[0],
+                vec![].into(),
+            )
+            .expect_err("should not transfer tokens when the receiver rejects");
+
+        assert!(matches!(
+            err,
+            Error::InvalidReceiver(ERC1155InvalidReceiver {
+                receiver
+            }) if receiver == RECEIVER
+        ));
+    }
+
+    #[test]
+    fn error_when_receiver_contract_reverts_with_reason() {
+        let vm = TestVM::default();
+        let mut contract = Erc1155::from(&vm);
+        vm.set_sender(ALICE);
+        let (token_ids, values) = contract.init(ALICE, 1);
+
+        mock_receiver(
+            &vm,
+            single_call_data(ALICE, ALICE, token_ids[0], values[0], &[]),
+            Err(b"not accepted".to_vec()),
+        );
+
+        let err = contract
+            .safe_transfer_from(
+                ALICE,
+                RECEIVER,
+                token_ids[0],
+                values[0],
+                vec![].into(),
+            )
+            .expect_err("should not transfer tokens when the receiver reverts");
+
+        assert!(matches!(
+            err,
+            Error::InvalidReceiverWithReason(InvalidReceiverWithReason {
+                reason
+            }) if reason == "not accepted"
+        ));
+    }
+
+    #[test]
+    fn error_when_receiver_contract_reverts_without_reason() {
+        let vm = TestVM::default();
+        let mut contract = Erc1155::from(&vm);
+        vm.set_sender(ALICE);
+        let (token_ids, values) = contract.init(ALICE, 2);
+
+        mock_receiver(
+            &vm,
+            batch_call_data(
+                ALICE,
+                ALICE,
+                token_ids.clone(),
+                values.clone(),
+                &[],
+            ),
+            Err(vec![]),
+        );
+
+        let err = contract
+            .safe_batch_transfer_from(
+                ALICE,
+                RECEIVER,
+                token_ids.clone(),
+                values.clone(),
+                vec![].into(),
+            )
+            .expect_err("should not transfer tokens when the receiver reverts");
+
+        assert!(matches!(
+            err,
+            Error::InvalidReceiver(ERC1155InvalidReceiver {
+                receiver
+            }) if receiver == RECEIVER
         ));
     }
 

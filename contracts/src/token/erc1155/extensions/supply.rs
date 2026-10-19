@@ -383,8 +383,12 @@ mod tests {
     use crate::{
         test_utils::{ALICE, BOB, DAVE},
         token::erc1155::{
-            tests::{random_token_ids, random_values},
+            tests::{
+                hook_answer, mock_receiver, random_token_ids, random_values,
+                single_call_data, RECEIVER,
+            },
             ERC1155InvalidReceiver, ERC1155InvalidSender,
+            BATCH_TRANSFER_FN_SELECTOR, SINGLE_TRANSFER_FN_SELECTOR,
         },
     };
 
@@ -463,6 +467,55 @@ mod tests {
             Error::InvalidReceiver(ERC1155InvalidReceiver {
                 receiver
             }) if receiver == invalid_receiver
+        ));
+    }
+
+    #[test]
+    fn mint_to_receiver_contract() {
+        let vm = TestVM::default();
+        let mut contract = Erc1155Supply::from(&vm);
+        vm.set_sender(ALICE);
+        let token_id = random_token_ids(1)[0];
+        let value = random_values(1)[0];
+
+        mock_receiver(
+            &vm,
+            single_call_data(ALICE, Address::ZERO, token_id, value, &[]),
+            Ok(hook_answer(SINGLE_TRANSFER_FN_SELECTOR)),
+        );
+
+        contract
+            ._mint(RECEIVER, token_id, value, &vec![].into())
+            .expect("should mint to a receiver contract");
+
+        assert_eq!(value, contract.balance_of(RECEIVER, token_id));
+        assert_eq!(value, contract.total_supply(token_id));
+        assert_eq!(value, contract.total_supply_all());
+    }
+
+    #[test]
+    fn mint_reverts_when_receiver_contract_rejects() {
+        let vm = TestVM::default();
+        let mut contract = Erc1155Supply::from(&vm);
+        vm.set_sender(ALICE);
+        let token_id = random_token_ids(1)[0];
+        let value = random_values(1)[0];
+
+        mock_receiver(
+            &vm,
+            single_call_data(ALICE, Address::ZERO, token_id, value, &[]),
+            Ok(hook_answer(BATCH_TRANSFER_FN_SELECTOR)),
+        );
+
+        let err = contract
+            ._mint(RECEIVER, token_id, value, &vec![].into())
+            .expect_err("should revert with `InvalidReceiver`");
+
+        assert!(matches!(
+            err,
+            Error::InvalidReceiver(ERC1155InvalidReceiver {
+                receiver
+            }) if receiver == RECEIVER
         ));
     }
 
