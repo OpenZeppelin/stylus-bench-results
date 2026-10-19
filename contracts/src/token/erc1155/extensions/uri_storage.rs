@@ -5,7 +5,10 @@ use alloc::{string::String, vec, vec::Vec};
 
 use alloy_primitives::U256;
 use openzeppelin_stylus_proc::interface_id;
-use stylus_sdk::{prelude::*, storage::{StorageMap, StorageString}};
+use stylus_sdk::{
+    prelude::*,
+    storage::{StorageMap, StorageString},
+};
 
 use super::metadata_uri::{IErc1155MetadataUri, URI};
 
@@ -15,7 +18,8 @@ pub struct Erc1155UriStorage {
     /// Optional base URI.
     pub(crate) base_uri: StorageString,
     /// Optional mapping for token URIs.
-    pub(crate) token_uris: StorageMap<U256, StorageString>}
+    pub(crate) token_uris: StorageMap<U256, StorageString>,
+}
 
 /// Interface of an optional extension for ERC-1155 with storage based token URI
 /// management.
@@ -67,7 +71,8 @@ impl Erc1155UriStorage {
         metadata_uri: &impl IErc1155MetadataUri,
     ) {
         self.token_uris.setter(token_id).set_str(token_uri);
-        self.vm().log(URI { value: self.uri(token_id, metadata_uri), id: token_id });
+        self.vm()
+            .log(URI { value: self.uri(token_id, metadata_uri), id: token_id });
     }
 
     /// Sets `base_uri` as the `base_uri` for all tokens.

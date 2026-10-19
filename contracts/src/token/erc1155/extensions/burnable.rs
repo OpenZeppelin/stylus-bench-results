@@ -1,13 +1,14 @@
 //! Optional Burnable extension of the ERC-1155 standard.
 
 use alloc::vec::Vec;
-use stylus_sdk::prelude::public;
 
 use alloy_primitives::{Address, U256};
 use openzeppelin_stylus_proc::interface_id;
+use stylus_sdk::prelude::*;
 
 use crate::token::erc1155::{
-    self, ERC1155MissingApprovalForAll, Erc1155, IErc1155};
+    self, ERC1155MissingApprovalForAll, Erc1155, IErc1155,
+};
 
 /// Extension of [`Erc1155`] that allows token holders to destroy both their
 /// own tokens and those that they have been approved to use.
@@ -104,7 +105,8 @@ impl Erc1155 {
             return Err(erc1155::Error::MissingApprovalForAll(
                 ERC1155MissingApprovalForAll {
                     owner: account,
-                    operator: sender},
+                    operator: sender,
+                },
             ));
         }
         Ok(())

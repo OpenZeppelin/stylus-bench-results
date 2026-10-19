@@ -2,16 +2,24 @@
 use alloc::{
     string::{String, ToString},
     vec,
-    vec::Vec};
+    vec::Vec,
+};
 
 use alloy_primitives::{aliases::B32, Address, U256};
-use stylus_sdk::stylus_core::calls::errors::MethodError;
 use openzeppelin_stylus_proc::interface_id;
-use stylus_sdk::{abi::Bytes, call, function_selector, prelude::*, storage::{StorageBool, StorageMap, StorageU256}};
+use stylus_sdk::{
+    abi::Bytes,
+    function_selector,
+    prelude::*,
+    storage::{StorageBool, StorageMap, StorageU256},
+    stylus_core::calls::errors::{Error as CallError, MethodError},
+};
 
 use crate::utils::{
+    address::AddressUtils,
     introspection::erc165::IErc165,
-    math::storage::{AddAssignChecked, SubAssignUnchecked}};
+    math::storage::{AddAssignChecked, SubAssignUnchecked},
+};
 
 pub mod extensions;
 pub mod receiver;
@@ -19,7 +27,8 @@ pub mod utils;
 
 pub use receiver::{
     IErc1155Receiver, IErc1155ReceiverInterface, BATCH_TRANSFER_FN_SELECTOR,
-    SINGLE_TRANSFER_FN_SELECTOR};
+    SINGLE_TRANSFER_FN_SELECTOR,
+};
 pub use sol::*;
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -166,7 +175,8 @@ pub enum Error {
     /// Indicates an array length mismatch between token ids and values in a
     /// [`Erc1155::safe_batch_transfer_from`] operation.
     /// Used in batch transfers.
-    InvalidArrayLength(ERC1155InvalidArrayLength)}
+    InvalidArrayLength(ERC1155InvalidArrayLength),
+}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -181,7 +191,8 @@ pub struct Erc1155 {
     pub(crate) balances: StorageMap<U256, StorageMap<Address, StorageU256>>,
     /// Maps owners to a mapping of operator approvals.
     pub(crate) operator_approvals:
-        StorageMap<Address, StorageMap<Address, StorageBool>>}
+        StorageMap<Address, StorageMap<Address, StorageBool>>,
+}
 
 /// NOTE: Implementation of [`TopLevelStorage`] to be able use `&mut self` when
 /// calling other contracts and not `&mut (impl TopLevelStorage +
@@ -276,8 +287,8 @@ pub trait IErc1155: IErc165 {
     ///   interface id or returned with error.
     /// * [`Error::InvalidSender`] - Returned when `from` is [`Address::ZERO`].
     /// * [`Error::MissingApprovalForAll`] - Returned when `from` is not the
-    ///   caller (`self.vm().msg_sender()`), and the caller does not have the right to
-    ///   approve.
+    ///   caller (`self.vm().msg_sender()`), and the caller does not have the
+    ///   right to approve.
     /// * [`Error::InsufficientBalance`] - Returned when `value` is greater than
     ///   the balance of the `from` account.
     ///
@@ -316,8 +327,8 @@ pub trait IErc1155: IErc165 {
     /// * [`Error::InsufficientBalance`] - Returned when any of the `values` is
     ///   greater than the balance of the `from` account.
     /// * [`Error::MissingApprovalForAll`] - Returned when `from` is not the
-    ///   caller (`self.vm().msg_sender()`), and the caller does not have the right to
-    ///   approve.
+    ///   caller (`self.vm().msg_sender()`), and the caller does not have the
+    ///   right to approve.
     ///
     /// # Events
     ///
@@ -661,7 +672,7 @@ impl Erc1155 {
     /// # Arguments
     ///
     /// * `&mut self` - Write access to the contract's state.
-    /// * `owner` - Tokens owner (`msg::sender`).
+    /// * `owner` - Tokens owner (`self.vm().msg_sender()`).
     /// * `operator` - Account to add to the set of authorized operators.
     /// * `approved` - Flag that determines whether or not permission will be
     ///   granted to `operator`. If true, this means `operator` will be allowed
@@ -682,7 +693,8 @@ impl Erc1155 {
     ) -> Result<(), Error> {
         if operator.is_zero() {
             return Err(Error::InvalidOperator(ERC1155InvalidOperator {
-                operator}));
+                operator,
+            }));
         }
         self.operator_approvals.setter(owner).setter(operator).set(approved);
         self.vm().log(ApprovalForAll { account: owner, operator, approved });
@@ -733,30 +745,47 @@ impl Erc1155 {
         details: Erc1155ReceiverData,
         data: alloy_primitives::Bytes,
     ) -> Result<(), Error> {
-        if !to.has_code() {
+        if !AddressUtils::has_code(self, to) {
             return Ok(());
         }
 
         let receiver = IErc1155ReceiverInterface::new(to);
-        let call = Call::new_in(self);
+        // `Call::new_mutating` needs `&mut self`, so the call context has to be
+        // built before `self.vm()` borrows `self` for the call.
+        let call = Call::new_mutating(self);
         let result = match details.transfer {
-            Transfer::Single { id, value } => receiver
-                .on_erc_1155_received(call, operator, from, id, value, data),
+            Transfer::Single { id, value } => receiver.on_erc_1155_received(
+                self.vm(),
+                call,
+                operator,
+                from,
+                id,
+                value,
+                data,
+            ),
 
             Transfer::Batch { ids, values } => receiver
                 .on_erc_1155_batch_received(
-                    call, operator, from, ids, values, data,
-                )};
+                    self.vm(),
+                    call,
+                    operator,
+                    from,
+                    ids,
+                    values,
+                    data,
+                ),
+        };
 
         let id = match result {
             Ok(id) => id,
             Err(e) => {
-                if let stylus_sdk::stylus_core::calls::errors::Error::Revert(ref reason) = e {
+                if let CallError::Revert(ref reason) = e {
                     if !reason.is_empty() {
                         return Err(Error::InvalidReceiverWithReason(
                             InvalidReceiverWithReason {
                                 reason: String::from_utf8_lossy(reason)
-                                    .to_string()},
+                                    .to_string(),
+                            },
                         ));
                     }
                 }
@@ -818,7 +847,8 @@ impl Erc1155 {
     ) -> Result<(), Error> {
         if to.is_zero() {
             return Err(Error::InvalidReceiver(ERC1155InvalidReceiver {
-                receiver: to}));
+                receiver: to,
+            }));
         }
         self._update_with_acceptance_check(
             Address::ZERO,
@@ -860,7 +890,8 @@ impl Erc1155 {
     ) -> Result<(), Error> {
         if from.is_zero() {
             return Err(Error::InvalidSender(ERC1155InvalidSender {
-                sender: from}));
+                sender: from,
+            }));
         }
         self._update_with_acceptance_check(
             from,
@@ -917,11 +948,13 @@ impl Erc1155 {
     ) -> Result<(), Error> {
         if to.is_zero() {
             return Err(Error::InvalidReceiver(ERC1155InvalidReceiver {
-                receiver: to}));
+                receiver: to,
+            }));
         }
         if from.is_zero() {
             return Err(Error::InvalidSender(ERC1155InvalidSender {
-                sender: from}));
+                sender: from,
+            }));
         }
         self._update_with_acceptance_check(from, to, ids, values, data)
     }
@@ -960,7 +993,8 @@ impl Erc1155 {
                         sender: from,
                         balance: from_balance,
                         needed: value,
-                        token_id},
+                        token_id,
+                    },
                 ));
             }
             self.balances
@@ -997,7 +1031,8 @@ impl Erc1155 {
         if ids.len() != values.len() {
             return Err(Error::InvalidArrayLength(ERC1155InvalidArrayLength {
                 ids_length: U256::from(ids.len()),
-                values_length: U256::from(values.len())}));
+                values_length: U256::from(values.len()),
+            }));
         }
         Ok(())
     }
@@ -1012,7 +1047,8 @@ impl Erc1155 {
     /// # Errors
     ///
     /// * [`Error::MissingApprovalForAll`] -  If the `from` is not the caller
-    ///   (`self.vm().msg_sender()`), and the caller does not have the right to approve.
+    ///   (`self.vm().msg_sender()`), and the caller does not have the right to
+    ///   approve.
     fn authorize_transfer(&self, from: Address) -> Result<(), Error> {
         let sender = self.vm().msg_sender();
         if from != sender && !self.is_approved_for_all(from, sender) {
@@ -1031,7 +1067,8 @@ struct Erc1155ReceiverData {
     /// ERC-1155 Receiver function selector.
     receiver_fn_selector: B32,
     /// Transfer details, either [`Transfer::Single`] or [`Transfer::Batch`].
-    transfer: Transfer}
+    transfer: Transfer,
+}
 
 impl Erc1155ReceiverData {
     /// Creates a new instance based on transfer details.
@@ -1066,7 +1103,8 @@ impl Erc1155ReceiverData {
     fn single(id: U256, value: U256) -> Self {
         Self {
             receiver_fn_selector: SINGLE_TRANSFER_FN_SELECTOR,
-            transfer: Transfer::Single { id, value }}
+            transfer: Transfer::Single { id, value },
+        }
     }
 
     /// Creates a new instance for a [`Transfer::Batch`].
@@ -1079,7 +1117,8 @@ impl Erc1155ReceiverData {
     fn batch(ids: Vec<U256>, values: Vec<U256>) -> Self {
         Self {
             receiver_fn_selector: BATCH_TRANSFER_FN_SELECTOR,
-            transfer: Transfer::Batch { ids, values }}
+            transfer: Transfer::Batch { ids, values },
+        }
     }
 }
 
@@ -1099,7 +1138,8 @@ enum Transfer {
     ///
     /// * `ids` - Array of tokens ids being transferred.
     /// * `values` - Array of all amount of tokens being transferred.
-    Batch { ids: Vec<U256>, values: Vec<U256> }}
+    Batch { ids: Vec<U256>, values: Vec<U256> },
+}
 
 #[cfg(test)]
 mod tests {

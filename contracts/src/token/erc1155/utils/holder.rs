@@ -7,8 +7,10 @@ use stylus_sdk::{abi::Bytes, function_selector, prelude::*};
 use crate::{
     token::erc1155::receiver::{
         IErc1155Receiver, BATCH_TRANSFER_FN_SELECTOR,
-        SINGLE_TRANSFER_FN_SELECTOR},
-    utils::introspection::erc165::IErc165};
+        SINGLE_TRANSFER_FN_SELECTOR,
+    },
+    utils::introspection::erc165::IErc165,
+};
 
 /// Simple implementation of [`IErc1155Receiver`] that will allow a contract to
 /// hold ERC-1155 tokens.

@@ -15,13 +15,19 @@ use alloc::{vec, vec::Vec};
 
 use alloy_primitives::{aliases::B32, Address, U256};
 use openzeppelin_stylus_proc::interface_id;
-use stylus_sdk::{abi::Bytes, prelude::*, storage::{StorageMap, StorageU256}};
+use stylus_sdk::{
+    abi::Bytes,
+    prelude::*,
+    storage::{StorageMap, StorageU256},
+};
 
 use crate::{
     token::erc1155::{self, Erc1155, Error, IErc1155},
     utils::{
         introspection::erc165::IErc165,
-        math::storage::{AddAssignChecked, SubAssignUnchecked}}};
+        math::storage::{AddAssignChecked, SubAssignUnchecked},
+    },
+};
 
 /// State of an [`Erc1155Supply`] contract.
 #[storage]
@@ -31,7 +37,8 @@ pub struct Erc1155Supply {
     /// Mapping from token id to total supply.
     pub(crate) total_supply: StorageMap<U256, StorageU256>,
     /// Total supply of all token ids.
-    pub(crate) total_supply_all: StorageU256}
+    pub(crate) total_supply_all: StorageU256,
+}
 
 /// Required interface of a [`Erc1155Supply`] contract.
 #[interface_id]
