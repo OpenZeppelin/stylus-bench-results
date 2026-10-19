@@ -221,9 +221,12 @@ impl IErc721 for Erc721Consecutive {
         to: Address,
         token_id: U256,
     ) -> Result<(), Error> {
-        // TODO: Once the SDK supports the conversion,
-        // use alloy_primitives::bytes!("") here.
-        self.safe_transfer_from_with_data(from, to, token_id, vec![].into())
+        self.safe_transfer_from_with_data(
+            from,
+            to,
+            token_id,
+            alloy_primitives::bytes!(""),
+        )
     }
 
     fn safe_transfer_from_with_data(
