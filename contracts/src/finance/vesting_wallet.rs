@@ -619,18 +619,42 @@ impl IErc165 for VestingWallet {
 
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::Contract;
-    use stylus_sdk::{alloy_primitives::{uint, Address, U256, U64}};
+    use alloy_primitives::{address, uint};
+    use alloy_sol_types::{sol, SolCall};
+    use stylus_sdk::testing::TestVM;
 
     use super::*;
-    use crate::token::erc20::Erc20;
+
+    sol! {
+        function balanceOf(address account) external view returns (uint256);
+    }
 
     const BALANCE: u64 = 1000;
 
     const DURATION: u64 = 4 * 365 * 86400; // 4 years
 
-    fn start() -> u64 {
-        self.vm().block_timestamp() + 3600 // 1 hour
+    /// Block timestamp of the tests: 1st January 2025, 00:00:00 UTC.
+    const TIMESTAMP: u64 = 1_735_689_600;
+
+    /// Address of the mocked ERC-20 token contract.
+    const ERC20: Address =
+        address!("0x0000000000000000000000000000000000000e20");
+
+    fn start(vm: &TestVM) -> u64 {
+        vm.block_timestamp() + 3600 // 1 hour
+    }
+
+    /// Mocks the response of the ERC-20 `token` to a `balanceOf(account)`
+    /// call.
+    fn mock_balance_of(
+        vm: &TestVM,
+        token: Address,
+        account: Address,
+        balance: U256,
+    ) {
+        let calldata = balanceOfCall { account }.abi_encode();
+        let returns = balanceOfCall::abi_encode_returns(&balance);
+        vm.mock_static_call(token, calldata, Ok(returns));
     }
 
     impl VestingWallet {
@@ -643,99 +667,99 @@ mod tests {
         }
     }
 
-    #[motsu::test]
-    fn reads_start(contract: Contract<VestingWallet>, alice: Address) {
-        let (start, _) = contract.sender(alice).init(start(), DURATION);
-        assert_eq!(U256::from(start), contract.sender(alice).start());
+    #[test]
+    fn reads_start() {
+        let vm = TestVM::default();
+        vm.set_block_timestamp(TIMESTAMP);
+        let mut contract = VestingWallet::from(&vm);
+
+        let (start, _) = contract.init(start(&vm), DURATION);
+        assert_eq!(U256::from(start), contract.start());
     }
 
-    #[motsu::test]
-    fn reads_duration(contract: Contract<VestingWallet>, alice: Address) {
-        let (_, duration) = contract.sender(alice).init(0, DURATION);
-        assert_eq!(U256::from(duration), contract.sender(alice).duration());
+    #[test]
+    fn reads_duration() {
+        let vm = TestVM::default();
+        let mut contract = VestingWallet::from(&vm);
+
+        let (_, duration) = contract.init(0, DURATION);
+        assert_eq!(U256::from(duration), contract.duration());
     }
 
-    #[motsu::test]
-    fn reads_end(contract: Contract<VestingWallet>, alice: Address) {
-        let (start, duration) = contract.sender(alice).init(start(), DURATION);
+    #[test]
+    fn reads_end() {
+        let vm = TestVM::default();
+        vm.set_block_timestamp(TIMESTAMP);
+        let mut contract = VestingWallet::from(&vm);
 
-        assert_eq!(U256::from(start + duration), contract.sender(alice).end());
+        let (start, duration) = contract.init(start(&vm), DURATION);
+
+        assert_eq!(U256::from(start + duration), contract.end());
     }
 
-    #[motsu::test]
-    fn reads_max_end(contract: Contract<VestingWallet>, alice: Address) {
-        contract.sender(alice).init(u64::MAX, u64::MAX);
-        assert_eq!(
-            U256::from(U64::MAX) + U256::from(U64::MAX),
-            contract.sender(alice).end()
-        );
+    #[test]
+    fn reads_max_end() {
+        let vm = TestVM::default();
+        let mut contract = VestingWallet::from(&vm);
+
+        contract.init(u64::MAX, u64::MAX);
+        assert_eq!(U256::from(U64::MAX) + U256::from(U64::MAX), contract.end());
     }
 
-    #[motsu::test]
-    fn gets_vesting_schedule(
-        contract: Contract<VestingWallet>,
-        alice: Address,
-    ) {
-        let (start, duration) = contract.sender(alice).init(start(), DURATION);
+    #[test]
+    fn gets_vesting_schedule() {
+        let vm = TestVM::default();
+        vm.set_block_timestamp(TIMESTAMP);
+        let mut contract = VestingWallet::from(&vm);
+
+        let (start, duration) = contract.init(start(&vm), DURATION);
 
         let one = uint!(1_U256);
         let two = uint!(2_U256);
 
         assert_eq!(
             U256::ZERO,
-            contract.sender(alice).vesting_schedule(two, start - U64::from(1))
+            contract.vesting_schedule(two, start - U64::from(1))
         );
         assert_eq!(
             one,
-            contract
-                .sender(alice)
-                .vesting_schedule(two, start + duration / U64::from(2))
+            contract.vesting_schedule(two, start + duration / U64::from(2))
         );
+        assert_eq!(two, contract.vesting_schedule(two, start + duration));
         assert_eq!(
             two,
-            contract.sender(alice).vesting_schedule(two, start + duration)
-        );
-        assert_eq!(
-            two,
-            contract
-                .sender(alice)
-                .vesting_schedule(two, start + duration + U64::from(1))
+            contract.vesting_schedule(two, start + duration + U64::from(1))
         );
     }
 
-    #[motsu::test]
-    fn gets_vesting_schedule_zero_duration(
-        contract: Contract<VestingWallet>,
-        alice: Address,
-    ) {
-        let (start, _) = contract.sender(alice).init(start(), 0);
+    #[test]
+    fn gets_vesting_schedule_zero_duration() {
+        let vm = TestVM::default();
+        vm.set_block_timestamp(TIMESTAMP);
+        let mut contract = VestingWallet::from(&vm);
+
+        let (start, _) = contract.init(start(&vm), 0);
 
         let two = uint!(2_U256);
 
         assert_eq!(
             U256::ZERO,
-            contract.sender(alice).vesting_schedule(two, start - U64::from(1))
+            contract.vesting_schedule(two, start - U64::from(1))
         );
-        assert_eq!(two, contract.sender(alice).vesting_schedule(two, start));
-        assert_eq!(
-            two,
-            contract.sender(alice).vesting_schedule(two, start + U64::from(1))
-        );
+        assert_eq!(two, contract.vesting_schedule(two, start));
+        assert_eq!(two, contract.vesting_schedule(two, start + U64::from(1)));
     }
 
-    #[motsu::test]
-    fn check_vested_amount_erc20(
-        vesting_wallet: Contract<VestingWallet>,
-        erc20: Contract<Erc20>,
-        alice: Address,
-    ) {
-        vesting_wallet.sender(alice).init(start(), DURATION);
-        erc20
-            .sender(alice)
-            ._mint(vesting_wallet.address(), U256::from(BALANCE))
-            .unwrap();
+    #[test]
+    fn check_vested_amount_erc20() {
+        let vm = TestVM::default();
+        vm.set_block_timestamp(TIMESTAMP);
+        let mut contract = VestingWallet::from(&vm);
 
-        let start = start();
+        contract.init(start(&vm), DURATION);
+        mock_balance_of(&vm, ERC20, vm.contract_address(), U256::from(BALANCE));
+
+        let start = start(&vm);
         for i in 0..64 {
             let timestamp = i * DURATION / 60 + start;
             let expected_amount = U256::from(std::cmp::min(
@@ -743,10 +767,8 @@ mod tests {
                 BALANCE * (timestamp - start) / DURATION,
             ));
 
-            let vested_amount = vesting_wallet
-                .sender(alice)
-                .vested_amount_erc20(erc20.address(), timestamp)
-                .unwrap();
+            let vested_amount =
+                contract.vested_amount_erc20(ERC20, timestamp).unwrap();
             assert_eq!(
                 expected_amount, vested_amount,
                 "\n---\ni: {i}\nstart: {start}\ntimestamp: {timestamp}\n---\n"
@@ -754,23 +776,25 @@ mod tests {
         }
     }
 
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual = <VestingWallet as IVestingWallet>::interface_id();
         let expected: B32 = 0x23a2649d_u32.into();
         assert_ne!(actual, expected);
     }
 
-    #[motsu::test]
-    fn supports_interface(contract: Contract<VestingWallet>, alice: Address) {
-        assert!(contract.sender(alice).supports_interface(
+    #[test]
+    fn supports_interface() {
+        let vm = TestVM::default();
+        let contract = VestingWallet::from(&vm);
+
+        assert!(contract.supports_interface(
             <VestingWallet as IVestingWallet>::interface_id()
         ));
         assert!(contract
-            .sender(alice)
             .supports_interface(<VestingWallet as IErc165>::interface_id()));
 
         let fake_interface_id: B32 = 0x12345678_u32.into();
-        assert!(!contract.sender(alice).supports_interface(fake_interface_id));
+        assert!(!contract.supports_interface(fake_interface_id));
     }
 }
