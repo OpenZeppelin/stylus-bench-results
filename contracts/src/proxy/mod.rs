@@ -3,10 +3,7 @@
 use alloc::vec::Vec;
 
 use alloy_primitives::Address;
-use stylus_sdk::{
-    call::{self, Call, Error},
-    prelude::*,
-};
+use stylus_sdk::{call::{self}, prelude::*, stylus_core::calls::errors::Error};
 
 pub mod beacon;
 pub mod erc1967;
@@ -50,7 +47,7 @@ pub unsafe trait IProxy: TopLevelStorage + Sized {
     ///
     /// # Errors
     ///
-    /// Returns a [`stylus_sdk::call::Error`] if the delegate call fails. This
+    /// Returns a [`stylus_sdk::stylus_core::calls::errors::Error`] if the delegate call fails. This
     /// error may represent:
     /// * A revert from the implementation contract, containing the revert data.
     /// * Failure to decode the return data from the implementation contract.
@@ -114,12 +111,7 @@ mod tests {
     use alloy_sol_macro::sol;
     use alloy_sol_types::{SolCall, SolError, SolValue};
     use motsu::prelude::*;
-    use stylus_sdk::{
-        alloy_primitives::{Address, U256},
-        prelude::*,
-        storage::{StorageAddress, StorageBool},
-        ArbResult,
-    };
+    use stylus_sdk::{alloy_primitives::{Address, U256}, prelude::*, storage::{StorageAddress, StorageBool}, ArbResult};
 
     use super::*;
     use crate::token::erc20::{self, Erc20, IErc20};
@@ -128,8 +120,7 @@ mod tests {
     #[storage]
     struct ProxyExample {
         implementation: StorageAddress,
-        error_on_implementation: StorageBool,
-    }
+        error_on_implementation: StorageBool}
 
     #[public]
     impl ProxyExample {
@@ -166,8 +157,7 @@ mod tests {
 
     #[storage]
     struct Erc20Example {
-        erc20: Erc20,
-    }
+        erc20: Erc20}
 
     #[public]
     #[implements(IErc20<Error = erc20::Error>)]
@@ -289,8 +279,7 @@ mod tests {
         erc20.assert_emitted(&erc20::Transfer {
             from: Address::ZERO,
             to: alice,
-            value: amount,
-        });
+            value: amount});
 
         // check that the balance can be accurately fetched through the proxy.
         let balance = proxy
@@ -319,8 +308,7 @@ mod tests {
         erc20.assert_emitted(&erc20::Transfer {
             from: alice,
             to: bob,
-            value: amount,
-        });
+            value: amount});
 
         let balance = proxy
             .sender(alice)
@@ -365,8 +353,7 @@ mod tests {
             erc20::ERC20InsufficientBalance {
                 sender: alice,
                 balance: U256::ZERO,
-                needed: amount,
-            }
+                needed: amount}
             .abi_encode()
         );
     }

@@ -3,12 +3,13 @@ use alloc::vec::Vec;
 
 use alloy_primitives::{Address, U256};
 use openzeppelin_stylus_proc::interface_id;
-use stylus_sdk::{msg, prelude::*};
+use stylus_sdk::{prelude::*};
 
 use crate::token::erc721::{self, Erc721};
 
 /// An [`Erc721`] token that can be burned (destroyed).
 #[interface_id]
+#[public]
 pub trait IErc721Burnable {
     /// The error type associated to this trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -43,7 +44,7 @@ impl IErc721Burnable for Erc721 {
         //
         // Therefore, it is not needed to verify that the return value is not 0
         // here.
-        self._update(Address::ZERO, token_id, msg::sender())?;
+        self._update(Address::ZERO, token_id, self.vm().msg_sender())?;
         Ok(())
     }
 }
@@ -55,8 +56,7 @@ mod tests {
     use super::*;
     use crate::token::erc721::{
         ERC721InsufficientApproval, ERC721NonexistentToken, Erc721, Error,
-        IErc721,
-    };
+        IErc721};
 
     const TOKEN_ID: U256 = uint!(1_U256);
 
@@ -239,8 +239,7 @@ mod tests {
             err,
             Error::InsufficientApproval(ERC721InsufficientApproval {
                     operator,
-                    token_id: t_id,
-            }) if operator == alice && t_id == TOKEN_ID
+                    token_id: t_id}) if operator == alice && t_id == TOKEN_ID
         ));
     }
 

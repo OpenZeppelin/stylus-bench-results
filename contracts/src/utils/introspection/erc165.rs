@@ -3,6 +3,7 @@
 //! [ERC]: https://eips.ethereum.org/EIPS/eip-165
 
 use alloy_primitives::aliases::B32;
+use stylus_sdk::prelude::public;
 use openzeppelin_stylus_proc::interface_id;
 
 /// Interface of the ERC-165 standard, as defined in the [ERC].
@@ -23,6 +24,7 @@ use openzeppelin_stylus_proc::interface_id;
 ///
 /// [ERC]: https://eips.ethereum.org/EIPS/eip-165
 #[interface_id]
+#[public]
 pub trait IErc165 {
     /// Returns true if this contract implements the interface defined by
     /// `interface_id`. See the corresponding [ERC] to learn more about how

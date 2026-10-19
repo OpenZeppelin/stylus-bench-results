@@ -4,19 +4,15 @@
 //! [ERC-1967]: https://eips.ethereum.org/EIPS/eip-1967
 
 use alloy_primitives::{aliases::B256, uint, Address, U256};
+use stylus_sdk::host::VM;
 pub use sol::*;
-use stylus_sdk::{
-    abi::Bytes, call::MethodError, evm, msg, prelude::*,
-    storage::StorageAddress,
-};
+use stylus_sdk::{abi::Bytes, stylus_core::calls::errors::MethodError, prelude::*, storage::StorageAddress};
 
 use crate::{
     proxy::{beacon::IBeaconInterface, erc1967},
     utils::{
         address::{self, AddressUtils},
-        storage_slot::StorageSlot,
-    },
-};
+        storage_slot::StorageSlot}};
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -48,7 +44,7 @@ mod sol {
         error ERC1967InvalidBeacon(address beacon);
 
         /// Indicates an error relatoed to the fact that an upgrade function
-        /// sees [`stylus_sdk::msg::value()`] > [`U256::ZERO`] that may be lost.
+        /// sees [`stylus_sdk::self.vm().msg_value()`] > [`U256::ZERO`] that may be lost.
         #[derive(Debug)]
         #[allow(missing_docs)]
         error ERC1967NonPayable();
@@ -68,7 +64,7 @@ pub enum Error {
     /// of the proxy is invalid.
     InvalidBeacon(ERC1967InvalidBeacon),
     /// Indicates an error relatoed to the fact that an upgrade function
-    /// sees [`stylus_sdk::msg::value()`] > [`alloy_primitives::U256::ZERO`]
+    /// sees [`stylus_sdk::self.vm().msg_value()`] > [`alloy_primitives::U256::ZERO`]
     /// that may be lost.
     NonPayable(ERC1967NonPayable),
     /// There's no code at `target` (it is not a contract).
@@ -77,8 +73,7 @@ pub enum Error {
     FailedCall(address::FailedCall),
     /// Indicates an error related to the fact that the delegate call
     /// failed.
-    FailedCallWithReason(address::FailedCallWithReason),
-}
+    FailedCallWithReason(address::FailedCallWithReason)}
 
 impl From<address::Error> for Error {
     fn from(e: address::Error) -> Self {
@@ -139,13 +134,13 @@ pub struct Erc1967Utils;
 impl Erc1967Utils {
     /// Returns the current implementation address.
     #[must_use]
-    pub fn get_implementation() -> Address {
-        StorageSlot::get_slot::<StorageAddress>(IMPLEMENTATION_SLOT).get()
+    pub fn get_implementation(context: &impl HostAccess<Host = VM>) -> Address {
+        StorageSlot::get_slot::<StorageAddress>(context, IMPLEMENTATION_SLOT).get()
     }
 
     /// Performs implementation upgrade with additional setup call if
     /// data is nonempty. This function is payable only if the setup call
-    /// is performed, otherwise [`msg::value()`] is rejected to avoid stuck
+    /// is performed, otherwise [`self.vm().msg_value()`] is rejected to avoid stuck
     /// value in the contract.
     ///
     /// # Arguments
@@ -164,22 +159,22 @@ impl Erc1967Utils {
     ///   fails.
     /// * [`Error::FailedCallWithReason`] - If the call to the implementation
     ///   contract fails with a revert reason.
-    pub fn upgrade_to_and_call<T: TopLevelStorage>(
+    pub fn upgrade_to_and_call<T: TopLevelStorage + HostAccess<Host = VM>>(
         context: &mut T,
         new_implementation: Address,
         data: &Bytes,
     ) -> Result<(), Error> {
-        Erc1967Utils::set_implementation(new_implementation)?;
+        Erc1967Utils::set_implementation(context, new_implementation)?;
 
-        evm::log(erc1967::Upgraded { implementation: new_implementation });
+        context.vm().log(erc1967::Upgraded { implementation: new_implementation });
 
         if data.is_empty() {
-            Erc1967Utils::check_non_payable()?;
+            Erc1967Utils::check_non_payable(context)?;
         } else {
             AddressUtils::function_delegate_call(
                 context,
                 new_implementation,
-                data.as_slice(),
+                data.as_ref(),
             )?;
         }
 
@@ -188,8 +183,8 @@ impl Erc1967Utils {
 
     /// Returns the current admin.
     #[must_use]
-    pub fn get_admin() -> Address {
-        StorageSlot::get_slot::<StorageAddress>(ADMIN_SLOT).get()
+    pub fn get_admin(context: &impl HostAccess<Host = VM>) -> Address {
+        StorageSlot::get_slot::<StorageAddress>(context, ADMIN_SLOT).get()
     }
 
     /// Changes the admin of the proxy.
@@ -202,24 +197,27 @@ impl Erc1967Utils {
     ///
     /// * [`Error::InvalidAdmin`] - If the `new_admin` address is not a valid
     ///   admin.
-    pub fn change_admin(new_admin: Address) -> Result<(), Error> {
-        evm::log(erc1967::AdminChanged {
-            previous_admin: Erc1967Utils::get_admin(),
+    pub fn change_admin(
+        context: &impl HostAccess<Host = VM>,
+        new_admin: Address,
+    ) -> Result<(), Error> {
+        context.vm().log(erc1967::AdminChanged {
+            previous_admin: Erc1967Utils::get_admin(context),
             new_admin,
         });
 
-        Erc1967Utils::set_admin(new_admin)
+        Erc1967Utils::set_admin(context, new_admin)
     }
 
     /// Returns the current beacon.
     #[must_use]
-    pub fn get_beacon() -> Address {
-        StorageSlot::get_slot::<StorageAddress>(BEACON_SLOT).get()
+    pub fn get_beacon(context: &impl HostAccess<Host = VM>) -> Address {
+        StorageSlot::get_slot::<StorageAddress>(context, BEACON_SLOT).get()
     }
 
     /// Change the beacon and trigger a setup call if data is nonempty.
     /// This function is payable only if the setup call is performed,
-    /// otherwise [`msg::value()`] is rejected to avoid stuck value in the
+    /// otherwise [`self.vm().msg_value()`] is rejected to avoid stuck value in the
     /// contract.
     ///
     /// # Arguments
@@ -240,16 +238,16 @@ impl Erc1967Utils {
     ///   fails.
     /// * [`Error::FailedCallWithReason`] - If the call to the beacon
     ///   implementation fails with a revert reason.
-    pub fn upgrade_beacon_to_and_call<T: TopLevelStorage>(
+    pub fn upgrade_beacon_to_and_call<T: TopLevelStorage + HostAccess<Host = VM>>(
         context: &mut T,
         new_beacon: Address,
         data: &Bytes,
     ) -> Result<(), Error> {
         Erc1967Utils::set_beacon(context, new_beacon)?;
-        evm::log(erc1967::BeaconUpgraded { beacon: new_beacon });
+        context.vm().log(erc1967::BeaconUpgraded { beacon: new_beacon });
 
         if data.is_empty() {
-            Erc1967Utils::check_non_payable()?;
+            Erc1967Utils::check_non_payable(context)?;
         } else {
             let beacon_implementation =
                 Erc1967Utils::get_beacon_implementation(context, new_beacon)?;
@@ -257,7 +255,7 @@ impl Erc1967Utils {
             AddressUtils::function_delegate_call(
                 context,
                 beacon_implementation,
-                data.as_slice(),
+                data.as_ref(),
             )?;
         }
 
@@ -266,16 +264,16 @@ impl Erc1967Utils {
 }
 
 impl Erc1967Utils {
-    /// Reverts if [`msg::value()`] is not [`alloy_primitives::U256::ZERO`]. It
-    /// can be used to avoid [`msg::value()`] stuck in the contract if an
+    /// Reverts if [`self.vm().msg_value()`] is not [`alloy_primitives::U256::ZERO`]. It
+    /// can be used to avoid [`self.vm().msg_value()`] stuck in the contract if an
     /// upgrade does not perform an initialization call.
     ///
     /// # Errors
     ///
-    /// * [`Error::NonPayable`] - If [`msg::value()`] is not
+    /// * [`Error::NonPayable`] - If [`self.vm().msg_value()`] is not
     ///   [`alloy_primitives::U256::ZERO`].
-    fn check_non_payable() -> Result<(), Error> {
-        if msg::value().is_zero() {
+    fn check_non_payable(context: &impl HostAccess<Host = VM>) -> Result<(), Error> {
+        if context.vm().msg_value().is_zero() {
             Ok(())
         } else {
             Err(ERC1967NonPayable {}.into())
@@ -292,15 +290,17 @@ impl Erc1967Utils {
     ///
     /// * [`Error::InvalidImplementation`] - If the `new_implementation` address
     ///   is not a valid implementation.
-    fn set_implementation(new_implementation: Address) -> Result<(), Error> {
-        if !new_implementation.has_code() {
+    fn set_implementation(
+        context: &impl HostAccess<Host = VM>,
+        new_implementation: Address,
+    ) -> Result<(), Error> {
+        if !AddressUtils::has_code(context, new_implementation) {
             return Err(ERC1967InvalidImplementation {
-                implementation: new_implementation,
-            }
+                implementation: new_implementation}
             .into());
         }
 
-        StorageSlot::get_slot::<StorageAddress>(IMPLEMENTATION_SLOT)
+        StorageSlot::get_slot::<StorageAddress>(context, IMPLEMENTATION_SLOT)
             .set(new_implementation);
 
         Ok(())
@@ -316,12 +316,15 @@ impl Erc1967Utils {
     ///
     /// * [`Error::InvalidAdmin`] - If the `new_admin` address is not a valid
     ///   admin.
-    fn set_admin(new_admin: Address) -> Result<(), Error> {
+    fn set_admin(
+        context: &impl HostAccess<Host = VM>,
+        new_admin: Address,
+    ) -> Result<(), Error> {
         if new_admin.is_zero() {
             return Err(ERC1967InvalidAdmin { admin: new_admin }.into());
         }
 
-        StorageSlot::get_slot::<StorageAddress>(ADMIN_SLOT).set(new_admin);
+        StorageSlot::get_slot::<StorageAddress>(context, ADMIN_SLOT).set(new_admin);
 
         Ok(())
     }
@@ -343,23 +346,22 @@ impl Erc1967Utils {
     ///   fails.
     /// * [`Error::FailedCallWithReason`] - If the call to the beacon
     ///   implementation fails with a revert reason.
-    fn set_beacon<T: TopLevelStorage>(
+    fn set_beacon<T: TopLevelStorage + HostAccess<Host = VM>>(
         context: &mut T,
         new_beacon: Address,
     ) -> Result<(), Error> {
-        if !new_beacon.has_code() {
+        if !AddressUtils::has_code(context, new_beacon) {
             return Err(ERC1967InvalidBeacon { beacon: new_beacon }.into());
         }
 
-        StorageSlot::get_slot::<StorageAddress>(BEACON_SLOT).set(new_beacon);
+        StorageSlot::get_slot::<StorageAddress>(context, BEACON_SLOT).set(new_beacon);
 
         let beacon_implementation =
             Erc1967Utils::get_beacon_implementation(context, new_beacon)?;
 
-        if !beacon_implementation.has_code() {
+        if !AddressUtils::has_code(context, beacon_implementation) {
             return Err(ERC1967InvalidImplementation {
-                implementation: beacon_implementation,
-            }
+                implementation: beacon_implementation}
             .into());
         }
 
@@ -382,13 +384,14 @@ impl Erc1967Utils {
     /// * [`Error::FailedCallWithReason`] - If the call to the beacon
     ///   implementation fails with a revert reason.
     /// * [`Error::EmptyCode`] - If the beacon implementation has no code.
-    fn get_beacon_implementation<T: TopLevelStorage>(
+    fn get_beacon_implementation<T: TopLevelStorage + HostAccess<Host = VM>>(
         context: &T,
         beacon: Address,
     ) -> Result<Address, Error> {
         Ok(AddressUtils::verify_call_result_from_target(
+            context,
             beacon,
-            IBeaconInterface::new(beacon).implementation(context),
+            IBeaconInterface::new(beacon).implementation(context.vm(), Call::new()),
         )?)
     }
 }
@@ -399,13 +402,7 @@ mod tests {
 
     use alloy_sol_types::SolCall;
     use motsu::prelude::*;
-    use stylus_sdk::{
-        alloy_primitives::{Address, U256},
-        alloy_sol_types::sol,
-        function_selector,
-        prelude::*,
-        storage::StorageAddress,
-    };
+    use stylus_sdk::{alloy_primitives::{Address, U256}, alloy_sol_types::sol, function_selector, prelude::*, storage::StorageAddress};
 
     use super::*;
     use crate::proxy::beacon::IBeacon;
@@ -462,8 +459,7 @@ mod tests {
     // mock beacon contract for testing.
     #[storage]
     struct MockBeacon {
-        implementation: StorageAddress,
-    }
+        implementation: StorageAddress}
 
     unsafe impl TopLevelStorage for MockBeacon {}
 
@@ -495,8 +491,7 @@ mod tests {
 
     #[derive(SolidityError, Debug)]
     enum ImplementationError {
-        ImplementationError(ImplementationSolidityError),
-    }
+        ImplementationError(ImplementationSolidityError)}
 
     impl MethodError for ImplementationError {
         fn encode(self) -> Vec<u8> {
@@ -520,7 +515,7 @@ mod tests {
                     ImplementationSolidityError {},
                 ));
             }
-            evm::log(ImplementationEvent {});
+            self.vm().log(ImplementationEvent {});
             Ok(())
         }
     }
@@ -557,8 +552,7 @@ mod tests {
 
         // verify event was emitted.
         contract.assert_emitted(&erc1967::Upgraded {
-            implementation: implementation.address(),
-        });
+            implementation: implementation.address()});
     }
 
     #[motsu::test]
@@ -582,8 +576,7 @@ mod tests {
 
         // verify event was emitted.
         contract.assert_emitted(&erc1967::Upgraded {
-            implementation: implementation.address(),
-        });
+            implementation: implementation.address()});
 
         // TODO: this should assert that the event was emitted on `contract`
         // (as it's the one that delegate called the upgrade)
@@ -605,8 +598,7 @@ mod tests {
         assert_eq!(
             err,
             Error::InvalidImplementation(ERC1967InvalidImplementation {
-                implementation: invalid_address,
-            })
+                implementation: invalid_address})
             .encode()
         );
 
@@ -628,8 +620,7 @@ mod tests {
         assert_eq!(
             err,
             Error::InvalidImplementation(ERC1967InvalidImplementation {
-                implementation: Address::ZERO,
-            })
+                implementation: Address::ZERO})
             .encode()
         );
     }
@@ -658,8 +649,7 @@ mod tests {
 
         // event should still be emitted.
         contract.assert_emitted(&erc1967::Upgraded {
-            implementation: implementation.address(),
-        });
+            implementation: implementation.address()});
     }
 
     #[motsu::test]
@@ -688,7 +678,7 @@ mod tests {
         assert_eq!(
             err,
             Error::FailedCallWithReason(address::FailedCallWithReason {
-                reason: stylus_sdk::call::Error::Revert(vec).encode().into()
+                reason: stylus_sdk::stylus_core::calls::errors::Error::Revert(vec).encode().into()
             })
             .encode(),
         );
@@ -718,8 +708,7 @@ mod tests {
                     ImplementationSolidityError {}
                 )
                 .encode()
-                .into(),
-            })
+                .into()})
             .encode()
         );
     }
@@ -766,8 +755,7 @@ mod tests {
         // Verify event was emitted
         contract.assert_emitted(&erc1967::AdminChanged {
             previous_admin: Address::ZERO,
-            new_admin: bob,
-        });
+            new_admin: bob});
 
         // verify that changing admin to [`Address::ZERO`] fails.
         let err = contract
@@ -814,12 +802,10 @@ mod tests {
         // verify events were emitted.
         contract.assert_emitted(&erc1967::AdminChanged {
             previous_admin: Address::ZERO,
-            new_admin: bob,
-        });
+            new_admin: bob});
         contract.assert_emitted(&erc1967::AdminChanged {
             previous_admin: bob,
-            new_admin: charlie,
-        });
+            new_admin: charlie});
     }
 
     #[motsu::test]
@@ -846,12 +832,10 @@ mod tests {
         // event should still be emitted.
         contract.assert_emitted(&erc1967::AdminChanged {
             previous_admin: Address::ZERO,
-            new_admin: bob,
-        });
+            new_admin: bob});
         contract.assert_emitted(&erc1967::AdminChanged {
             previous_admin: bob,
-            new_admin: bob,
-        });
+            new_admin: bob});
     }
 
     #[motsu::test]
@@ -882,8 +866,7 @@ mod tests {
 
         // verify event was emitted.
         contract.assert_emitted(&erc1967::BeaconUpgraded {
-            beacon: beacon.address(),
-        });
+            beacon: beacon.address()});
     }
 
     #[motsu::test]
@@ -907,8 +890,7 @@ mod tests {
 
         // verify event was emitted.
         contract.assert_emitted(&erc1967::BeaconUpgraded {
-            beacon: beacon.address(),
-        });
+            beacon: beacon.address()});
 
         // TODO: this should assert that the event was emitted on `contract`
         // (as it's the one that delegate called the upgrade)
@@ -930,8 +912,7 @@ mod tests {
         assert_eq!(
             err,
             Error::InvalidBeacon(ERC1967InvalidBeacon {
-                beacon: invalid_address,
-            })
+                beacon: invalid_address})
             .encode()
         );
 
@@ -962,8 +943,7 @@ mod tests {
         assert_eq!(
             err,
             Error::InvalidBeacon(ERC1967InvalidBeacon {
-                beacon: Address::ZERO,
-            })
+                beacon: Address::ZERO})
             .encode()
         );
     }
@@ -989,8 +969,7 @@ mod tests {
         assert_eq!(
             err,
             Error::InvalidImplementation(ERC1967InvalidImplementation {
-                implementation: invalid_address,
-            })
+                implementation: invalid_address})
             .encode()
         );
 
@@ -1016,8 +995,7 @@ mod tests {
         assert_eq!(
             err,
             Error::InvalidImplementation(ERC1967InvalidImplementation {
-                implementation: Address::ZERO,
-            })
+                implementation: Address::ZERO})
             .encode()
         );
     }
@@ -1053,11 +1031,9 @@ mod tests {
 
         // verify events were emitted.
         contract.assert_emitted(&erc1967::BeaconUpgraded {
-            beacon: beacon1.address(),
-        });
+            beacon: beacon1.address()});
         contract.assert_emitted(&erc1967::BeaconUpgraded {
-            beacon: beacon2.address(),
-        });
+            beacon: beacon2.address()});
     }
 
     #[motsu::test]
@@ -1086,8 +1062,7 @@ mod tests {
 
         // event should still be emitted.
         contract.assert_emitted(&erc1967::BeaconUpgraded {
-            beacon: beacon.address(),
-        });
+            beacon: beacon.address()});
     }
 
     #[motsu::test]
@@ -1119,7 +1094,7 @@ mod tests {
         assert_eq!(
             err,
             Error::FailedCallWithReason(address::FailedCallWithReason {
-                reason: stylus_sdk::call::Error::Revert(vec).encode().into()
+                reason: stylus_sdk::stylus_core::calls::errors::Error::Revert(vec).encode().into()
             })
             .encode(),
         );
@@ -1152,8 +1127,7 @@ mod tests {
                     ImplementationSolidityError {}
                 )
                 .encode()
-                .into(),
-            })
+                .into()})
             .encode()
         );
     }

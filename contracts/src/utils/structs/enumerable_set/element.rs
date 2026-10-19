@@ -1,13 +1,8 @@
 //! Contains generic size utilities for enumerable set storage contract.
 
 use alloy_primitives::{Address, B256, U128, U16, U256, U32, U64, U8};
-use stylus_sdk::{
-    prelude::{Erase, SimpleStorageType, StorageType},
-    storage::{
-        StorageAddress, StorageB256, StorageKey, StorageU128, StorageU16,
-        StorageU256, StorageU32, StorageU64, StorageU8,
-    },
-};
+use stylus_sdk::{prelude::{Erase, SimpleStorageType, StorageType}, storage::{
+        StorageAddress, StorageB256, StorageKey, StorageU128, StorageU16, StorageU256, StorageU32, StorageU64, StorageU8}};
 
 /// Trait that associate set element with storage type.
 pub trait Element: StorageKey + Copy {

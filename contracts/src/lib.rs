@@ -23,16 +23,12 @@ importing them:
 
 ```ignore
 use openzeppelin_stylus::token::erc20::{self, Erc20, IErc20};
-use stylus_sdk::{
-    alloy_primitives::{Address, U256},
-    prelude::*,
-};
+use stylus_sdk::{alloy_primitives::{Address, U256}, prelude::*};
 
 #[entrypoint]
 #[storage]
 struct MyContract {
-    pub erc20: Erc20,
-}
+    pub erc20: Erc20}
 
 #[public]
 #[implements(IErc20<Error = erc20::Error>)]
@@ -98,3 +94,6 @@ pub mod finance;
 pub mod proxy;
 pub mod token;
 pub mod utils;
+
+#[cfg(test)]
+pub(crate) mod test_utils;

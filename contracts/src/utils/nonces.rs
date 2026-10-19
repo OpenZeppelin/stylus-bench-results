@@ -5,11 +5,7 @@
 use alloc::{vec, vec::Vec};
 
 use alloy_primitives::{uint, Address, U256};
-use stylus_sdk::{
-    call::MethodError,
-    prelude::*,
-    storage::{StorageMap, StorageU256},
-};
+use stylus_sdk::{stylus_core::calls::errors::MethodError, prelude::*, storage::{StorageMap, StorageU256}};
 
 use crate::utils::math::storage::AddAssignChecked;
 
@@ -32,8 +28,7 @@ mod sol {
 #[derive(SolidityError, Debug)]
 pub enum Error {
     /// The nonce used for an `account` is not the expected current nonce.
-    InvalidAccountNonce(InvalidAccountNonce),
-}
+    InvalidAccountNonce(InvalidAccountNonce)}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -45,10 +40,10 @@ impl MethodError for Error {
 #[storage]
 pub struct Nonces {
     /// Mapping from address to its nonce.
-    pub(crate) nonces: StorageMap<Address, StorageU256>,
-}
+    pub(crate) nonces: StorageMap<Address, StorageU256>}
 
 /// Interface for [`Nonces`]
+#[public]
 pub trait INonces {
     /// Returns the unused nonce for the given account.
     ///
@@ -119,8 +114,7 @@ impl Nonces {
         if nonce != current_nonce {
             return Err(Error::InvalidAccountNonce(InvalidAccountNonce {
                 account: owner,
-                current_nonce,
-            }));
+                current_nonce}));
         }
 
         Ok(())

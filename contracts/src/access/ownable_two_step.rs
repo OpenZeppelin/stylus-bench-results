@@ -21,12 +21,11 @@ use alloc::{vec, vec::Vec};
 use alloy_primitives::{aliases::B32, Address};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
-use stylus_sdk::{evm, msg, prelude::*, storage::StorageAddress};
+use stylus_sdk::{prelude::*, storage::StorageAddress};
 
 use crate::{
     access::ownable::{self, Ownable},
-    utils::introspection::erc165::IErc165,
-};
+    utils::introspection::erc165::IErc165};
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -54,11 +53,11 @@ pub struct Ownable2Step {
     // inheritting contract have access to its internal functions.
     pub ownable: Ownable,
     /// Pending owner of the contract.
-    pub(crate) pending_owner: StorageAddress,
-}
+    pub(crate) pending_owner: StorageAddress}
 
 /// Interface for an [`Ownable2Step`] contract.
 #[interface_id]
+#[public]
 pub trait IOwnable2Step {
     /// The error type associated to the trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -176,15 +175,14 @@ impl IOwnable2Step for Ownable2Step {
         self.pending_owner.set(new_owner);
 
         let current_owner = self.owner();
-        evm::log(OwnershipTransferStarted {
+        self.vm().log(OwnershipTransferStarted {
             previous_owner: current_owner,
-            new_owner,
-        });
+            new_owner});
         Ok(())
     }
 
     fn accept_ownership(&mut self) -> Result<(), Self::Error> {
-        let sender = msg::sender();
+        let sender = self.vm().msg_sender();
         let pending_owner = self.pending_owner();
         if sender != pending_owner {
             return Err(ownable::Error::UnauthorizedAccount(

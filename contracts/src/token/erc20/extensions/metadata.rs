@@ -15,11 +15,11 @@ pub const DEFAULT_DECIMALS: U8 = uint!(18_U8);
 #[storage]
 pub struct Erc20Metadata {
     /// [`Metadata`] contract.
-    pub(crate) metadata: Metadata,
-}
+    pub(crate) metadata: Metadata}
 
 /// Interface for the optional metadata functions from the ERC-20 standard.
 #[interface_id]
+#[public]
 pub trait IErc20Metadata: IErc165 {
     /// Returns the name of the token.
     ///

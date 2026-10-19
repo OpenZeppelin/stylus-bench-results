@@ -18,7 +18,7 @@
 //!
 //! ```rust,ignore
 //! pub fn foo() {
-//!   assert!(self.has_role(MY_ROLE.into(), msg::sender()));
+//!   assert!(self.has_role(MY_ROLE.into(), self.vm().msg_sender()));
 //!   // ...
 //! }
 //! ```
@@ -44,12 +44,7 @@ use alloc::{vec, vec::Vec};
 use alloy_primitives::{aliases::B32, Address, B256};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
-use stylus_sdk::{
-    call::MethodError,
-    evm, msg,
-    prelude::*,
-    storage::{StorageB256, StorageBool, StorageMap},
-};
+use stylus_sdk::{stylus_core::calls::errors::MethodError, prelude::*, storage::{StorageB256, StorageBool, StorageMap}};
 
 use crate::utils::introspection::erc165::IErc165;
 
@@ -111,8 +106,7 @@ pub enum Error {
     /// The caller account is missing a role.
     UnauthorizedAccount(AccessControlUnauthorizedAccount),
     /// The caller of a function is not the expected one.
-    BadConfirmation(AccessControlBadConfirmation),
-}
+    BadConfirmation(AccessControlBadConfirmation)}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -128,18 +122,17 @@ pub struct RoleData {
     /// Whether an account is member of a certain role.
     pub has_role: StorageMap<Address, StorageBool>,
     /// The admin role for this role.
-    pub admin_role: StorageB256,
-}
+    pub admin_role: StorageB256}
 
 /// State of an [`AccessControl`] contract.
 #[storage]
 pub struct AccessControl {
     /// Role identifier -> Role information.
-    pub(crate) roles: StorageMap<B256, RoleData>,
-}
+    pub(crate) roles: StorageMap<B256, RoleData>}
 
 /// Interface for an [`AccessControl`] contract.
 #[interface_id]
+#[public]
 pub trait IAccessControl {
     /// The error type associated with this interface implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -267,7 +260,7 @@ impl IAccessControl for AccessControl {
     }
 
     fn only_role(&self, role: B256) -> Result<(), Self::Error> {
-        self._check_role(role, msg::sender())
+        self._check_role(role, self.vm().msg_sender())
     }
 
     fn get_role_admin(&self, role: B256) -> B256 {
@@ -301,7 +294,7 @@ impl IAccessControl for AccessControl {
         role: B256,
         confirmation: Address,
     ) -> Result<(), Self::Error> {
-        if msg::sender() != confirmation {
+        if self.vm().msg_sender() != confirmation {
             return Err(Error::BadConfirmation(
                 AccessControlBadConfirmation {},
             ));
@@ -330,11 +323,10 @@ impl AccessControl {
     pub fn _set_role_admin(&mut self, role: B256, new_admin_role: B256) {
         let previous_admin_role = self.get_role_admin(role);
         self.roles.setter(role).admin_role.set(new_admin_role);
-        evm::log(RoleAdminChanged {
+        self.vm().log(RoleAdminChanged {
             role,
             previous_admin_role,
-            new_admin_role,
-        });
+            new_admin_role});
     }
 
     /// Checks if `account` has been granted `role`.
@@ -382,7 +374,7 @@ impl AccessControl {
             false
         } else {
             self.roles.setter(role).has_role.insert(account, true);
-            evm::log(RoleGranted { role, account, sender: msg::sender() });
+            self.vm().log(RoleGranted { role, account, sender: self.vm().msg_sender() });
             true
         }
     }
@@ -404,7 +396,7 @@ impl AccessControl {
     pub fn _revoke_role(&mut self, role: B256, account: Address) -> bool {
         if self.has_role(role, account) {
             self.roles.setter(role).has_role.insert(account, false);
-            evm::log(RoleRevoked { role, account, sender: msg::sender() });
+            self.vm().log(RoleRevoked { role, account, sender: self.vm().msg_sender() });
             true
         } else {
             false

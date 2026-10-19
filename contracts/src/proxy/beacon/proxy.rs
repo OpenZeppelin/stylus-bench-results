@@ -25,14 +25,12 @@ use stylus_sdk::{abi::Bytes, prelude::*, storage::StorageAddress};
 use crate::proxy::{
     beacon::IBeaconInterface,
     erc1967::{Erc1967Utils, Error},
-    IProxy,
-};
+    IProxy};
 
 /// State of an [`BeaconProxy`] contract.
 #[storage]
 pub struct BeaconProxy {
-    beacon: StorageAddress,
-}
+    beacon: StorageAddress}
 
 /// NOTE: Implementation of [`TopLevelStorage`] to be able use `&mut self` when
 /// calling other contracts and not `&mut (impl TopLevelStorage +
@@ -97,23 +95,17 @@ mod tests {
     use alloy_sol_macro::sol;
     use alloy_sol_types::{SolCall, SolError, SolValue};
     use motsu::prelude::*;
-    use stylus_sdk::{
-        alloy_primitives::{Address, U256},
-        prelude::*,
-        ArbResult,
-    };
+    use stylus_sdk::{alloy_primitives::{Address, U256}, prelude::*, ArbResult};
 
     use super::*;
     use crate::{
         proxy::beacon::IBeacon,
-        token::erc20::{self, Erc20, IErc20},
-    };
+        token::erc20::{self, Erc20, IErc20}};
 
     #[entrypoint]
     #[storage]
     struct BeaconProxyExample {
-        beacon_proxy: BeaconProxy,
-    }
+        beacon_proxy: BeaconProxy}
 
     #[public]
     impl BeaconProxyExample {
@@ -142,8 +134,7 @@ mod tests {
 
     #[storage]
     struct Beacon {
-        implementation: StorageAddress,
-    }
+        implementation: StorageAddress}
 
     unsafe impl TopLevelStorage for Beacon {}
 
@@ -165,8 +156,7 @@ mod tests {
 
     #[storage]
     struct Erc20Example {
-        erc20: Erc20,
-    }
+        erc20: Erc20}
 
     #[public]
     #[implements(IErc20<Error = erc20::Error>)]
@@ -346,8 +336,7 @@ mod tests {
         erc20.assert_emitted(&erc20::Transfer {
             from: Address::ZERO,
             to: alice,
-            value: amount,
-        });
+            value: amount});
 
         // check that the balance can be accurately fetched through the proxy.
         let balance = proxy
@@ -376,8 +365,7 @@ mod tests {
         erc20.assert_emitted(&erc20::Transfer {
             from: alice,
             to: bob,
-            value: amount,
-        });
+            value: amount});
 
         let balance = proxy
             .sender(alice)
@@ -428,8 +416,7 @@ mod tests {
             erc20::ERC20InsufficientBalance {
                 sender: alice,
                 balance: U256::ZERO,
-                needed: amount,
-            }
+                needed: amount}
             .abi_encode()
         );
     }

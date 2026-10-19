@@ -1,18 +1,18 @@
 //! Optional Burnable extension of the ERC-1155 standard.
 
 use alloc::vec::Vec;
+use stylus_sdk::prelude::public;
 
 use alloy_primitives::{Address, U256};
 use openzeppelin_stylus_proc::interface_id;
-use stylus_sdk::msg;
 
 use crate::token::erc1155::{
-    self, ERC1155MissingApprovalForAll, Erc1155, IErc1155,
-};
+    self, ERC1155MissingApprovalForAll, Erc1155, IErc1155};
 
 /// Extension of [`Erc1155`] that allows token holders to destroy both their
 /// own tokens and those that they have been approved to use.
 #[interface_id]
+#[public]
 pub trait IErc1155Burnable {
     /// The error type associated to this trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -69,6 +69,7 @@ pub trait IErc1155Burnable {
     ) -> Result<(), Self::Error>;
 }
 
+#[public]
 impl IErc1155Burnable for Erc1155 {
     type Error = erc1155::Error;
 
@@ -98,13 +99,12 @@ impl Erc1155 {
         &self,
         account: Address,
     ) -> Result<(), erc1155::Error> {
-        let sender = msg::sender();
+        let sender = self.vm().msg_sender();
         if account != sender && !self.is_approved_for_all(account, sender) {
             return Err(erc1155::Error::MissingApprovalForAll(
                 ERC1155MissingApprovalForAll {
                     owner: account,
-                    operator: sender,
-                },
+                    operator: sender},
             ));
         }
         Ok(())
@@ -120,8 +120,7 @@ mod tests {
     use crate::token::erc1155::{
         tests::{random_token_ids, random_values},
         ERC1155InsufficientBalance, ERC1155InvalidSender,
-        ERC1155MissingApprovalForAll, Erc1155, Error, IErc1155,
-    };
+        ERC1155MissingApprovalForAll, Erc1155, Error, IErc1155};
 
     trait Init {
         fn init(
@@ -237,8 +236,7 @@ mod tests {
         assert!(matches!(
             err,
             Error::InvalidSender(ERC1155InvalidSender {
-                sender,
-            }) if sender == invalid_sender
+                sender}) if sender == invalid_sender
         ));
     }
 
@@ -264,8 +262,7 @@ mod tests {
                 sender,
                 balance,
                 needed,
-                token_id,
-            }) if sender == alice && balance == value && needed == to_burn && token_id == token_id
+                token_id}) if sender == alice && balance == value && needed == to_burn && token_id == token_id
         ));
     }
 
@@ -363,8 +360,7 @@ mod tests {
         assert!(matches!(
             err,
             Error::InvalidSender(ERC1155InvalidSender {
-                sender,
-            }) if sender == invalid_sender
+                sender}) if sender == invalid_sender
         ));
     }
 
@@ -388,8 +384,7 @@ mod tests {
                 sender,
                 balance,
                 needed,
-                token_id,
-            }) if sender == alice && balance == values[0] && needed == to_burn[0] && token_id == token_ids[0]
+                token_id}) if sender == alice && balance == values[0] && needed == to_burn[0] && token_id == token_ids[0]
         ));
     }
 }

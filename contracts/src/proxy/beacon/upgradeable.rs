@@ -4,12 +4,11 @@ use alloc::{vec, vec::Vec};
 
 use alloy_primitives::Address;
 pub use sol::*;
-use stylus_sdk::{call::MethodError, evm, prelude::*, storage::StorageAddress};
+use stylus_sdk::{stylus_core::calls::errors::MethodError, prelude::*, storage::StorageAddress};
 
 use crate::{
     access::ownable::{self, IOwnable, Ownable},
-    proxy::beacon::IBeacon,
-};
+    proxy::beacon::IBeacon};
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -41,8 +40,7 @@ pub enum Error {
     UnauthorizedAccount(ownable::OwnableUnauthorizedAccount),
     /// Indicates an error related to the fact that the `owner` of the
     /// beacon is invalid.
-    InvalidOwner(ownable::OwnableInvalidOwner),
-}
+    InvalidOwner(ownable::OwnableInvalidOwner)}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -56,8 +54,7 @@ impl From<ownable::Error> for Error {
             ownable::Error::UnauthorizedAccount(err) => {
                 Error::UnauthorizedAccount(err)
             }
-            ownable::Error::InvalidOwner(err) => Error::InvalidOwner(err),
-        }
+            ownable::Error::InvalidOwner(err) => Error::InvalidOwner(err)}
     }
 }
 
@@ -69,6 +66,7 @@ impl From<ownable::Error> for Error {
 /// upgrading the proxies that use this beacon.
 ///
 /// [BeaconProxy]: super::BeaconProxy
+#[public]
 pub trait IUpgradeableBeacon: IBeacon + IOwnable {
     /// Upgrades the beacon to a new implementation.
     ///
@@ -98,8 +96,7 @@ pub struct UpgradeableBeacon {
     /// The address of the implementation contract.
     implementation: StorageAddress,
     /// The [`Ownable`] contract that owns the beacon.
-    ownable: Ownable,
-}
+    ownable: Ownable}
 
 unsafe impl TopLevelStorage for UpgradeableBeacon {}
 
@@ -180,12 +177,11 @@ impl UpgradeableBeacon {
         if !new_implementation.has_code() {
             return Err(Error::InvalidImplementation(
                 BeaconInvalidImplementation {
-                    implementation: new_implementation,
-                },
+                    implementation: new_implementation},
             ));
         }
         self.implementation.set(new_implementation);
-        evm::log(Upgraded { implementation: new_implementation });
+        self.vm().log(Upgraded { implementation: new_implementation });
         Ok(())
     }
 }
@@ -257,8 +253,7 @@ mod tests {
         assert!(matches!(
             err,
             Error::InvalidImplementation(BeaconInvalidImplementation {
-                implementation,
-            }) if implementation == invalid_address
+                implementation}) if implementation == invalid_address
         ));
     }
 
@@ -276,8 +271,7 @@ mod tests {
         assert!(matches!(
             err,
             Error::InvalidOwner(ownable::OwnableInvalidOwner {
-                owner,
-            }) if owner == Address::ZERO
+                owner}) if owner == Address::ZERO
         ));
     }
 
@@ -294,8 +288,7 @@ mod tests {
         assert!(matches!(
             err,
             Error::InvalidImplementation(BeaconInvalidImplementation {
-                implementation,
-            }) if implementation == Address::ZERO
+                implementation}) if implementation == Address::ZERO
         ));
     }
 
@@ -373,8 +366,7 @@ mod tests {
         assert!(matches!(
             err,
             Error::UnauthorizedAccount(ownable::OwnableUnauthorizedAccount {
-                account,
-            }) if account == bob
+                account}) if account == bob
         ));
 
         // implementation should remain unchanged.
@@ -426,8 +418,7 @@ mod tests {
         assert!(matches!(
             err,
             Error::InvalidImplementation(BeaconInvalidImplementation {
-                implementation,
-            }) if implementation == Address::ZERO
+                implementation}) if implementation == Address::ZERO
         ));
 
         // implementation should remain unchanged.
@@ -505,8 +496,7 @@ mod tests {
         assert!(matches!(
             err,
             Error::UnauthorizedAccount(ownable::OwnableUnauthorizedAccount {
-                account,
-            }) if account == alice
+                account}) if account == alice
         ));
     }
 
@@ -528,8 +518,7 @@ mod tests {
         assert_eq!(
             err,
             Error::InvalidOwner(ownable::OwnableInvalidOwner {
-                owner: Address::ZERO,
-            })
+                owner: Address::ZERO})
             .encode()
         );
 
@@ -557,8 +546,7 @@ mod tests {
         assert_eq!(
             err,
             Error::UnauthorizedAccount(ownable::OwnableUnauthorizedAccount {
-                account: bob,
-            })
+                account: bob})
             .encode()
         );
 
@@ -594,8 +582,7 @@ mod tests {
         assert!(matches!(
             err,
             Error::UnauthorizedAccount(ownable::OwnableUnauthorizedAccount {
-                account,
-            }) if account == alice
+                account}) if account == alice
         ));
     }
 
@@ -617,8 +604,7 @@ mod tests {
         assert_eq!(
             err,
             Error::UnauthorizedAccount(ownable::OwnableUnauthorizedAccount {
-                account: bob,
-            })
+                account: bob})
             .encode()
         );
 
@@ -671,8 +657,7 @@ mod tests {
         assert!(matches!(
             err,
             Error::UnauthorizedAccount(ownable::OwnableUnauthorizedAccount {
-                account,
-            }) if account == alice
+                account}) if account == alice
         ));
 
         let err = beacon
@@ -682,8 +667,7 @@ mod tests {
         assert!(matches!(
             err,
             Error::UnauthorizedAccount(ownable::OwnableUnauthorizedAccount {
-                account,
-            }) if account == bob
+                account}) if account == bob
         ));
     }
 
@@ -710,8 +694,7 @@ mod tests {
         assert!(matches!(
             err,
             Error::UnauthorizedAccount(ownable::OwnableUnauthorizedAccount {
-                account,
-            }) if account == alice
+                account}) if account == alice
         ));
     }
 }

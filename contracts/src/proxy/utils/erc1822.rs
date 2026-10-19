@@ -2,6 +2,7 @@
 //! [ERC-1822]: <https://eips.ethereum.org/EIPS/eip-1822>.
 
 use alloc::vec::Vec;
+use stylus_sdk::prelude::public;
 
 use alloy_primitives::aliases::B256;
 use openzeppelin_stylus_proc::interface_id;
@@ -11,6 +12,7 @@ use openzeppelin_stylus_proc::interface_id;
 /// This interface documents a method for upgradeability through a simplified
 /// proxy whose upgrades are fully controlled by the current implementation.
 #[interface_id]
+#[public]
 pub trait IErc1822Proxiable {
     /// Returns the storage slot that the proxiable contract assumes is being
     /// used to store the implementation address.

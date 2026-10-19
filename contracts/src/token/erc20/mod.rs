@@ -8,17 +8,11 @@ use alloc::{vec, vec::Vec};
 
 use alloy_primitives::{aliases::B32, Address, U256};
 use openzeppelin_stylus_proc::interface_id;
-use stylus_sdk::{
-    call::MethodError,
-    evm, msg,
-    prelude::*,
-    storage::{StorageMap, StorageU256},
-};
+use stylus_sdk::{stylus_core::calls::errors::MethodError, prelude::*, storage::{StorageMap, StorageU256}};
 
 use crate::utils::{
     introspection::erc165::IErc165,
-    math::storage::{AddAssignChecked, AddAssignUnchecked, SubAssignUnchecked},
-};
+    math::storage::{AddAssignChecked, AddAssignUnchecked, SubAssignUnchecked}};
 
 pub mod extensions;
 pub mod interface;
@@ -117,8 +111,7 @@ pub enum Error {
     InvalidSpender(ERC20InvalidSpender),
     /// Indicates a failure with the `approver` of a token to be approved. Used
     /// in approvals. approver Address initiating an approval operation.
-    InvalidApprover(ERC20InvalidApprover),
-}
+    InvalidApprover(ERC20InvalidApprover)}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -135,8 +128,7 @@ pub struct Erc20 {
     pub(crate) allowances:
         StorageMap<Address, StorageMap<Address, StorageU256>>,
     /// The total supply of the token.
-    pub(crate) total_supply: StorageU256,
-}
+    pub(crate) total_supply: StorageU256}
 
 /// NOTE: Implementation of [`TopLevelStorage`] to be able use `&mut self` when
 /// calling other contracts and not `&mut (impl TopLevelStorage +
@@ -145,6 +137,7 @@ unsafe impl TopLevelStorage for Erc20 {}
 
 /// Required interface of an [`Erc20`] compliant contract.
 #[interface_id]
+#[public]
 pub trait IErc20 {
     /// The error type associated to this ERC-20 trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -293,7 +286,7 @@ impl IErc20 for Erc20 {
         to: Address,
         value: U256,
     ) -> Result<bool, Self::Error> {
-        let from = msg::sender();
+        let from = self.vm().msg_sender();
         self._transfer(from, to, value)?;
         Ok(true)
     }
@@ -307,7 +300,7 @@ impl IErc20 for Erc20 {
         spender: Address,
         value: U256,
     ) -> Result<bool, Self::Error> {
-        let owner = msg::sender();
+        let owner = self.vm().msg_sender();
         self._approve(owner, spender, value, true)
     }
 
@@ -317,7 +310,7 @@ impl IErc20 for Erc20 {
         to: Address,
         value: U256,
     ) -> Result<bool, Self::Error> {
-        let spender = msg::sender();
+        let spender = self.vm().msg_sender();
         self._spend_allowance(from, spender, value)?;
         self._transfer(from, to, value)?;
         Ok(true)
@@ -353,19 +346,17 @@ impl Erc20 {
     ) -> Result<bool, Error> {
         if owner.is_zero() {
             return Err(Error::InvalidApprover(ERC20InvalidApprover {
-                approver: Address::ZERO,
-            }));
+                approver: Address::ZERO}));
         }
 
         if spender.is_zero() {
             return Err(Error::InvalidSpender(ERC20InvalidSpender {
-                spender: Address::ZERO,
-            }));
+                spender: Address::ZERO}));
         }
 
         self.allowances.setter(owner).insert(spender, value);
         if emit_event {
-            evm::log(Approval { owner, spender, value });
+            self.vm().log(Approval { owner, spender, value });
         }
         Ok(true)
     }
@@ -397,13 +388,11 @@ impl Erc20 {
     ) -> Result<(), Error> {
         if from.is_zero() {
             return Err(Error::InvalidSender(ERC20InvalidSender {
-                sender: Address::ZERO,
-            }));
+                sender: Address::ZERO}));
         }
         if to.is_zero() {
             return Err(Error::InvalidReceiver(ERC20InvalidReceiver {
-                receiver: Address::ZERO,
-            }));
+                receiver: Address::ZERO}));
         }
 
         self._update(from, to, value)?;
@@ -433,8 +422,7 @@ impl Erc20 {
     ) -> Result<(), Error> {
         if account.is_zero() {
             return Err(Error::InvalidReceiver(ERC20InvalidReceiver {
-                receiver: Address::ZERO,
-            }));
+                receiver: Address::ZERO}));
         }
         self._update(Address::ZERO, account, value)
     }
@@ -484,8 +472,7 @@ impl Erc20 {
                     ERC20InsufficientBalance {
                         sender: from,
                         balance: from_balance,
-                        needed: value,
-                    },
+                        needed: value},
                 ));
             }
             // Overflow not possible:
@@ -505,7 +492,7 @@ impl Erc20 {
             self.balances.setter(to).add_assign_unchecked(value);
         }
 
-        evm::log(Transfer { from, to, value });
+        self.vm().log(Transfer { from, to, value });
 
         Ok(())
     }
@@ -534,8 +521,7 @@ impl Erc20 {
     ) -> Result<(), Error> {
         if account == Address::ZERO {
             return Err(Error::InvalidSender(ERC20InvalidSender {
-                sender: Address::ZERO,
-            }));
+                sender: Address::ZERO}));
         }
         self._update(account, Address::ZERO, value)
     }
@@ -572,8 +558,7 @@ impl Erc20 {
                     ERC20InsufficientAllowance {
                         spender,
                         allowance: current_allowance,
-                        needed: value,
-                    },
+                        needed: value},
                 ));
             }
 
@@ -584,6 +569,7 @@ impl Erc20 {
     }
 }
 
+#[public]
 impl IErc165 for Erc20 {
     fn supports_interface(&self, interface_id: B32) -> bool {
         <Self as IErc20>::interface_id() == interface_id
@@ -620,8 +606,7 @@ mod tests {
         contract.assert_emitted(&Transfer {
             from: Address::ZERO,
             to: alice,
-            value: one,
-        });
+            value: one});
     }
 
     #[motsu::test]
@@ -716,8 +701,7 @@ mod tests {
         contract.assert_emitted(&Transfer {
             from: alice,
             to: Address::ZERO,
-            value: one,
-        });
+            value: one});
     }
 
     #[motsu::test]
@@ -913,8 +897,7 @@ mod tests {
         contract.assert_emitted(&Approval {
             owner: alice,
             spender: bob,
-            value: one,
-        });
+            value: one});
     }
 
     #[motsu::test]

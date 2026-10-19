@@ -3,8 +3,7 @@
 use alloc::{
     string::{String, ToString},
     vec,
-    vec::Vec,
-};
+    vec::Vec};
 
 use alloy_primitives::U256;
 use openzeppelin_stylus_proc::interface_id;
@@ -12,8 +11,7 @@ use stylus_sdk::{prelude::*, storage::StorageString};
 
 use crate::{
     token::erc721::{self, IErc721},
-    utils::{introspection::erc165::IErc165, Metadata},
-};
+    utils::{introspection::erc165::IErc165, Metadata}};
 
 /// State of an [`Erc721Metadata`] contract.
 #[storage]
@@ -23,11 +21,11 @@ pub struct Erc721Metadata {
     // TODO: Remove this field once function overriding is possible. For now we
     // keep this field `pub`, since this is used to simulate overriding.
     /// Base URI for tokens.
-    pub base_uri: StorageString,
-}
+    pub base_uri: StorageString}
 
 /// Interface for the optional metadata functions from the ERC-721 standard.
 #[interface_id]
+#[public]
 pub trait IErc721Metadata: IErc165 {
     /// The error type associated to this trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -124,14 +122,12 @@ mod tests {
     use super::*;
     use crate::{
         token::erc721::{self, Erc721},
-        utils::introspection::erc165::IErc165,
-    };
+        utils::introspection::erc165::IErc165};
 
     #[storage]
     struct Erc721MetadataExample {
         erc721: Erc721,
-        metadata: Erc721Metadata,
-    }
+        metadata: Erc721Metadata}
 
     #[public]
     #[implements(IErc721Metadata<Error = erc721::Error>, IErc165)]

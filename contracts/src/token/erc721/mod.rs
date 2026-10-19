@@ -2,23 +2,16 @@
 use alloc::{
     string::{String, ToString},
     vec,
-    vec::Vec,
-};
+    vec::Vec};
 
 use alloy_primitives::{aliases::B32, uint, Address, U128, U256};
+use stylus_sdk::stylus_core::calls::errors::MethodError;
 use openzeppelin_stylus_proc::interface_id;
-use stylus_sdk::{
-    abi::Bytes,
-    call::{self, Call, MethodError},
-    evm, function_selector, msg,
-    prelude::*,
-    storage::{StorageAddress, StorageBool, StorageMap, StorageU256},
-};
+use stylus_sdk::{abi::Bytes, call, function_selector, prelude::*, storage::{StorageAddress, StorageBool, StorageMap, StorageU256}};
 
 use crate::utils::{
     introspection::erc165::IErc165,
-    math::storage::{AddAssignUnchecked, SubAssignUnchecked},
-};
+    math::storage::{AddAssignUnchecked, SubAssignUnchecked}};
 
 pub mod extensions;
 pub mod interface;
@@ -26,8 +19,7 @@ pub mod receiver;
 pub mod utils;
 
 pub use receiver::{
-    IErc721Receiver, IErc721ReceiverInterface, RECEIVER_FN_SELECTOR,
-};
+    IErc721Receiver, IErc721ReceiverInterface, RECEIVER_FN_SELECTOR};
 pub use sol::*;
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -177,8 +169,7 @@ pub enum Error {
     InvalidApprover(ERC721InvalidApprover),
     /// Indicates a failure with the `operator` to be approved. Used in
     /// approvals.
-    InvalidOperator(ERC721InvalidOperator),
-}
+    InvalidOperator(ERC721InvalidOperator)}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -197,8 +188,7 @@ pub struct Erc721 {
     pub(crate) token_approvals: StorageMap<U256, StorageAddress>,
     /// Maps owners to a mapping of operator approvals.
     pub(crate) operator_approvals:
-        StorageMap<Address, StorageMap<Address, StorageBool>>,
-}
+        StorageMap<Address, StorageMap<Address, StorageBool>>}
 
 /// NOTE: Implementation of [`TopLevelStorage`] to be able use `&mut self` when
 /// calling other contracts and not `&mut (impl TopLevelStorage +
@@ -207,6 +197,7 @@ unsafe impl TopLevelStorage for Erc721 {}
 
 /// Required interface of an [`Erc721`] compliant contract.
 #[interface_id]
+#[public]
 pub trait IErc721: IErc165 {
     /// The error type associated to this ERC-721 trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -445,7 +436,7 @@ impl IErc721 for Erc721 {
         data: Bytes,
     ) -> Result<(), Self::Error> {
         self.transfer_from(from, to, token_id)?;
-        self._check_on_erc721_received(msg::sender(), from, to, token_id, &data)
+        self._check_on_erc721_received(self.vm().msg_sender(), from, to, token_id, &data)
     }
 
     fn transfer_from(
@@ -463,13 +454,12 @@ impl IErc721 for Erc721 {
         // Setting an "auth" argument enables the `_is_authorized` check which
         // verifies that the token exists (`from != 0`). Therefore, it is
         // not needed to verify that the return value is not 0 here.
-        let previous_owner = self._update(to, token_id, msg::sender())?;
+        let previous_owner = self._update(to, token_id, self.vm().msg_sender())?;
         if previous_owner != from {
             return Err(ERC721IncorrectOwner {
                 sender: from,
                 token_id,
-                owner: previous_owner,
-            }
+                owner: previous_owner}
             .into());
         }
         Ok(())
@@ -480,7 +470,7 @@ impl IErc721 for Erc721 {
         to: Address,
         token_id: U256,
     ) -> Result<(), Self::Error> {
-        self._approve(to, token_id, msg::sender(), true)
+        self._approve(to, token_id, self.vm().msg_sender(), true)
     }
 
     fn set_approval_for_all(
@@ -488,7 +478,7 @@ impl IErc721 for Erc721 {
         operator: Address,
         approved: bool,
     ) -> Result<(), Self::Error> {
-        self._set_approval_for_all(msg::sender(), operator, approved)
+        self._set_approval_for_all(self.vm().msg_sender(), operator, approved)
     }
 
     fn get_approved(&self, token_id: U256) -> Result<Address, Self::Error> {
@@ -681,7 +671,7 @@ impl Erc721 {
         }
 
         self.owners.setter(token_id).set(to);
-        evm::log(Transfer { from, to, token_id });
+        self.vm().log(Transfer { from, to, token_id });
         Ok(from)
     }
 
@@ -751,7 +741,7 @@ impl Erc721 {
     ) -> Result<(), Error> {
         self._mint(to, token_id)?;
         self._check_on_erc721_received(
-            msg::sender(),
+            self.vm().msg_sender(),
             Address::ZERO,
             to,
             token_id,
@@ -826,8 +816,7 @@ impl Erc721 {
             return Err(ERC721IncorrectOwner {
                 sender: from,
                 token_id,
-                owner: previous_owner,
-            }
+                owner: previous_owner}
             .into());
         }
 
@@ -871,7 +860,7 @@ impl Erc721 {
         data: &Bytes,
     ) -> Result<(), Error> {
         self._transfer(from, to, token_id)?;
-        self._check_on_erc721_received(msg::sender(), from, to, token_id, data)
+        self._check_on_erc721_received(self.vm().msg_sender(), from, to, token_id, data)
     }
 
     /// Approve `to` to operate on `token_id`.
@@ -918,7 +907,7 @@ impl Erc721 {
             }
 
             if emit_event {
-                evm::log(Approval { owner, approved: to, token_id });
+                self.vm().log(Approval { owner, approved: to, token_id });
             }
         }
 
@@ -953,7 +942,7 @@ impl Erc721 {
         }
 
         self.operator_approvals.setter(owner).setter(operator).set(approved);
-        evm::log(ApprovalForAll { owner, operator, approved });
+        self.vm().log(ApprovalForAll { owner, operator, approved });
         Ok(())
     }
 
@@ -982,7 +971,7 @@ impl Erc721 {
     /// Performs an acceptance check for the provided `operator` by calling
     /// [`IErc721Receiver::on_erc721_received`] on the `to` address. The
     /// `operator` is generally the address that initiated the token transfer
-    /// (i.e. `msg::sender()`).
+    /// (i.e. `self.vm().msg_sender()`).
     ///
     /// The acceptance call is not executed and treated as a no-op if the
     /// target address doesn't contain code (i.e. an EOA). Otherwise, the
@@ -1031,13 +1020,12 @@ impl Erc721 {
         let id = match result {
             Ok(id) => id,
             Err(e) => {
-                if let call::Error::Revert(ref reason) = e {
+                if let stylus_sdk::stylus_core::calls::errors::Error::Revert(ref reason) = e {
                     if !reason.is_empty() {
                         return Err(Error::InvalidReceiverWithReason(
                             InvalidReceiverWithReason {
                                 reason: String::from_utf8_lossy(reason)
-                                    .to_string(),
-                            },
+                                    .to_string()},
                         ));
                     }
                 }
@@ -1066,8 +1054,7 @@ mod tests {
         ERC721IncorrectOwner, ERC721InsufficientApproval,
         ERC721InvalidApprover, ERC721InvalidOperator, ERC721InvalidOwner,
         ERC721InvalidReceiver, ERC721InvalidSender, ERC721NonexistentToken,
-        Erc721, Error, IErc721,
-    };
+        Erc721, Error, IErc721};
     use crate::utils::introspection::erc165::IErc165;
 
     const TOKEN_ID: U256 = uint!(1_U256);
@@ -1406,8 +1393,7 @@ mod tests {
             err,
             Error::InsufficientApproval(ERC721InsufficientApproval {
                     operator,
-                    token_id: t_id,
-            }) if operator == alice && t_id == TOKEN_ID
+                    token_id: t_id}) if operator == alice && t_id == TOKEN_ID
         ));
     }
 
@@ -1424,8 +1410,7 @@ mod tests {
         assert!(matches!(
             err,
             Error::NonexistentToken(ERC721NonexistentToken {
-                    token_id: t_id,
-            }) if t_id == TOKEN_ID
+                    token_id: t_id}) if t_id == TOKEN_ID
         ));
     }
 
@@ -1606,8 +1591,7 @@ mod tests {
         assert!(matches!(
             err,
             Error::NonexistentToken(ERC721NonexistentToken {
-                token_id: t_id,
-            }) if t_id == TOKEN_ID
+                token_id: t_id}) if t_id == TOKEN_ID
         ));
     }
 
@@ -1805,8 +1789,7 @@ mod tests {
             err,
             Error::InsufficientApproval(ERC721InsufficientApproval {
                 operator,
-                token_id: t_id,
-            }) if operator == alice && t_id == TOKEN_ID
+                token_id: t_id}) if operator == alice && t_id == TOKEN_ID
         ));
     }
 
@@ -1828,8 +1811,7 @@ mod tests {
         assert!(matches!(
             err,
             Error::NonexistentToken(ERC721NonexistentToken {
-                token_id: t_id,
-            }) if t_id == TOKEN_ID
+                token_id: t_id}) if t_id == TOKEN_ID
         ));
     }
 
@@ -2413,8 +2395,7 @@ mod tests {
         assert!(matches!(
             err,
             Error::NonexistentToken(ERC721NonexistentToken {
-                token_id: t_id,
-            }) if t_id == TOKEN_ID
+                token_id: t_id}) if t_id == TOKEN_ID
         ));
     }
 
@@ -2581,8 +2562,7 @@ mod tests {
         assert!(matches!(
             err,
             Error::NonexistentToken(ERC721NonexistentToken {
-                token_id: t_id,
-            }) if t_id == TOKEN_ID
+                token_id: t_id}) if t_id == TOKEN_ID
         ));
     }
 

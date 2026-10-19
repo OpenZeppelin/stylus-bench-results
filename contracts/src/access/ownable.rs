@@ -13,9 +13,7 @@ use alloc::{vec, vec::Vec};
 use alloy_primitives::{aliases::B32, Address};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
-use stylus_sdk::{
-    call::MethodError, evm, msg, prelude::*, storage::StorageAddress,
-};
+use stylus_sdk::{stylus_core::calls::errors::MethodError, prelude::*, storage::StorageAddress};
 
 use crate::utils::introspection::erc165::IErc165;
 
@@ -55,8 +53,7 @@ pub enum Error {
     /// The caller account is not authorized to perform an operation.
     UnauthorizedAccount(OwnableUnauthorizedAccount),
     /// The owner is not a valid owner account. (eg. [`Address::ZERO`])
-    InvalidOwner(OwnableInvalidOwner),
-}
+    InvalidOwner(OwnableInvalidOwner)}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -68,11 +65,11 @@ impl MethodError for Error {
 #[storage]
 pub struct Ownable {
     /// The current owner of this contract.
-    pub(crate) owner: StorageAddress,
-}
+    pub(crate) owner: StorageAddress}
 
 /// Interface for an [`Ownable`] contract.
 #[interface_id]
+#[public]
 pub trait IOwnable {
     /// Returns the address of the current owner.
     ///
@@ -138,8 +135,7 @@ impl Ownable {
     pub fn constructor(&mut self, initial_owner: Address) -> Result<(), Error> {
         if initial_owner.is_zero() {
             return Err(Error::InvalidOwner(OwnableInvalidOwner {
-                owner: Address::ZERO,
-            }));
+                owner: Address::ZERO}));
         }
         self._transfer_ownership(initial_owner);
         Ok(())
@@ -198,8 +194,7 @@ impl Ownable {
 
         if new_owner.is_zero() {
             return Err(Error::InvalidOwner(OwnableInvalidOwner {
-                owner: Address::ZERO,
-            }));
+                owner: Address::ZERO}));
         }
 
         self._transfer_ownership(new_owner);
@@ -244,7 +239,7 @@ impl Ownable {
     /// * [`Error::UnauthorizedAccount`] - If called by any account other than
     ///   the owner.
     pub fn only_owner(&self) -> Result<(), Error> {
-        let account = msg::sender();
+        let account = self.vm().msg_sender();
         if self.owner() != account {
             return Err(Error::UnauthorizedAccount(
                 OwnableUnauthorizedAccount { account },
@@ -268,7 +263,7 @@ impl Ownable {
     pub fn _transfer_ownership(&mut self, new_owner: Address) {
         let previous_owner = self.owner.get();
         self.owner.set(new_owner);
-        evm::log(OwnershipTransferred { previous_owner, new_owner });
+        self.vm().log(OwnershipTransferred { previous_owner, new_owner });
     }
 }
 
@@ -299,8 +294,7 @@ mod tests {
 
         contract.assert_emitted(&OwnershipTransferred {
             previous_owner: Address::ZERO,
-            new_owner: alice,
-        });
+            new_owner: alice});
     }
 
     #[motsu::test]
@@ -334,8 +328,7 @@ mod tests {
 
         contract.assert_emitted(&OwnershipTransferred {
             previous_owner: alice,
-            new_owner: bob,
-        });
+            new_owner: bob});
     }
 
     #[motsu::test]
@@ -381,8 +374,7 @@ mod tests {
 
         contract.assert_emitted(&OwnershipTransferred {
             previous_owner: alice,
-            new_owner: Address::ZERO,
-        });
+            new_owner: Address::ZERO});
     }
 
     #[motsu::test]

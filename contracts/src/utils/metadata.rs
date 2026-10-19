@@ -9,8 +9,7 @@ pub struct Metadata {
     /// Token name.
     pub(crate) name: StorageString,
     /// Token symbol.
-    pub(crate) symbol: StorageString,
-}
+    pub(crate) symbol: StorageString}
 
 #[public]
 impl Metadata {

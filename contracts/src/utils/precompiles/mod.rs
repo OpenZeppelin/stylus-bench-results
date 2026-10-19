@@ -24,8 +24,7 @@ pub mod primitives {
     pub mod ecrecover {
         pub use crate::utils::cryptography::ecdsa::{
             ECDSAInvalidSignature, ECDSAInvalidSignatureS, EcRecoverData,
-            Error, ECRECOVER_ADDR, SIGNATURE_S_UPPER_BOUND,
-        };
+            Error, ECRECOVER_ADDR, SIGNATURE_S_UPPER_BOUND};
     }
 }
 

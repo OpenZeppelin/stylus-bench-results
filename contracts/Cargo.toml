@@ -12,15 +12,13 @@ version.workspace = true
 alloy-primitives.workspace = true
 alloy-sol-types.workspace = true
 alloy-sol-macro.workspace = true
-alloy-sol-macro-expander.workspace = true
-alloy-sol-macro-input.workspace = true
 stylus-sdk.workspace = true
 keccak-const.workspace = true
 openzeppelin-stylus-proc.workspace = true
 
 [dev-dependencies]
 alloy-primitives = { workspace = true, features = ["arbitrary"] }
-motsu.workspace = true
+stylus-sdk = { workspace = true, features = ["stylus-test"] }
 
 [features]
 reentrant = ["stylus-sdk/reentrant"]

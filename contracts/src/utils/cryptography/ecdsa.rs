@@ -3,13 +3,11 @@
 //! These functions can be used to verify that a message was signed
 //! by the holder of the private keys of a given address.
 use alloc::vec::Vec;
+use stylus_sdk::stylus_core::calls::errors::MethodError;
 
 use alloy_primitives::{address, uint, Address, B256, U256};
 use alloy_sol_types::SolType;
-use stylus_sdk::{
-    call::{self, MethodError, StaticCallContext},
-    prelude::*,
-};
+use stylus_sdk::{call, prelude::*};
 
 /// Address of the `ecRecover` EVM precompile.
 pub const ECRECOVER_ADDR: Address =
@@ -61,8 +59,7 @@ pub enum Error {
     /// The signature derives the [`Address::ZERO`].
     InvalidSignature(ECDSAInvalidSignature),
     /// The signature has an `S` value that is in the upper half order.
-    InvalidSignatureS(ECDSAInvalidSignatureS),
-}
+    InvalidSignatureS(ECDSAInvalidSignatureS)}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {

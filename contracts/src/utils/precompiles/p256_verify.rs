@@ -1,6 +1,6 @@
 use alloy_primitives::{address, uint, Address, B256, U256};
 use alloy_sol_types::SolValue;
-use stylus_sdk::call::{self, StaticCallContext};
+use stylus_sdk::{call, stylus_core::StaticCallContext};
 
 /// Address of the `P256VERIFY` EVM precompile as per [RIP-7212].
 ///

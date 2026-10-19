@@ -17,9 +17,7 @@
 use alloc::{vec, vec::Vec};
 
 pub use sol::*;
-use stylus_sdk::{
-    call::MethodError, evm, msg, prelude::*, storage::StorageBool,
-};
+use stylus_sdk::{stylus_core::calls::errors::MethodError, prelude::*, storage::StorageBool};
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -60,8 +58,7 @@ pub enum Error {
     EnforcedPause(EnforcedPause),
     /// Indicates an error related to the operation that failed
     /// because the contract had been in `Unpaused` state.
-    ExpectedPause(ExpectedPause),
-}
+    ExpectedPause(ExpectedPause)}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -73,10 +70,10 @@ impl MethodError for Error {
 #[storage]
 pub struct Pausable {
     /// Indicates whether the contract is `Paused`.
-    pub(crate) paused: StorageBool,
-}
+    pub(crate) paused: StorageBool}
 
 /// Pausable interface.
+#[public]
 pub trait IPausable {
     /// Returns true if the contract is paused, and false otherwise.
     ///
@@ -110,7 +107,7 @@ impl Pausable {
     pub fn pause(&mut self) -> Result<(), Error> {
         self.when_not_paused()?;
         self.paused.set(true);
-        evm::log(Paused { account: msg::sender() });
+        self.vm().log(Paused { account: self.vm().msg_sender() });
         Ok(())
     }
 
@@ -126,7 +123,7 @@ impl Pausable {
     pub fn unpause(&mut self) -> Result<(), Error> {
         self.when_paused()?;
         self.paused.set(false);
-        evm::log(Unpaused { account: msg::sender() });
+        self.vm().log(Unpaused { account: self.vm().msg_sender() });
         Ok(())
     }
 

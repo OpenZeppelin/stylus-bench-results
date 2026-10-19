@@ -20,14 +20,10 @@
 pub use alloc::{string::String, vec, vec::Vec};
 
 use alloy_primitives::{aliases::B256, uint, Address, U256, U32};
+use stylus_sdk::stylus_core::calls::errors::MethodError;
 use alloy_sol_types::SolCall;
 pub use sol::*;
-use stylus_sdk::{
-    abi::Bytes,
-    call::{Call, MethodError},
-    prelude::*,
-    storage::{StorageBool, StorageU32},
-};
+use stylus_sdk::{abi::Bytes, prelude::*, storage::{StorageBool, StorageU32}};
 
 use crate::{
     proxy::{
@@ -36,16 +32,11 @@ use crate::{
             utils::{
                 ERC1967InvalidAdmin, ERC1967InvalidBeacon,
                 ERC1967InvalidImplementation, ERC1967NonPayable, Erc1967Utils,
-                IMPLEMENTATION_SLOT,
-            },
-        },
-        utils::erc1822::{Erc1822ProxiableInterface, IErc1822Proxiable},
-    },
+                IMPLEMENTATION_SLOT}},
+        utils::erc1822::{Erc1822ProxiableInterface, IErc1822Proxiable}},
     utils::{
         address::{self, AddressUtils},
-        storage_slot::StorageSlot,
-    },
-};
+        storage_slot::StorageSlot}};
 
 /// The version of the upgrade interface of the contract.
 pub const UPGRADE_INTERFACE_VERSION: &str = "5.0.0";
@@ -133,7 +124,7 @@ pub enum Error {
     /// of the proxy is invalid.
     InvalidBeacon(ERC1967InvalidBeacon),
     /// Indicates an error related to the fact that an upgrade function
-    /// sees [`stylus_sdk::msg::value()`] > [`alloy_primitives::U256::ZERO`]
+    /// sees [`stylus_sdk::self.vm().msg_value()`] > [`alloy_primitives::U256::ZERO`]
     /// that may be lost.
     NonPayable(ERC1967NonPayable),
     /// There's no code at `target` (it is not a contract).
@@ -148,8 +139,7 @@ pub enum Error {
     InvalidInitialization(InvalidInitialization),
     /// Indicates an error related to the fact that the version is not greater
     /// than the current version.
-    InvalidVersion(InvalidVersion),
-}
+    InvalidVersion(InvalidVersion)}
 
 impl From<erc1967::utils::Error> for Error {
     fn from(e: erc1967::utils::Error) -> Self {
@@ -182,6 +172,7 @@ unsafe impl TopLevelStorage for UUPSUpgradeable {}
 
 /// Interface for a UUPS (Universal Upgradeable Proxy Standard) upgradeable
 /// contract.
+#[public]
 pub trait IUUPSUpgradeable: IErc1822Proxiable {
     /// Returns the version of the upgrade interface of the contract.
     ///
@@ -343,8 +334,7 @@ pub trait IUUPSUpgradeable: IErc1822Proxiable {
 #[storage]
 pub struct UUPSUpgradeable {
     /// Logic version number stored in the proxy contract.
-    pub version: StorageU32,
-}
+    pub version: StorageU32}
 
 #[public]
 #[implements(IUUPSUpgradeable, IErc1822Proxiable)]
@@ -388,8 +378,7 @@ impl UUPSUpgradeable {
         }
         if self.version.get() > VERSION_NUMBER {
             return Err(Error::InvalidVersion(InvalidVersion {
-                current_version: self.version.get().to(),
-            }));
+                current_version: self.version.get().to()}));
         }
 
         self.version.set(VERSION_NUMBER);
@@ -580,8 +569,7 @@ impl UUPSUpgradeable {
             .proxiable_uuid(Call::new_in(self))
             .map_err(|_e| {
                 Error::InvalidImplementation(ERC1967InvalidImplementation {
-                    implementation: new_implementation,
-                })
+                    implementation: new_implementation})
             })?;
 
         if slot == IMPLEMENTATION_SLOT {
@@ -589,8 +577,7 @@ impl UUPSUpgradeable {
                 .map_err(Error::from)
         } else {
             Err(Error::UnsupportedProxiableUUID(UUPSUnsupportedProxiableUUID {
-                slot,
-            }))
+                slot}))
         }
     }
 }
@@ -617,14 +604,12 @@ mod tests {
         use super::*;
         use crate::{
             proxy::{self, erc1967::Erc1967Proxy, IProxy},
-            token::erc20::{Erc20, IErc20},
-        };
+            token::erc20::{Erc20, IErc20}};
 
         #[entrypoint]
         #[storage]
         pub struct Erc1967ProxyExample {
-            erc1967: Erc1967Proxy,
-        }
+            erc1967: Erc1967Proxy}
 
         #[public]
         impl Erc1967ProxyExample {
@@ -650,8 +635,7 @@ mod tests {
         #[storage]
         pub struct UUPSErc20Example {
             erc20: Erc20,
-            uups: UUPSUpgradeable,
-        }
+            uups: UUPSUpgradeable}
 
         #[public]
         #[implements(IErc20<Error = erc20::Error>, IUUPSUpgradeable, IErc1822Proxiable)]
@@ -858,8 +842,7 @@ mod tests {
         proxy.assert_emitted(&erc20::Transfer {
             from: Address::ZERO,
             to: alice,
-            value: amount,
-        });
+            value: amount});
 
         // check that the balance can be accurately fetched through the proxy.
         let balance = proxy
@@ -886,8 +869,7 @@ mod tests {
         proxy.assert_emitted(&erc20::Transfer {
             from: alice,
             to: bob,
-            value: amount,
-        });
+            value: amount});
 
         let balance = proxy
             .sender(alice)

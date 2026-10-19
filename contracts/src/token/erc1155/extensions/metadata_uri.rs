@@ -35,11 +35,11 @@ mod sol {
 pub struct Erc1155MetadataUri {
     /// Used as the URI for all token types by relying on ID substitution,
     /// e.g. <https://token-cdn-domain/{id}.json>.
-    pub(crate) uri: StorageString,
-}
+    pub(crate) uri: StorageString}
 
 /// Interface for the optional metadata functions from the ERC-1155 standard.
 #[interface_id]
+#[public]
 pub trait IErc1155MetadataUri {
     /// Returns the URI for token type `id`.
     ///
@@ -89,10 +89,7 @@ impl IErc165 for Erc1155MetadataUri {
 #[cfg(test)]
 mod tests {
     use motsu::prelude::Contract;
-    use stylus_sdk::{
-        alloy_primitives::{uint, Address},
-        prelude::*,
-    };
+    use stylus_sdk::{alloy_primitives::{uint, Address}, prelude::*};
 
     use super::*;
 

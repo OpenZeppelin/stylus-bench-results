@@ -13,10 +13,7 @@ use alloc::{vec, vec::Vec};
 
 use alloy_primitives::U256;
 pub use element::{Accessor, Element};
-use stylus_sdk::{
-    prelude::*,
-    storage::{StorageMap, StorageType, StorageU256, StorageVec},
-};
+use stylus_sdk::{prelude::*, storage::{StorageMap, StorageType, StorageU256, StorageVec}};
 
 /// State of an [`EnumerableSet`] contract.
 #[storage]
@@ -25,8 +22,7 @@ pub struct EnumerableSet<T: Element> {
     values: StorageVec<T::StorageElement>,
     /// Position is the index of the value in the `values` array plus 1.
     /// Position 0 is used to mean a value is not in the set.
-    positions: StorageMap<T, StorageU256>,
-}
+    positions: StorageMap<T, StorageU256>}
 
 impl<T: Element> EnumerableSet<T> {
     /// Adds a value to a set.
@@ -253,8 +249,7 @@ impl<T: Element> EnumerableSet<T> {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use alloy_primitives::{
-        uint, Address, B256, U128, U16, U256, U32, U64, U8,
-    };
+        uint, Address, B256, U128, U16, U256, U32, U64, U8};
 
     use super::*;
 

@@ -1,5 +1,6 @@
 //! Solidity Interface of [`BeaconProxy`].
 use alloc::vec::Vec;
+use stylus_sdk::prelude::public;
 
 use alloy_primitives::Address;
 
@@ -13,6 +14,7 @@ pub use upgradeable::{Error, IUpgradeableBeacon, UpgradeableBeacon};
 
 /// This is the interface that [`BeaconProxy`] expects of its beacon.
 #[interface_id]
+#[public]
 pub trait IBeacon {
     /// Must return an address that can be used as a delegate call target.
     ///
