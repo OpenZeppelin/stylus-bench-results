@@ -2,16 +2,24 @@
 use alloc::{
     string::{String, ToString},
     vec,
-    vec::Vec};
+    vec::Vec,
+};
 
 use alloy_primitives::{aliases::B32, uint, Address, U128, U256};
-use stylus_sdk::stylus_core::calls::errors::MethodError;
 use openzeppelin_stylus_proc::interface_id;
-use stylus_sdk::{abi::Bytes, call, function_selector, prelude::*, storage::{StorageAddress, StorageBool, StorageMap, StorageU256}};
+use stylus_sdk::{
+    abi::Bytes,
+    function_selector,
+    prelude::*,
+    storage::{StorageAddress, StorageBool, StorageMap, StorageU256},
+    stylus_core::calls::errors::{Error as CallError, MethodError},
+};
 
 use crate::utils::{
+    address::AddressUtils,
     introspection::erc165::IErc165,
-    math::storage::{AddAssignUnchecked, SubAssignUnchecked}};
+    math::storage::{AddAssignUnchecked, SubAssignUnchecked},
+};
 
 pub mod extensions;
 pub mod interface;
@@ -19,7 +27,8 @@ pub mod receiver;
 pub mod utils;
 
 pub use receiver::{
-    IErc721Receiver, IErc721ReceiverInterface, RECEIVER_FN_SELECTOR};
+    IErc721Receiver, IErc721ReceiverInterface, RECEIVER_FN_SELECTOR,
+};
 pub use sol::*;
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -169,7 +178,8 @@ pub enum Error {
     InvalidApprover(ERC721InvalidApprover),
     /// Indicates a failure with the `operator` to be approved. Used in
     /// approvals.
-    InvalidOperator(ERC721InvalidOperator)}
+    InvalidOperator(ERC721InvalidOperator),
+}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -188,7 +198,8 @@ pub struct Erc721 {
     pub(crate) token_approvals: StorageMap<U256, StorageAddress>,
     /// Maps owners to a mapping of operator approvals.
     pub(crate) operator_approvals:
-        StorageMap<Address, StorageMap<Address, StorageBool>>}
+        StorageMap<Address, StorageMap<Address, StorageBool>>,
+}
 
 /// NOTE: Implementation of [`TopLevelStorage`] to be able use `&mut self` when
 /// calling other contracts and not `&mut (impl TopLevelStorage +
@@ -198,6 +209,8 @@ unsafe impl TopLevelStorage for Erc721 {}
 /// Required interface of an [`Erc721`] compliant contract.
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented marker method to the trait.
+#[allow(missing_docs)]
 pub trait IErc721: IErc165 {
     /// The error type associated to this ERC-721 trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -361,7 +374,7 @@ pub trait IErc721: IErc165 {
     /// * `operator` - Account to add to the set of authorized operators.
     /// * `approved` - Flag that determines whether or not permission will be
     ///   granted to `operator`. If true, this means `operator` will be allowed
-    ///   to manage `msg::sender`'s assets.
+    ///   to manage the caller's assets.
     ///
     /// # Errors
     ///
@@ -436,7 +449,13 @@ impl IErc721 for Erc721 {
         data: Bytes,
     ) -> Result<(), Self::Error> {
         self.transfer_from(from, to, token_id)?;
-        self._check_on_erc721_received(self.vm().msg_sender(), from, to, token_id, &data)
+        self._check_on_erc721_received(
+            self.vm().msg_sender(),
+            from,
+            to,
+            token_id,
+            &data,
+        )
     }
 
     fn transfer_from(
@@ -454,12 +473,14 @@ impl IErc721 for Erc721 {
         // Setting an "auth" argument enables the `_is_authorized` check which
         // verifies that the token exists (`from != 0`). Therefore, it is
         // not needed to verify that the return value is not 0 here.
-        let previous_owner = self._update(to, token_id, self.vm().msg_sender())?;
+        let previous_owner =
+            self._update(to, token_id, self.vm().msg_sender())?;
         if previous_owner != from {
             return Err(ERC721IncorrectOwner {
                 sender: from,
                 token_id,
-                owner: previous_owner}
+                owner: previous_owner,
+            }
             .into());
         }
         Ok(())
@@ -779,7 +800,7 @@ impl Erc721 {
     /// Transfers `token_id` from `from` to `to`.
     ///
     /// As opposed to [`Self::transfer_from`], this imposes no restrictions on
-    /// `msg::sender`.
+    /// the message sender (`self.vm().msg_sender()`).
     ///
     /// # Arguments
     ///
@@ -816,7 +837,8 @@ impl Erc721 {
             return Err(ERC721IncorrectOwner {
                 sender: from,
                 token_id,
-                owner: previous_owner}
+                owner: previous_owner,
+            }
             .into());
         }
 
@@ -860,7 +882,13 @@ impl Erc721 {
         data: &Bytes,
     ) -> Result<(), Error> {
         self._transfer(from, to, token_id)?;
-        self._check_on_erc721_received(self.vm().msg_sender(), from, to, token_id, data)
+        self._check_on_erc721_received(
+            self.vm().msg_sender(),
+            from,
+            to,
+            token_id,
+            data,
+        )
     }
 
     /// Approve `to` to operate on `token_id`.
@@ -1003,13 +1031,14 @@ impl Erc721 {
         token_id: U256,
         data: &Bytes,
     ) -> Result<(), Error> {
-        if !to.has_code() {
+        if !AddressUtils::has_code(self, to) {
             return Ok(());
         }
 
         let receiver = IErc721ReceiverInterface::new(to);
-        let call = Call::new_in(self);
+        let call = Call::new_mutating(self);
         let result = receiver.on_erc_721_received(
+            self.vm(),
             call,
             operator,
             from,
@@ -1020,12 +1049,13 @@ impl Erc721 {
         let id = match result {
             Ok(id) => id,
             Err(e) => {
-                if let stylus_sdk::stylus_core::calls::errors::Error::Revert(ref reason) = e {
+                if let CallError::Revert(ref reason) = e {
                     if !reason.is_empty() {
                         return Err(Error::InvalidReceiverWithReason(
                             InvalidReceiverWithReason {
                                 reason: String::from_utf8_lossy(reason)
-                                    .to_string()},
+                                    .to_string(),
+                            },
                         ));
                     }
                 }
@@ -1054,7 +1084,8 @@ mod tests {
         ERC721IncorrectOwner, ERC721InsufficientApproval,
         ERC721InvalidApprover, ERC721InvalidOperator, ERC721InvalidOwner,
         ERC721InvalidReceiver, ERC721InvalidSender, ERC721NonexistentToken,
-        Erc721, Error, IErc721};
+        Erc721, Error, IErc721,
+    };
     use crate::utils::introspection::erc165::IErc165;
 
     const TOKEN_ID: U256 = uint!(1_U256);

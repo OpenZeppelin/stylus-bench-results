@@ -21,22 +21,30 @@ use alloc::{vec, vec::Vec};
 
 use alloy_primitives::{
     aliases::{B32, U96},
-    uint, Address, U256};
-use stylus_sdk::{abi::Bytes, stylus_core::calls::errors::MethodError, prelude::*};
+    uint, Address, U256,
+};
+use stylus_sdk::{
+    abi::Bytes, prelude::*, stylus_core::calls::errors::MethodError,
+};
 
 use crate::{
     token::erc721::{
         self, Approval, ERC721IncorrectOwner, ERC721InsufficientApproval,
         ERC721InvalidApprover, ERC721InvalidOperator, ERC721InvalidOwner,
         ERC721InvalidReceiver, ERC721InvalidSender, ERC721NonexistentToken,
-        Erc721, IErc721, InvalidReceiverWithReason, Transfer},
+        Erc721, IErc721, InvalidReceiverWithReason, Transfer,
+    },
     utils::{
         introspection::erc165::IErc165,
         math::storage::{AddAssignUnchecked, SubAssignUnchecked},
         structs::{
             bitmap::BitMap,
             checkpoints::{
-                self, CheckpointUnorderedInsertion, Size, Trace, S160}}}};
+                self, CheckpointUnorderedInsertion, Size, Trace, S160,
+            },
+        },
+    },
+};
 
 type StorageU96 = <S160 as Size>::KeyStorage;
 
@@ -125,7 +133,8 @@ pub enum Error {
     /// Individual minting is not allowed.
     ForbiddenMint(ERC721ForbiddenMint),
     /// Batch burn is not supported.
-    ForbiddenBatchBurn(ERC721ForbiddenBatchBurn)}
+    ForbiddenBatchBurn(ERC721ForbiddenBatchBurn),
+}
 
 impl From<erc721::Error> for Error {
     fn from(value: erc721::Error) -> Self {
@@ -142,7 +151,8 @@ impl From<erc721::Error> for Error {
                 Error::InsufficientApproval(e)
             }
             erc721::Error::InvalidApprover(e) => Error::InvalidApprover(e),
-            erc721::Error::InvalidOperator(e) => Error::InvalidOperator(e)}
+            erc721::Error::InvalidOperator(e) => Error::InvalidOperator(e),
+        }
     }
 }
 
@@ -183,7 +193,8 @@ pub struct Erc721Consecutive {
     /// limit stress on off-chain indexing services that have to record one
     /// entry per token, and have protections against "unreasonably large"
     /// batches of tokens.
-    pub max_batch_size: StorageU96}
+    pub max_batch_size: StorageU96,
+}
 
 /// NOTE: Implementation of [`TopLevelStorage`] to be able use `&mut self` when
 /// calling other contracts and not `&mut (impl TopLevelStorage +
@@ -248,12 +259,14 @@ impl IErc721 for Erc721Consecutive {
         // Setting an "auth" argument enables the `_is_authorized` check which
         // verifies that the token exists (`!from.is_zero()`). Therefore, it is
         // not needed to verify that the return value is not 0 here.
-        let previous_owner = self._update(to, token_id, self.vm().msg_sender())?;
+        let previous_owner =
+            self._update(to, token_id, self.vm().msg_sender())?;
         if previous_owner != from {
             return Err(erc721::Error::IncorrectOwner(ERC721IncorrectOwner {
                 sender: from,
                 token_id,
-                owner: previous_owner})
+                owner: previous_owner,
+            })
             .into());
         }
         Ok(())
@@ -378,7 +391,8 @@ impl Erc721Consecutive {
             if batch_size > self._max_batch_size() {
                 return Err(ERC721ExceededMaxBatchMint {
                     batch_size: U256::from(batch_size),
-                    max_batch: U256::from(self._max_batch_size())}
+                    max_batch: U256::from(self._max_batch_size()),
+                }
                 .into());
             }
 
@@ -398,7 +412,8 @@ impl Erc721Consecutive {
                 from_token_id: next.to::<U256>(),
                 to_token_id: last.to::<U256>(),
                 from_address: Address::ZERO,
-                to_address: to});
+                to_address: to,
+            });
         }
         Ok(next)
     }
@@ -456,7 +471,8 @@ impl Erc721Consecutive {
     fn _next_consecutive_id(&self) -> U96 {
         match self.sequential_ownership.latest_checkpoint() {
             None => self._first_consecutive_id(),
-            Some((latest_id, _)) => latest_id + uint!(1_U96)}
+            Some((latest_id, _)) => latest_id + uint!(1_U96),
+        }
     }
 
     /// Used to offset the first token id in
@@ -559,7 +575,8 @@ impl Erc721Consecutive {
         let previous_owner = self._update(to, token_id, Address::ZERO)?;
         if !previous_owner.is_zero() {
             return Err(erc721::Error::InvalidSender(ERC721InvalidSender {
-                sender: Address::ZERO})
+                sender: Address::ZERO,
+            })
             .into());
         }
         Ok(())
@@ -638,7 +655,7 @@ impl Erc721Consecutive {
     /// Transfers `token_id` from `from` to `to`.
     ///
     /// As opposed to [`Self::transfer_from`], this imposes no restrictions on
-    /// `msg::sender`.
+    /// the message sender (`self.vm().msg_sender()`).
     ///
     /// # Arguments
     ///
@@ -680,7 +697,8 @@ impl Erc721Consecutive {
             return Err(erc721::Error::IncorrectOwner(ERC721IncorrectOwner {
                 sender: from,
                 token_id,
-                owner: previous_owner})
+                owner: previous_owner,
+            })
             .into());
         }
 

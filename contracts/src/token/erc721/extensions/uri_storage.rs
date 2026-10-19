@@ -5,12 +5,16 @@ use alloc::{string::String, vec, vec::Vec};
 
 use alloy_primitives::U256;
 pub use sol::*;
-use stylus_sdk::{prelude::*, storage::{StorageMap, StorageString}};
+use stylus_sdk::{
+    prelude::*,
+    storage::{StorageMap, StorageString},
+};
 
 use crate::token::erc721::{
     self,
     extensions::{Erc721Metadata, IErc721Metadata},
-    IErc721};
+    IErc721,
+};
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -38,11 +42,14 @@ mod sol {
 #[storage]
 pub struct Erc721UriStorage {
     /// Optional mapping for token URIs.
-    pub token_uris: StorageMap<U256, StorageString>}
+    pub token_uris: StorageMap<U256, StorageString>,
+}
 
 /// Interface of an optional extension ERC-721 token providing storage based
 /// token URI management.
 #[public]
+// The `#[public]` macro adds an undocumented marker method to the trait.
+#[allow(missing_docs)]
 pub trait IErc721UriStorage: IErc721Metadata {}
 
 impl Erc721UriStorage {
@@ -100,7 +107,8 @@ mod tests {
     use super::*;
     use crate::{
         token::erc721::{self, extensions::Erc721Metadata, Erc721},
-        utils::introspection::erc165::IErc165};
+        utils::introspection::erc165::IErc165,
+    };
     const TOKEN_ID: U256 = uint!(1_U256);
     use alloy_primitives::aliases::B32;
 
@@ -108,7 +116,8 @@ mod tests {
     struct Erc721MetadataExample {
         pub erc721: Erc721,
         pub metadata: Erc721Metadata,
-        pub uri_storage: Erc721UriStorage}
+        pub uri_storage: Erc721UriStorage,
+    }
 
     #[public]
     #[implements(IErc721Metadata<Error = erc721::Error>, IErc165)]

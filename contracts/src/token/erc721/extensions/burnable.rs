@@ -3,13 +3,15 @@ use alloc::vec::Vec;
 
 use alloy_primitives::{Address, U256};
 use openzeppelin_stylus_proc::interface_id;
-use stylus_sdk::{prelude::*};
+use stylus_sdk::prelude::*;
 
 use crate::token::erc721::{self, Erc721};
 
 /// An [`Erc721`] token that can be burned (destroyed).
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented marker method to the trait.
+#[allow(missing_docs)]
 pub trait IErc721Burnable {
     /// The error type associated to this trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -56,7 +58,8 @@ mod tests {
     use super::*;
     use crate::token::erc721::{
         ERC721InsufficientApproval, ERC721NonexistentToken, Erc721, Error,
-        IErc721};
+        IErc721,
+    };
 
     const TOKEN_ID: U256 = uint!(1_U256);
 

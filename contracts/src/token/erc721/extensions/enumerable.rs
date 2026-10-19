@@ -14,11 +14,16 @@ use alloc::{vec, vec::Vec};
 use alloy_primitives::{aliases::B32, uint, Address, U256};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
-use stylus_sdk::{stylus_core::calls::errors::MethodError, prelude::*, storage::{StorageMap, StorageU256, StorageVec}};
+use stylus_sdk::{
+    prelude::*,
+    storage::{StorageMap, StorageU256, StorageVec},
+    stylus_core::calls::errors::MethodError,
+};
 
 use crate::{
     token::erc721::{self, IErc721},
-    utils::introspection::erc165::IErc165};
+    utils::introspection::erc165::IErc165,
+};
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -52,7 +57,8 @@ pub enum Error {
     OutOfBoundsIndex(ERC721OutOfBoundsIndex),
 
     /// Indicates an error related to batch minting not allowed.
-    EnumerableForbiddenBatchMint(ERC721EnumerableForbiddenBatchMint)}
+    EnumerableForbiddenBatchMint(ERC721EnumerableForbiddenBatchMint),
+}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -70,12 +76,15 @@ pub struct Erc721Enumerable {
     /// Stores all tokens ids.
     pub(crate) all_tokens: StorageVec<StorageU256>,
     /// Maps indices at `all_tokens` to tokens ids.
-    pub(crate) all_tokens_index: StorageMap<U256, StorageU256>}
+    pub(crate) all_tokens_index: StorageMap<U256, StorageU256>,
+}
 
 /// This is the interface of the optional `Enumerable` extension
 /// of the ERC-721 standard.
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented marker method to the trait.
+#[allow(missing_docs)]
 pub trait IErc721Enumerable {
     /// The error type associated to this ERC-721 enumerable trait
     /// implementation.
@@ -352,7 +361,8 @@ mod tests {
     #[storage]
     struct Erc721EnumerableTestExample {
         pub erc721: Erc721,
-        pub enumerable: Erc721Enumerable}
+        pub enumerable: Erc721Enumerable,
+    }
 
     #[public]
     #[implements(IErc721Enumerable<Error = Error>, IErc165)]
