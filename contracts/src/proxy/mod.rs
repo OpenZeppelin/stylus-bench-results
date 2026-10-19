@@ -3,7 +3,9 @@
 use alloc::vec::Vec;
 
 use alloy_primitives::Address;
-use stylus_sdk::{call, prelude::*, stylus_core::calls::errors::Error};
+use stylus_sdk::{
+    call, host::VM, prelude::*, stylus_core::calls::errors::Error,
+};
 
 pub mod beacon;
 pub mod erc1967;
@@ -21,8 +23,9 @@ pub mod utils;
 /// The success and return data of the delegated call will be returned back
 /// to the caller of the proxy.
 ///
-/// The proxy reaches the host environment through [`HostAccess::vm`], which is
-/// why implementors have to be [`HostAccess`] (every `#[storage]` type is).
+/// The proxy reaches the host environment through [`HostAccess::vm`], so
+/// implementors have to be [`HostAccess`] with the [`VM`] as their host, like
+/// every `#[storage]` type is.
 ///
 /// # Safety
 ///
@@ -33,7 +36,9 @@ pub mod utils;
 ///
 /// The caller must ensure that the implementation contract is a valid contract
 /// address.
-pub unsafe trait IProxy: TopLevelStorage + HostAccess + Sized {
+pub unsafe trait IProxy:
+    TopLevelStorage + HostAccess<Host = VM> + Sized
+{
     /// Delegates the current call to [`IProxy::implementation`].
     ///
     /// This function does not return to its internal call site, it will
