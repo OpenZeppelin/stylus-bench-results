@@ -4,6 +4,7 @@ members = [
   "contracts",
   "contracts-proc",
   "lib/crypto",
+  "lib/devnet",
   "lib/e2e",
   "lib/e2e-proc",
   "examples/access-control",
@@ -112,12 +113,12 @@ stylus-tools = { version = "=0.10.10", features = ["integration-tests"] }
 # `alloy` is used by the end-to-end tests and benches. The contracts only depend
 # on `alloy-primitives` and `alloy-sol-types`, which must match the versions the
 # Stylus SDK is built against.
-alloy = { version = "=1.7.3", features = ["essentials", "signer-local"] }
-alloy-primitives = { version = "=1.5.7", default-features = false, features = [
+alloy = { version = "=1.8.3", features = ["essentials", "signer-local"] }
+alloy-primitives = { version = "=1.6.0", default-features = false, features = [
   "tiny-keccak",
 ] }
-alloy-sol-types = { version = "=1.5.7", default-features = false }
-alloy-sol-macro = { version = "=1.5.7", default-features = false }
+alloy-sol-types = { version = "=1.6.0", default-features = false }
+alloy-sol-macro = { version = "=1.6.0", default-features = false }
 
 ruint = "^1.17.1"
 
@@ -147,6 +148,7 @@ e2e-proc = { path = "lib/e2e-proc" }
 openzeppelin-stylus = { path = "contracts" }
 openzeppelin-stylus-proc = { path = "contracts-proc", version = "=0.3.0" }
 openzeppelin-crypto = { path = "lib/crypto" }
+devnet = { path = "lib/devnet" }
 
 [profile.release]
 codegen-units = 1
