@@ -1,11 +1,15 @@
 //! A collection of utilities for working with [`Address`].
 
 use alloc::vec::Vec;
-use stylus_sdk::stylus_core::calls::errors::MethodError;
 
 use alloy_primitives::Address;
 pub use sol::*;
-use stylus_sdk::{call, host::VM, prelude::*};
+use stylus_sdk::{
+    call,
+    host::VM,
+    prelude::*,
+    stylus_core::calls::errors::{Error as CallError, MethodError},
+};
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -45,7 +49,8 @@ pub enum Error {
     FailedCall(FailedCall),
     /// A call to an address target failed. The target may have reverted
     /// with a reason.
-    FailedCallWithReason(FailedCallWithReason)}
+    FailedCallWithReason(FailedCallWithReason),
+}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -61,7 +66,7 @@ impl AddressUtils {
     ///
     /// # Arguments
     ///
-    /// * `context` - Mutable access to the contract's state.
+    /// * `context` - Mutable access to the contract's state and to its host.
     /// * `target` - The address of the target contract.
     /// * `data` - The data to pass to the target contract.
     ///
@@ -72,15 +77,13 @@ impl AddressUtils {
     /// * [`Error::FailedCallWithReason`] - If the call to the target contract
     ///   fails with a revert reason or if the call fails for any other reason.
     /// * [`Error::EmptyCode`] - If the target contract has no code.
-    pub(crate) fn has_code(context: &impl HostAccess<Host = VM>, account: Address) -> bool {
-        context.vm().code_size(account) > 0
-    }
-
     pub fn function_delegate_call(
         context: &mut (impl TopLevelStorage + HostAccess<Host = VM>),
         target: Address,
         data: &[u8],
     ) -> Result<Vec<u8>, Error> {
+        // The call context borrows `context` mutably, so it must be built
+        // before the host is accessed through `context.vm()`.
         let call = Call::new_mutating(context);
         let result =
             unsafe { call::delegate_call(context.vm(), call, target, data) };
@@ -98,6 +101,8 @@ impl AddressUtils {
     ///
     /// # Arguments
     ///
+    /// * `context` - Read access to the contract's host, used to look up the
+    ///   code of `target`.
     /// * `target` - The address of the target contract.
     /// * `result` - The result of the call.
     ///
@@ -111,16 +116,33 @@ impl AddressUtils {
     pub fn verify_call_result_from_target<T: AsRef<[u8]>>(
         context: &impl HostAccess<Host = VM>,
         target: Address,
-        result: Result<T, stylus_sdk::stylus_core::calls::errors::Error>,
+        result: Result<T, CallError>,
     ) -> Result<T, Error> {
         match result {
             Ok(returndata) => {
-                if returndata.as_ref().is_empty() && context.vm().code_size(target) == 0 {
+                if returndata.as_ref().is_empty()
+                    && !Self::has_code(context, target)
+                {
                     return Err(AddressEmptyCode { target }.into());
                 }
                 Ok(returndata)
             }
-            Err(e) => Err(Self::revert(e))}
+            Err(e) => Err(Self::revert(e)),
+        }
+    }
+
+    /// Returns `true` if there is code deployed at `account`, and `false`
+    /// otherwise.
+    ///
+    /// # Arguments
+    ///
+    /// * `context` - Read access to the contract's host.
+    /// * `account` - The address to look up the code of.
+    pub(crate) fn has_code(
+        context: &impl HostAccess<Host = VM>,
+        account: Address,
+    ) -> bool {
+        context.vm().code_size(account) > 0
     }
 }
 
@@ -132,11 +154,10 @@ impl AddressUtils {
     /// [Address.sol].
     ///
     /// [Address.sol]: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/Address.sol
-    fn revert(error: stylus_sdk::stylus_core::calls::errors::Error) -> Error {
+    fn revert(error: CallError) -> Error {
         match &error {
-            stylus_sdk::stylus_core::calls::errors::Error::Revert(data) if data.is_empty() => {
-                FailedCall {}.into()
-            }
-            _ => FailedCallWithReason { reason: error.encode().into() }.into()}
+            CallError::Revert(data) if data.is_empty() => FailedCall {}.into(),
+            _ => FailedCallWithReason { reason: error.encode().into() }.into(),
+        }
     }
 }
