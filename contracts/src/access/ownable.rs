@@ -287,148 +287,171 @@ impl IErc165 for Ownable {
 
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::*;
-    use stylus_sdk::{alloy_primitives::Address, prelude::*};
+    use core::fmt::Debug;
+
+    use alloy_sol_types::SolEvent;
+    use stylus_sdk::testing::TestVM;
 
     use super::*;
-    use crate::utils::introspection::erc165::IErc165;
+    use crate::{
+        test_utils::{ALICE, BOB},
+        utils::introspection::erc165::IErc165,
+    };
 
-    unsafe impl TopLevelStorage for Ownable {}
-
-    #[motsu::test]
-    fn constructor(contract: Contract<Ownable>, alice: Address) {
-        contract.sender(alice).constructor(alice).unwrap();
-
-        let owner = contract.sender(alice).owner();
-        assert_eq!(owner, alice);
-
-        contract.assert_emitted(&OwnershipTransferred {
-            previous_owner: Address::ZERO,
-            new_owner: alice});
+    /// Asserts that `event` was emitted at least once.
+    #[track_caller]
+    fn assert_emitted<E: SolEvent + Debug>(vm: &TestVM, event: &E) {
+        let log = event.encode_log_data();
+        let expected = (log.topics().to_vec(), log.data.to_vec());
+        let emitted = vm.get_emitted_logs();
+        assert!(
+            emitted.contains(&expected),
+            "event was not emitted: {event:?}, emitted logs: {emitted:?}"
+        );
     }
 
-    #[motsu::test]
-    fn constructor_reverts_when_invalid_owner(
-        contract: Contract<Ownable>,
-        alice: Address,
-    ) {
-        let err = contract
-            .sender(alice)
-            .constructor(Address::ZERO)
-            .motsu_expect_err("should revert");
+    #[test]
+    fn constructor() {
+        let vm = TestVM::default();
+        let mut contract = Ownable::from(&vm);
+        vm.set_sender(ALICE);
+
+        contract.constructor(ALICE).unwrap();
+
+        let owner = contract.owner();
+        assert_eq!(owner, ALICE);
+
+        assert_emitted(
+            &vm,
+            &OwnershipTransferred {
+                previous_owner: Address::ZERO,
+                new_owner: ALICE,
+            },
+        );
+    }
+
+    #[test]
+    fn constructor_reverts_when_invalid_owner() {
+        let vm = TestVM::default();
+        let mut contract = Ownable::from(&vm);
+        vm.set_sender(ALICE);
+
+        let err =
+            contract.constructor(Address::ZERO).expect_err("should revert");
         assert!(
             matches!(err, Error::InvalidOwner(OwnableInvalidOwner { owner }) if owner == Address::ZERO)
         );
     }
 
-    #[motsu::test]
-    fn transfers_ownership(
-        contract: Contract<Ownable>,
-        alice: Address,
-        bob: Address,
-    ) {
-        contract.sender(alice).constructor(alice).unwrap();
+    #[test]
+    fn transfers_ownership() {
+        let vm = TestVM::default();
+        let mut contract = Ownable::from(&vm);
+        vm.set_sender(ALICE);
 
-        contract
-            .sender(alice)
-            .transfer_ownership(bob)
-            .expect("should transfer ownership");
-        let owner = contract.sender(alice).owner();
-        assert_eq!(owner, bob);
+        contract.constructor(ALICE).unwrap();
 
-        contract.assert_emitted(&OwnershipTransferred {
-            previous_owner: alice,
-            new_owner: bob});
+        contract.transfer_ownership(BOB).expect("should transfer ownership");
+        let owner = contract.owner();
+        assert_eq!(owner, BOB);
+
+        assert_emitted(
+            &vm,
+            &OwnershipTransferred { previous_owner: ALICE, new_owner: BOB },
+        );
     }
 
-    #[motsu::test]
-    fn prevents_non_owners_from_transferring(
-        contract: Contract<Ownable>,
-        alice: Address,
-        bob: Address,
-    ) {
-        contract.sender(alice).constructor(bob).unwrap();
+    #[test]
+    fn prevents_non_owners_from_transferring() {
+        let vm = TestVM::default();
+        let mut contract = Ownable::from(&vm);
+        vm.set_sender(ALICE);
 
-        let err = contract.sender(alice).transfer_ownership(bob).unwrap_err();
+        contract.constructor(BOB).unwrap();
+
+        let err = contract.transfer_ownership(BOB).unwrap_err();
         assert!(matches!(err, Error::UnauthorizedAccount(_)));
     }
 
-    #[motsu::test]
-    fn prevents_reaching_stuck_state(
-        contract: Contract<Ownable>,
-        alice: Address,
-    ) {
-        contract.sender(alice).constructor(alice).unwrap();
+    #[test]
+    fn prevents_reaching_stuck_state() {
+        let vm = TestVM::default();
+        let mut contract = Ownable::from(&vm);
+        vm.set_sender(ALICE);
 
-        let err = contract
-            .sender(alice)
-            .transfer_ownership(Address::ZERO)
-            .unwrap_err();
+        contract.constructor(ALICE).unwrap();
+
+        let err = contract.transfer_ownership(Address::ZERO).unwrap_err();
 
         assert!(matches!(err, Error::InvalidOwner(_)));
     }
 
-    #[motsu::test]
-    fn loses_ownership_after_renouncing(
-        contract: Contract<Ownable>,
-        alice: Address,
-    ) {
-        contract.sender(alice).constructor(alice).unwrap();
+    #[test]
+    fn loses_ownership_after_renouncing() {
+        let vm = TestVM::default();
+        let mut contract = Ownable::from(&vm);
+        vm.set_sender(ALICE);
 
-        contract
-            .sender(alice)
-            .renounce_ownership()
-            .expect("should renounce ownership");
-        let owner = contract.sender(alice).owner();
+        contract.constructor(ALICE).unwrap();
+
+        contract.renounce_ownership().expect("should renounce ownership");
+        let owner = contract.owner();
         assert_eq!(owner, Address::ZERO);
 
-        contract.assert_emitted(&OwnershipTransferred {
-            previous_owner: alice,
-            new_owner: Address::ZERO});
+        assert_emitted(
+            &vm,
+            &OwnershipTransferred {
+                previous_owner: ALICE,
+                new_owner: Address::ZERO,
+            },
+        );
     }
 
-    #[motsu::test]
-    fn prevents_non_owners_from_renouncing(
-        contract: Contract<Ownable>,
-        alice: Address,
-        bob: Address,
-    ) {
-        contract.sender(alice).constructor(bob).unwrap();
+    #[test]
+    fn prevents_non_owners_from_renouncing() {
+        let vm = TestVM::default();
+        let mut contract = Ownable::from(&vm);
+        vm.set_sender(ALICE);
 
-        let err = contract.sender(alice).renounce_ownership().unwrap_err();
+        contract.constructor(BOB).unwrap();
+
+        let err = contract.renounce_ownership().unwrap_err();
         assert!(matches!(err, Error::UnauthorizedAccount(_)));
     }
 
-    #[motsu::test]
-    fn recovers_access_using_internal_transfer(
-        contract: Contract<Ownable>,
-        alice: Address,
-        bob: Address,
-    ) {
-        contract.sender(alice).constructor(bob).unwrap();
+    #[test]
+    fn recovers_access_using_internal_transfer() {
+        let vm = TestVM::default();
+        let mut contract = Ownable::from(&vm);
+        vm.set_sender(ALICE);
 
-        contract.sender(alice)._transfer_ownership(bob);
-        let owner = contract.sender(alice).owner();
-        assert_eq!(owner, bob);
+        contract.constructor(BOB).unwrap();
+
+        contract._transfer_ownership(BOB);
+        let owner = contract.owner();
+        assert_eq!(owner, BOB);
     }
 
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual = <Ownable as IOwnable>::interface_id();
         let expected: B32 = 0xe083076_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
-    fn supports_interface(contract: Contract<Ownable>, alice: Address) {
-        assert!(contract
-            .sender(alice)
-            .supports_interface(<Ownable as IOwnable>::interface_id()));
-        assert!(contract
-            .sender(alice)
-            .supports_interface(<Ownable as IErc165>::interface_id()));
+    #[test]
+    fn supports_interface() {
+        let vm = TestVM::default();
+        let contract = Ownable::from(&vm);
+
+        assert!(
+            contract.supports_interface(<Ownable as IOwnable>::interface_id())
+        );
+        assert!(
+            contract.supports_interface(<Ownable as IErc165>::interface_id())
+        );
 
         let fake_interface_id: B32 = 0x12345678_u32.into();
-        assert!(!contract.sender(alice).supports_interface(fake_interface_id));
+        assert!(!contract.supports_interface(fake_interface_id));
     }
 }
