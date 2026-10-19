@@ -43,6 +43,7 @@ pub struct Erc1155Supply {
 /// Required interface of a [`Erc1155Supply`] contract.
 #[interface_id]
 #[public]
+#[allow(missing_docs)]
 pub trait IErc1155Supply: IErc165 {
     /// Total value of tokens in with a given id.
     ///

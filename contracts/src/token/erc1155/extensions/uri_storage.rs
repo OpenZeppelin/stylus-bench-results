@@ -25,6 +25,7 @@ pub struct Erc1155UriStorage {
 /// management.
 #[interface_id]
 #[public]
+#[allow(missing_docs)]
 pub trait IErc1155UriStorage {
     /// Returns the Uniform Resource Identifier (URI) for `token_id` token.
     ///

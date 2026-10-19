@@ -14,6 +14,7 @@ use crate::token::erc1155::{
 /// own tokens and those that they have been approved to use.
 #[interface_id]
 #[public]
+#[allow(missing_docs)]
 pub trait IErc1155Burnable {
     /// The error type associated to this trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;

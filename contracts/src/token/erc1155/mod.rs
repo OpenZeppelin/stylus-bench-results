@@ -202,6 +202,7 @@ unsafe impl TopLevelStorage for Erc1155 {}
 /// Required interface of an [`Erc1155`] compliant contract.
 #[interface_id]
 #[public]
+#[allow(missing_docs)]
 pub trait IErc1155: IErc165 {
     /// The error type associated to this ERC-1155 trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;

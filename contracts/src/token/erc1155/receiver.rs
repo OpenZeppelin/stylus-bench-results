@@ -38,6 +38,7 @@ sol_interface! {
     interface IErc1155ReceiverInterface {
         /// See [`super::IErc1155Receiver::on_erc1155_received`].
         #[allow(missing_docs)]
+        #[allow(clippy::too_many_arguments)]
         function onERC1155Received(
             address operator,
             address from,
@@ -48,6 +49,7 @@ sol_interface! {
 
         /// See [`super::IErc1155Receiver::on_erc1155_batch_received`].
         #[allow(missing_docs)]
+        #[allow(clippy::too_many_arguments)]
         function onERC1155BatchReceived(
             address operator,
             address from,
