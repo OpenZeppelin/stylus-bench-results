@@ -25,7 +25,8 @@ use stylus_sdk::{prelude::*, storage::StorageAddress};
 
 use crate::{
     access::ownable::{self, Ownable},
-    utils::introspection::erc165::IErc165};
+    utils::introspection::erc165::IErc165,
+};
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -53,11 +54,14 @@ pub struct Ownable2Step {
     // inheritting contract have access to its internal functions.
     pub ownable: Ownable,
     /// Pending owner of the contract.
-    pub(crate) pending_owner: StorageAddress}
+    pub(crate) pending_owner: StorageAddress,
+}
 
 /// Interface for an [`Ownable2Step`] contract.
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait IOwnable2Step {
     /// The error type associated to the trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -177,7 +181,8 @@ impl IOwnable2Step for Ownable2Step {
         let current_owner = self.owner();
         self.vm().log(OwnershipTransferStarted {
             previous_owner: current_owner,
-            new_owner});
+            new_owner,
+        });
         Ok(())
     }
 

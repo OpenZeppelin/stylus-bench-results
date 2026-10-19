@@ -11,7 +11,9 @@ use stylus_sdk::{prelude::*, storage::StorageMap};
 use crate::{
     access::control::AccessControl,
     utils::{
-        introspection::erc165::IErc165, structs::enumerable_set::EnumerableSet}};
+        introspection::erc165::IErc165, structs::enumerable_set::EnumerableSet,
+    },
+};
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -30,17 +32,21 @@ mod sol {
 #[derive(SolidityError, Debug)]
 pub enum Error {
     /// The caller attempted to query a `role` member at an invalid `index`.
-    OutOfBounds(AccessControlEnumerableOutOfBounds)}
+    OutOfBounds(AccessControlEnumerableOutOfBounds),
+}
 
 /// State of an [`AccessControlEnumerable`] contract.
 #[storage]
 pub struct AccessControlEnumerable {
     /// Role identifier -> [`EnumerableSet`] of accounts.
-    pub(crate) role_members: StorageMap<B256, EnumerableSet<Address>>}
+    pub(crate) role_members: StorageMap<B256, EnumerableSet<Address>>,
+}
 
 /// Interface for the [`AccessControlEnumerable`] extension.
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait IAccessControlEnumerable {
     /// The error type associated to the trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -111,7 +117,8 @@ impl IAccessControlEnumerable for AccessControlEnumerable {
             None => {
                 Err(Error::OutOfBounds(AccessControlEnumerableOutOfBounds {
                     role,
-                    index}))
+                    index,
+                }))
             }
         }
     }

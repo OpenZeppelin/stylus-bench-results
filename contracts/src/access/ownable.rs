@@ -13,7 +13,10 @@ use alloc::{vec, vec::Vec};
 use alloy_primitives::{aliases::B32, Address};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
-use stylus_sdk::{stylus_core::calls::errors::MethodError, prelude::*, storage::StorageAddress};
+use stylus_sdk::{
+    prelude::*, storage::StorageAddress,
+    stylus_core::calls::errors::MethodError,
+};
 
 use crate::utils::introspection::erc165::IErc165;
 
@@ -53,7 +56,8 @@ pub enum Error {
     /// The caller account is not authorized to perform an operation.
     UnauthorizedAccount(OwnableUnauthorizedAccount),
     /// The owner is not a valid owner account. (eg. [`Address::ZERO`])
-    InvalidOwner(OwnableInvalidOwner)}
+    InvalidOwner(OwnableInvalidOwner),
+}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -65,11 +69,14 @@ impl MethodError for Error {
 #[storage]
 pub struct Ownable {
     /// The current owner of this contract.
-    pub(crate) owner: StorageAddress}
+    pub(crate) owner: StorageAddress,
+}
 
 /// Interface for an [`Ownable`] contract.
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait IOwnable {
     /// Returns the address of the current owner.
     ///
@@ -135,7 +142,8 @@ impl Ownable {
     pub fn constructor(&mut self, initial_owner: Address) -> Result<(), Error> {
         if initial_owner.is_zero() {
             return Err(Error::InvalidOwner(OwnableInvalidOwner {
-                owner: Address::ZERO}));
+                owner: Address::ZERO,
+            }));
         }
         self._transfer_ownership(initial_owner);
         Ok(())
@@ -194,7 +202,8 @@ impl Ownable {
 
         if new_owner.is_zero() {
             return Err(Error::InvalidOwner(OwnableInvalidOwner {
-                owner: Address::ZERO}));
+                owner: Address::ZERO,
+            }));
         }
 
         self._transfer_ownership(new_owner);
@@ -228,7 +237,8 @@ impl Ownable {
 }
 
 impl Ownable {
-    /// Checks if the [`msg::sender`] is set as the owner.
+    /// Checks if the sender of the call (`self.vm().msg_sender()`) is set as
+    /// the owner.
     ///
     /// # Arguments
     ///

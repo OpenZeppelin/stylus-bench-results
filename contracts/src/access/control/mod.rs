@@ -44,7 +44,11 @@ use alloc::{vec, vec::Vec};
 use alloy_primitives::{aliases::B32, Address, B256};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
-use stylus_sdk::{stylus_core::calls::errors::MethodError, prelude::*, storage::{StorageB256, StorageBool, StorageMap}};
+use stylus_sdk::{
+    prelude::*,
+    storage::{StorageB256, StorageBool, StorageMap},
+    stylus_core::calls::errors::MethodError,
+};
 
 use crate::utils::introspection::erc165::IErc165;
 
@@ -106,7 +110,8 @@ pub enum Error {
     /// The caller account is missing a role.
     UnauthorizedAccount(AccessControlUnauthorizedAccount),
     /// The caller of a function is not the expected one.
-    BadConfirmation(AccessControlBadConfirmation)}
+    BadConfirmation(AccessControlBadConfirmation),
+}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -122,17 +127,21 @@ pub struct RoleData {
     /// Whether an account is member of a certain role.
     pub has_role: StorageMap<Address, StorageBool>,
     /// The admin role for this role.
-    pub admin_role: StorageB256}
+    pub admin_role: StorageB256,
+}
 
 /// State of an [`AccessControl`] contract.
 #[storage]
 pub struct AccessControl {
     /// Role identifier -> Role information.
-    pub(crate) roles: StorageMap<B256, RoleData>}
+    pub(crate) roles: StorageMap<B256, RoleData>,
+}
 
 /// Interface for an [`AccessControl`] contract.
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait IAccessControl {
     /// The error type associated with this interface implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -146,7 +155,8 @@ pub trait IAccessControl {
     /// * `account` - The account to check for membership.
     fn has_role(&self, role: B256, account: Address) -> bool;
 
-    /// Checks if [`msg::sender`] has been granted `role`.
+    /// Checks if the sender of the call (`self.vm().msg_sender()`) has been
+    /// granted `role`.
     ///
     /// # Arguments
     ///
@@ -155,8 +165,8 @@ pub trait IAccessControl {
     ///
     /// # Errors
     ///
-    /// * [`Error::UnauthorizedAccount`] - If [`msg::sender`] has not been
-    ///   granted `role`.
+    /// * [`Error::UnauthorizedAccount`] - If the sender of the call has not
+    ///   been granted `role`.
     fn only_role(&self, role: B256) -> Result<(), Self::Error>;
 
     /// Returns the admin role that controls `role`. See
@@ -183,8 +193,8 @@ pub trait IAccessControl {
     ///
     /// # Errors
     ///
-    /// * [`Error::UnauthorizedAccount`] - If [`msg::sender`] has not been
-    ///   granted `role`.
+    /// * [`Error::UnauthorizedAccount`] - If the sender of the call has not
+    ///   been granted `role`.
     ///
     /// # Events
     ///
@@ -207,8 +217,8 @@ pub trait IAccessControl {
     ///
     /// # Errors
     ///
-    /// * [`Error::UnauthorizedAccount`] - If [`msg::sender`] has not been
-    ///   granted `role`.
+    /// * [`Error::UnauthorizedAccount`] - If the sender of the call has not
+    ///   been granted `role`.
     ///
     /// # Events
     ///
@@ -234,7 +244,7 @@ pub trait IAccessControl {
     ///
     /// # Errors
     ///
-    /// * [`Error::BadConfirmation`]  - If [`msg::sender`] is not the
+    /// * [`Error::BadConfirmation`]  - If the sender of the call is not the
     ///   `confirmation` address.
     ///
     /// # Events
@@ -326,7 +336,8 @@ impl AccessControl {
         self.vm().log(RoleAdminChanged {
             role,
             previous_admin_role,
-            new_admin_role});
+            new_admin_role,
+        });
     }
 
     /// Checks if `account` has been granted `role`.
@@ -339,8 +350,8 @@ impl AccessControl {
     ///
     /// # Errors
     ///
-    /// * [`Error::UnauthorizedAccount`] - If [`msg::sender`] has not been
-    ///   granted `role`.
+    /// * [`Error::UnauthorizedAccount`] - If `account` has not been granted
+    ///   `role`.
     pub fn _check_role(
         &self,
         role: B256,
@@ -374,7 +385,11 @@ impl AccessControl {
             false
         } else {
             self.roles.setter(role).has_role.insert(account, true);
-            self.vm().log(RoleGranted { role, account, sender: self.vm().msg_sender() });
+            self.vm().log(RoleGranted {
+                role,
+                account,
+                sender: self.vm().msg_sender(),
+            });
             true
         }
     }
@@ -396,7 +411,11 @@ impl AccessControl {
     pub fn _revoke_role(&mut self, role: B256, account: Address) -> bool {
         if self.has_role(role, account) {
             self.roles.setter(role).has_role.insert(account, false);
-            self.vm().log(RoleRevoked { role, account, sender: self.vm().msg_sender() });
+            self.vm().log(RoleRevoked {
+                role,
+                account,
+                sender: self.vm().msg_sender(),
+            });
             true
         } else {
             false
