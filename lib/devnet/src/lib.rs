@@ -5,6 +5,8 @@
 //! Docker). Set `RPC_URL` to use a node that is already running; otherwise the
 //! first call starts one for the current process.
 
+pub mod assert;
+
 use std::{
     path::{Path, PathBuf},
     sync::OnceLock,
