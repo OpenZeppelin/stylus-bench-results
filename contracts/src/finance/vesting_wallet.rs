@@ -449,10 +449,7 @@ impl IVestingWallet for VestingWallet {
         self.ownable.owner()
     }
 
-    fn transfer_ownership(
-        &mut self,
-        new_owner: Address,
-    ) -> Result<(), Error> {
+    fn transfer_ownership(&mut self, new_owner: Address) -> Result<(), Error> {
         Ok(self.ownable.transfer_ownership(new_owner)?)
     }
 
@@ -493,10 +490,7 @@ impl IVestingWallet for VestingWallet {
     }
 
     #[selector(name = "releasable")]
-    fn releasable_erc20(
-        &mut self,
-        token: Address,
-    ) -> Result<U256, Error> {
+    fn releasable_erc20(&mut self, token: Address) -> Result<U256, Error> {
         let vested =
             self.vested_amount_erc20(token, self.vm().block_timestamp())?;
         // SAFETY: total vested amount is by definition greater than or equal to
