@@ -434,16 +434,38 @@ impl Erc1967Utils {
     }
 }
 
-#[cfg(test)]
+// Not built with `export-abi`, see `proxy::test_helpers`.
+#[cfg(all(test, not(feature = "export-abi")))]
 mod tests {
     #![allow(clippy::needless_pass_by_value, clippy::unused_self)]
 
-    use alloy_sol_types::SolCall;
-    use motsu::prelude::*;
-    use stylus_sdk::{alloy_primitives::{Address, U256}, alloy_sol_types::sol, function_selector, prelude::*, storage::StorageAddress};
+    use alloy_sol_types::{SolCall, SolValue};
+    use stylus_sdk::{
+        alloy_primitives::{address, Address, U256},
+        alloy_sol_types::sol,
+        function_selector,
+        prelude::*,
+        storage::StorageAddress,
+        testing::TestVM,
+    };
 
     use super::*;
-    use crate::proxy::beacon::IBeacon;
+    use crate::{
+        proxy::{
+            beacon::IBeacon,
+            test_helpers::{assert_emitted, deploy, execute},
+        },
+        test_utils::{ALICE, BOB, CHARLIE},
+    };
+
+    /// The implementation the contract is upgraded to.
+    const IMPLEMENTATION: Address =
+        address!("0x000000000000000000000000000000000000e200");
+    /// The beacons the contract is upgraded to.
+    const BEACON: Address =
+        address!("0x000000000000000000000000000000000000be4c");
+    const BEACON_2: Address =
+        address!("0x000000000000000000000000000000000000be4d");
 
     #[entrypoint]
     #[storage]
@@ -453,7 +475,7 @@ mod tests {
     impl TestContract {
         // test functions that wrap [`Erc1967Utils`] methods.
         fn test_get_implementation(&self) -> Address {
-            Erc1967Utils::get_implementation()
+            Erc1967Utils::get_implementation(self)
         }
 
         fn test_upgrade_to_and_call(
@@ -469,18 +491,18 @@ mod tests {
         }
 
         fn test_get_admin(&self) -> Address {
-            Erc1967Utils::get_admin()
+            Erc1967Utils::get_admin(self)
         }
 
         fn test_change_admin(
             &mut self,
             new_admin: Address,
         ) -> Result<(), Vec<u8>> {
-            Ok(Erc1967Utils::change_admin(new_admin)?)
+            Ok(Erc1967Utils::change_admin(self, new_admin)?)
         }
 
         fn test_get_beacon(&self) -> Address {
-            Erc1967Utils::get_beacon()
+            Erc1967Utils::get_beacon(self)
         }
 
         fn test_upgrade_beacon_to_and_call(
@@ -497,7 +519,8 @@ mod tests {
     // mock beacon contract for testing.
     #[storage]
     struct MockBeacon {
-        implementation: StorageAddress}
+        implementation: StorageAddress,
+    }
 
     unsafe impl TopLevelStorage for MockBeacon {}
 
@@ -529,7 +552,8 @@ mod tests {
 
     #[derive(SolidityError, Debug)]
     enum ImplementationError {
-        ImplementationError(ImplementationSolidityError)}
+        ImplementationError(ImplementationSolidityError),
+    }
 
     impl MethodError for ImplementationError {
         fn encode(self) -> Vec<u8> {
@@ -564,179 +588,217 @@ mod tests {
         }
     }
 
-    #[motsu::test]
-    fn get_implementation_returns_zero_by_default(
-        contract: Contract<TestContract>,
-        alice: Address,
-    ) {
-        let implementation = contract.sender(alice).test_get_implementation();
+    // `TestVM` answers every call with the return data of the last mock
+    // registered, whichever call the mock is for. Upgrading to a beacon with
+    // setup data makes calls that need different data: the ones asking the
+    // beacon for its implementation, which need the encoded address, and the
+    // delegate call of the setup data. The tests register the beacon last, so
+    // what the delegate call returns, or reverts with, is the encoded address
+    // of the implementation.
+
+    /// Makes `vm` see a contract at `beacon` that answers `implementation()`
+    /// with `implementation`, the way a [`MockBeacon`] constructed with it
+    /// does.
+    fn deploy_beacon(vm: &TestVM, beacon: Address, implementation: Address) {
+        let beacon_vm = TestVM::default();
+        MockBeacon::from(&beacon_vm).constructor(implementation);
+
+        deploy(vm, beacon);
+        let calldata = function_selector!("implementation").to_vec();
+        vm.mock_static_call(
+            beacon,
+            calldata.clone(),
+            execute::<MockBeacon>(&beacon_vm, &calldata),
+        );
+    }
+
+    #[test]
+    fn get_implementation_returns_zero_by_default() {
+        let vm = TestVM::default();
+        let contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+
+        let implementation = contract.test_get_implementation();
         assert_eq!(implementation, Address::ZERO);
     }
 
-    #[motsu::test]
-    fn upgrade_to_and_call_with_valid_implementation_and_empty_data(
-        contract: Contract<TestContract>,
-        implementation: Contract<Implementation>,
-        alice: Address,
-    ) {
+    #[test]
+    fn upgrade_to_and_call_with_valid_implementation_and_empty_data() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+        deploy(&vm, IMPLEMENTATION);
+
         contract
-            .sender(alice)
-            .test_upgrade_to_and_call(implementation.address(), vec![].into())
+            .test_upgrade_to_and_call(IMPLEMENTATION, vec![].into())
             .expect("should be able to upgrade to valid implementation");
 
-        let implementation_addr =
-            contract.sender(alice).test_get_implementation();
-        assert_eq!(implementation_addr, implementation.address());
+        let implementation_addr = contract.test_get_implementation();
+        assert_eq!(implementation_addr, IMPLEMENTATION);
 
         // verify event was emitted.
-        contract.assert_emitted(&erc1967::Upgraded {
-            implementation: implementation.address()});
+        assert_emitted(
+            &vm,
+            &erc1967::Upgraded { implementation: IMPLEMENTATION },
+        );
     }
 
-    #[motsu::test]
-    fn upgrade_to_and_call_with_valid_implementation_and_data(
-        contract: Contract<TestContract>,
-        implementation: Contract<Implementation>,
-        alice: Address,
-    ) {
+    #[test]
+    fn upgrade_to_and_call_with_valid_implementation_and_data() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+        deploy(&vm, IMPLEMENTATION);
+
         let data = IImplementation::emitOrErrorCall { should_error: false }
             .abi_encode();
-        contract
-            .sender(alice)
-            .test_upgrade_to_and_call(implementation.address(), data.into())
-            .motsu_expect(
-                "should be able to upgrade to valid implementation with data",
-            );
+        // the data is delegated to the implementation, which runs in the
+        // context of the contract.
+        vm.mock_delegate_call(
+            IMPLEMENTATION,
+            data.clone(),
+            execute::<Implementation>(&vm, &data),
+        );
+        contract.test_upgrade_to_and_call(IMPLEMENTATION, data.into()).expect(
+            "should be able to upgrade to valid implementation with data",
+        );
 
-        let implementation_addr =
-            contract.sender(alice).test_get_implementation();
-        assert_eq!(implementation_addr, implementation.address());
+        let implementation_addr = contract.test_get_implementation();
+        assert_eq!(implementation_addr, IMPLEMENTATION);
 
         // verify event was emitted.
-        contract.assert_emitted(&erc1967::Upgraded {
-            implementation: implementation.address()});
+        assert_emitted(
+            &vm,
+            &erc1967::Upgraded { implementation: IMPLEMENTATION },
+        );
 
-        // TODO: this should assert that the event was emitted on `contract`
-        // (as it's the one that delegate called the upgrade)
-        // https://github.com/OpenZeppelin/stylus-test-helpers/issues/111
-        implementation.assert_emitted(&ImplementationEvent {});
+        // the implementation runs in the context of the contract that delegate
+        // called the upgrade, so the contract is the one that emits the event.
+        assert_emitted(&vm, &ImplementationEvent {});
     }
 
-    #[motsu::test]
-    fn upgrade_to_and_call_with_invalid_implementation(
-        contract: Contract<TestContract>,
-        alice: Address,
-    ) {
-        let invalid_address = alice; // address with no code.
+    #[test]
+    fn upgrade_to_and_call_with_invalid_implementation() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+
+        let invalid_address = ALICE; // address with no code.
         let err = contract
-            .sender(alice)
             .test_upgrade_to_and_call(invalid_address, vec![].into())
             .expect_err("should fail when upgrading to invalid implementation");
 
         assert_eq!(
             err,
             Error::InvalidImplementation(ERC1967InvalidImplementation {
-                implementation: invalid_address})
+                implementation: invalid_address
+            })
             .encode()
         );
 
         // implementation should remain unchanged.
-        let implementation = contract.sender(alice).test_get_implementation();
+        let implementation = contract.test_get_implementation();
         assert_eq!(implementation, Address::ZERO);
     }
 
-    #[motsu::test]
-    fn upgrade_to_and_call_with_zero_implementation(
-        contract: Contract<TestContract>,
-        alice: Address,
-    ) {
+    #[test]
+    fn upgrade_to_and_call_with_zero_implementation() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+
         let err = contract
-            .sender(alice)
             .test_upgrade_to_and_call(Address::ZERO, vec![].into())
             .expect_err("should fail when upgrading to zero implementation");
 
         assert_eq!(
             err,
             Error::InvalidImplementation(ERC1967InvalidImplementation {
-                implementation: Address::ZERO})
+                implementation: Address::ZERO
+            })
             .encode()
         );
     }
 
-    #[motsu::test]
-    fn upgrade_to_and_call_with_same_implementation(
-        contract: Contract<TestContract>,
-        implementation: Contract<Implementation>,
-        alice: Address,
-    ) {
+    #[test]
+    fn upgrade_to_and_call_with_same_implementation() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+        deploy(&vm, IMPLEMENTATION);
+
         // first upgrade.
         contract
-            .sender(alice)
-            .test_upgrade_to_and_call(implementation.address(), vec![].into())
+            .test_upgrade_to_and_call(IMPLEMENTATION, vec![].into())
             .expect("should be able to upgrade first time");
 
         // upgrade to same implementation.
         contract
-            .sender(alice)
-            .test_upgrade_to_and_call(implementation.address(), vec![].into())
+            .test_upgrade_to_and_call(IMPLEMENTATION, vec![].into())
             .expect("should be able to upgrade to same implementation");
 
-        let implementation_addr =
-            contract.sender(alice).test_get_implementation();
-        assert_eq!(implementation_addr, implementation.address());
+        let implementation_addr = contract.test_get_implementation();
+        assert_eq!(implementation_addr, IMPLEMENTATION);
 
         // event should still be emitted.
-        contract.assert_emitted(&erc1967::Upgraded {
-            implementation: implementation.address()});
+        assert_emitted(
+            &vm,
+            &erc1967::Upgraded { implementation: IMPLEMENTATION },
+        );
     }
 
-    #[motsu::test]
-    fn upgrade_to_and_call_with_delegate_call_failure(
-        contract: Contract<TestContract>,
-        implementation: Contract<Implementation>,
-        alice: Address,
-    ) {
-        let data = function_selector!("nonExistentFunction").to_vec();
+    #[test]
+    fn upgrade_to_and_call_with_delegate_call_failure() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+        deploy(&vm, IMPLEMENTATION);
 
-        let err = contract
-            .sender(alice)
-            .test_upgrade_to_and_call(
-                implementation.address(),
-                data.clone().into(),
-            )
-            .expect_err("should fail when delegate call fails");
+        let data = function_selector!("nonExistentFunction").to_vec();
 
         let vec = format!(
             "function not found for selector '{0}' and no fallback defined",
-            u32::from_be_bytes(TryInto::try_into(data).unwrap())
+            u32::from_be_bytes(TryInto::try_into(data.clone()).unwrap())
         )
         .as_bytes()
         .to_vec();
+        // the delegate call reverts with a reason.
+        vm.mock_delegate_call(IMPLEMENTATION, data.clone(), Err(vec.clone()));
+
+        let err = contract
+            .test_upgrade_to_and_call(IMPLEMENTATION, data.into())
+            .expect_err("should fail when delegate call fails");
 
         assert_eq!(
             err,
             Error::FailedCallWithReason(address::FailedCallWithReason {
-                reason: stylus_sdk::stylus_core::calls::errors::Error::Revert(vec).encode().into()
+                reason: stylus_sdk::stylus_core::calls::errors::Error::Revert(
+                    vec
+                )
+                .encode()
+                .into()
             })
             .encode(),
         );
     }
 
-    #[motsu::test]
-    fn upgrade_to_and_call_with_implementation_reverts(
-        contract: Contract<TestContract>,
-        implementation: Contract<Implementation>,
-        alice: Address,
-    ) {
+    #[test]
+    fn upgrade_to_and_call_with_implementation_reverts() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+        deploy(&vm, IMPLEMENTATION);
+
         let data = IImplementation::emitOrErrorCall { should_error: true }
             .abi_encode();
+        vm.mock_delegate_call(
+            IMPLEMENTATION,
+            data.clone(),
+            execute::<Implementation>(&vm, &data),
+        );
 
         let err = contract
-            .sender(alice)
-            .test_upgrade_to_and_call(
-                implementation.address(),
-                data.clone().into(),
-            )
+            .test_upgrade_to_and_call(IMPLEMENTATION, data.into())
             .expect_err("should fail when implementation reverts");
 
         assert_eq!(
@@ -746,58 +808,63 @@ mod tests {
                     ImplementationSolidityError {}
                 )
                 .encode()
-                .into()})
+                .into()
+            })
             .encode()
         );
     }
 
-    #[motsu::test]
-    fn upgrade_to_and_call_reverts_with_empty_data_with_value(
-        contract: Contract<TestContract>,
-        implementation: Contract<Implementation>,
-        alice: Address,
-    ) {
-        alice.fund(U256::from(1000));
+    #[test]
+    fn upgrade_to_and_call_reverts_with_empty_data_with_value() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+        deploy(&vm, IMPLEMENTATION);
+
+        vm.set_balance(ALICE, U256::from(1000));
+        vm.set_value(U256::from(1000));
 
         let err = contract
-            .sender_and_value(alice, U256::from(1000))
-            .test_upgrade_to_and_call(implementation.address(), vec![].into())
+            .test_upgrade_to_and_call(IMPLEMENTATION, vec![].into())
             .expect_err("should fail with ERC1967NonPayable");
 
         assert_eq!(err, Error::NonPayable(ERC1967NonPayable {}).encode());
     }
 
-    #[motsu::test]
-    fn get_admin_returns_zero_by_default(
-        contract: Contract<TestContract>,
-        alice: Address,
-    ) {
-        let admin = contract.sender(alice).test_get_admin();
+    #[test]
+    fn get_admin_returns_zero_by_default() {
+        let vm = TestVM::default();
+        let contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+
+        let admin = contract.test_get_admin();
         assert_eq!(admin, Address::ZERO);
     }
 
-    #[motsu::test]
-    fn change_admin_with_valid_address(
-        contract: Contract<TestContract>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn change_admin_with_valid_address() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+
         contract
-            .sender(alice)
-            .test_change_admin(bob)
+            .test_change_admin(BOB)
             .expect("should be able to change admin to valid address");
 
-        let admin = contract.sender(alice).test_get_admin();
-        assert_eq!(admin, bob);
+        let admin = contract.test_get_admin();
+        assert_eq!(admin, BOB);
 
         // Verify event was emitted
-        contract.assert_emitted(&erc1967::AdminChanged {
-            previous_admin: Address::ZERO,
-            new_admin: bob});
+        assert_emitted(
+            &vm,
+            &erc1967::AdminChanged {
+                previous_admin: Address::ZERO,
+                new_admin: BOB,
+            },
+        );
 
         // verify that changing admin to [`Address::ZERO`] fails.
         let err = contract
-            .sender(alice)
             .test_change_admin(Address::ZERO)
             .expect_err("should fail when changing admin to zero address");
 
@@ -808,198 +875,203 @@ mod tests {
         );
 
         // admin should remain unchanged.
-        let admin = contract.sender(alice).test_get_admin();
-        assert_eq!(admin, bob);
+        let admin = contract.test_get_admin();
+        assert_eq!(admin, BOB);
     }
 
-    #[motsu::test]
-    fn change_admin_multiple_times(
-        contract: Contract<TestContract>,
-        alice: Address,
-        bob: Address,
-        charlie: Address,
-    ) {
+    #[test]
+    fn change_admin_multiple_times() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+
         // first change.
         contract
-            .sender(alice)
-            .test_change_admin(bob)
+            .test_change_admin(BOB)
             .expect("should be able to change admin first time");
 
-        let admin = contract.sender(alice).test_get_admin();
-        assert_eq!(admin, bob);
+        let admin = contract.test_get_admin();
+        assert_eq!(admin, BOB);
 
         // second change.
         contract
-            .sender(alice)
-            .test_change_admin(charlie)
+            .test_change_admin(CHARLIE)
             .expect("should be able to change admin second time");
 
-        let admin = contract.sender(alice).test_get_admin();
-        assert_eq!(admin, charlie);
+        let admin = contract.test_get_admin();
+        assert_eq!(admin, CHARLIE);
 
         // verify events were emitted.
-        contract.assert_emitted(&erc1967::AdminChanged {
-            previous_admin: Address::ZERO,
-            new_admin: bob});
-        contract.assert_emitted(&erc1967::AdminChanged {
-            previous_admin: bob,
-            new_admin: charlie});
+        assert_emitted(
+            &vm,
+            &erc1967::AdminChanged {
+                previous_admin: Address::ZERO,
+                new_admin: BOB,
+            },
+        );
+        assert_emitted(
+            &vm,
+            &erc1967::AdminChanged { previous_admin: BOB, new_admin: CHARLIE },
+        );
     }
 
-    #[motsu::test]
-    fn change_admin_with_same_address(
-        contract: Contract<TestContract>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn change_admin_with_same_address() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+
         // first change.
         contract
-            .sender(alice)
-            .test_change_admin(bob)
+            .test_change_admin(BOB)
             .expect("should be able to change admin first time");
 
         // change to same address.
         contract
-            .sender(alice)
-            .test_change_admin(bob)
+            .test_change_admin(BOB)
             .expect("should be able to change admin to same address");
 
-        let admin = contract.sender(alice).test_get_admin();
-        assert_eq!(admin, bob);
+        let admin = contract.test_get_admin();
+        assert_eq!(admin, BOB);
 
         // event should still be emitted.
-        contract.assert_emitted(&erc1967::AdminChanged {
-            previous_admin: Address::ZERO,
-            new_admin: bob});
-        contract.assert_emitted(&erc1967::AdminChanged {
-            previous_admin: bob,
-            new_admin: bob});
+        assert_emitted(
+            &vm,
+            &erc1967::AdminChanged {
+                previous_admin: Address::ZERO,
+                new_admin: BOB,
+            },
+        );
+        assert_emitted(
+            &vm,
+            &erc1967::AdminChanged { previous_admin: BOB, new_admin: BOB },
+        );
     }
 
-    #[motsu::test]
-    fn get_beacon_returns_zero_by_default(
-        contract: Contract<TestContract>,
-        alice: Address,
-    ) {
-        let beacon = contract.sender(alice).test_get_beacon();
+    #[test]
+    fn get_beacon_returns_zero_by_default() {
+        let vm = TestVM::default();
+        let contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+
+        let beacon = contract.test_get_beacon();
         assert_eq!(beacon, Address::ZERO);
     }
 
-    #[motsu::test]
-    fn upgrade_beacon_to_and_call_with_valid_beacon_and_empty_data(
-        contract: Contract<TestContract>,
-        beacon: Contract<MockBeacon>,
-        implementation: Contract<Implementation>,
-        alice: Address,
-    ) {
-        beacon.sender(alice).constructor(implementation.address());
+    #[test]
+    fn upgrade_beacon_to_and_call_with_valid_beacon_and_empty_data() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+        deploy(&vm, IMPLEMENTATION);
+        deploy_beacon(&vm, BEACON, IMPLEMENTATION);
 
         contract
-            .sender(alice)
-            .test_upgrade_beacon_to_and_call(beacon.address(), vec![].into())
+            .test_upgrade_beacon_to_and_call(BEACON, vec![].into())
             .expect("should be able to upgrade to valid beacon");
 
-        let beacon_address = contract.sender(alice).test_get_beacon();
-        assert_eq!(beacon_address, beacon.address());
+        let beacon_address = contract.test_get_beacon();
+        assert_eq!(beacon_address, BEACON);
 
         // verify event was emitted.
-        contract.assert_emitted(&erc1967::BeaconUpgraded {
-            beacon: beacon.address()});
+        assert_emitted(&vm, &erc1967::BeaconUpgraded { beacon: BEACON });
     }
 
-    #[motsu::test]
-    fn upgrade_beacon_to_and_call_with_valid_beacon_and_data(
-        contract: Contract<TestContract>,
-        beacon: Contract<MockBeacon>,
-        implementation: Contract<Implementation>,
-        alice: Address,
-    ) {
-        beacon.sender(alice).constructor(implementation.address());
+    #[test]
+    fn upgrade_beacon_to_and_call_with_valid_beacon_and_data() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+        deploy(&vm, IMPLEMENTATION);
 
         let data = IImplementation::emitOrErrorCall { should_error: false }
             .abi_encode();
+        // the data is delegated to the implementation of the beacon, which
+        // runs in the context of the contract.
+        vm.mock_delegate_call(
+            IMPLEMENTATION,
+            data.clone(),
+            execute::<Implementation>(&vm, &data),
+        );
+        deploy_beacon(&vm, BEACON, IMPLEMENTATION);
         contract
-            .sender(alice)
-            .test_upgrade_beacon_to_and_call(beacon.address(), data.into())
+            .test_upgrade_beacon_to_and_call(BEACON, data.into())
             .expect("should be able to upgrade to valid beacon with data");
 
-        let beacon_address = contract.sender(alice).test_get_beacon();
-        assert_eq!(beacon_address, beacon.address());
+        let beacon_address = contract.test_get_beacon();
+        assert_eq!(beacon_address, BEACON);
 
         // verify event was emitted.
-        contract.assert_emitted(&erc1967::BeaconUpgraded {
-            beacon: beacon.address()});
+        assert_emitted(&vm, &erc1967::BeaconUpgraded { beacon: BEACON });
 
-        // TODO: this should assert that the event was emitted on `contract`
-        // (as it's the one that delegate called the upgrade)
-        // https://github.com/OpenZeppelin/stylus-test-helpers/issues/111
-        implementation.assert_emitted(&ImplementationEvent {});
+        // the implementation runs in the context of the contract that delegate
+        // called the upgrade, so the contract is the one that emits the event.
+        assert_emitted(&vm, &ImplementationEvent {});
     }
 
-    #[motsu::test]
-    fn upgrade_beacon_to_and_call_with_invalid_beacon(
-        contract: Contract<TestContract>,
-        alice: Address,
-    ) {
-        let invalid_address = alice; // address with no code.
+    #[test]
+    fn upgrade_beacon_to_and_call_with_invalid_beacon() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+
+        let invalid_address = ALICE; // address with no code.
         let err = contract
-            .sender(alice)
             .test_upgrade_beacon_to_and_call(invalid_address, vec![].into())
             .expect_err("should fail when upgrading to invalid beacon");
 
         assert_eq!(
             err,
             Error::InvalidBeacon(ERC1967InvalidBeacon {
-                beacon: invalid_address})
+                beacon: invalid_address
+            })
             .encode()
         );
 
         // beacon should remain unchanged.
-        let beacon = contract.sender(alice).test_get_beacon();
+        let beacon = contract.test_get_beacon();
         assert_eq!(beacon, Address::ZERO);
     }
 
-    #[motsu::test]
-    fn upgrade_beacon_to_and_call_with_zero_beacon(
-        contract: Contract<TestContract>,
-        beacon: Contract<MockBeacon>,
-        implementation: Contract<Implementation>,
-        alice: Address,
-    ) {
-        beacon.sender(alice).constructor(implementation.address());
+    #[test]
+    fn upgrade_beacon_to_and_call_with_zero_beacon() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+        deploy(&vm, IMPLEMENTATION);
+        deploy_beacon(&vm, BEACON, IMPLEMENTATION);
 
         contract
-            .sender(alice)
-            .test_upgrade_beacon_to_and_call(beacon.address(), vec![].into())
+            .test_upgrade_beacon_to_and_call(BEACON, vec![].into())
             .expect("should be able to upgrade to valid beacon");
 
         let err = contract
-            .sender(alice)
             .test_upgrade_beacon_to_and_call(Address::ZERO, vec![].into())
             .expect_err("should fail when upgrading to zero beacon");
 
         assert_eq!(
             err,
             Error::InvalidBeacon(ERC1967InvalidBeacon {
-                beacon: Address::ZERO})
+                beacon: Address::ZERO
+            })
             .encode()
         );
     }
 
-    #[motsu::test]
-    #[ignore = "TODO: motsu doesn't properly reset custom storage slots on transaction revert. See https://github.com/OpenZeppelin/stylus-test-helpers/issues/112"]
-    fn upgrade_beacon_to_and_call_with_beacon_returning_invalid_implementation(
-        contract: Contract<TestContract>,
-        beacon: Contract<MockBeacon>,
-        alice: Address,
-    ) {
+    #[test]
+    #[ignore = "TestVM doesn't roll back the storage writes of a call that fails: the beacon slot is written before the implementation of the beacon is checked, and stays set"]
+    fn upgrade_beacon_to_and_call_with_beacon_returning_invalid_implementation()
+    {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+
         // beacon returns an address with no code.
-        let invalid_address = alice; // address with no code.
-        beacon.sender(alice).constructor(invalid_address);
+        let invalid_address = ALICE; // address with no code.
+        deploy_beacon(&vm, BEACON, invalid_address);
 
         let err = contract
-            .sender(alice)
-            .test_upgrade_beacon_to_and_call(beacon.address(), vec![].into())
+            .test_upgrade_beacon_to_and_call(BEACON, vec![].into())
             .expect_err(
                 "should fail when beacon returns invalid implementation",
             );
@@ -1007,225 +1079,205 @@ mod tests {
         assert_eq!(
             err,
             Error::InvalidImplementation(ERC1967InvalidImplementation {
-                implementation: invalid_address})
+                implementation: invalid_address
+            })
             .encode()
         );
 
         // beacon should remain unchanged.
-        let beacon_address = contract.sender(alice).test_get_beacon();
+        let beacon_address = contract.test_get_beacon();
         assert_eq!(beacon_address, Address::ZERO);
     }
 
-    #[motsu::test]
-    fn upgrade_beacon_to_and_call_with_beacon_returning_zero_implementation(
-        contract: Contract<TestContract>,
-        beacon: Contract<MockBeacon>,
-        alice: Address,
-    ) {
+    #[test]
+    fn upgrade_beacon_to_and_call_with_beacon_returning_zero_implementation() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+
         // beacon returns [`Address::ZERO`].
-        beacon.sender(alice).constructor(Address::ZERO);
+        deploy_beacon(&vm, BEACON, Address::ZERO);
 
         let err = contract
-            .sender(alice)
-            .test_upgrade_beacon_to_and_call(beacon.address(), vec![].into())
+            .test_upgrade_beacon_to_and_call(BEACON, vec![].into())
             .expect_err("should fail when beacon returns zero implementation");
 
         assert_eq!(
             err,
             Error::InvalidImplementation(ERC1967InvalidImplementation {
-                implementation: Address::ZERO})
+                implementation: Address::ZERO
+            })
             .encode()
         );
     }
 
-    #[motsu::test]
-    fn upgrade_beacon_to_and_call_multiple_times(
-        contract: Contract<TestContract>,
-        beacon1: Contract<MockBeacon>,
-        beacon2: Contract<MockBeacon>,
-        implementation: Contract<Implementation>,
-        alice: Address,
-    ) {
-        beacon1.sender(alice).constructor(implementation.address());
-        beacon2.sender(alice).constructor(implementation.address());
+    #[test]
+    fn upgrade_beacon_to_and_call_multiple_times() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+        deploy(&vm, IMPLEMENTATION);
+        deploy_beacon(&vm, BEACON, IMPLEMENTATION);
+        deploy_beacon(&vm, BEACON_2, IMPLEMENTATION);
 
         // first upgrade.
         contract
-            .sender(alice)
-            .test_upgrade_beacon_to_and_call(beacon1.address(), vec![].into())
+            .test_upgrade_beacon_to_and_call(BEACON, vec![].into())
             .expect("should be able to upgrade beacon first time");
 
-        let beacon = contract.sender(alice).test_get_beacon();
-        assert_eq!(beacon, beacon1.address());
+        let beacon = contract.test_get_beacon();
+        assert_eq!(beacon, BEACON);
 
         // second upgrade.
         contract
-            .sender(alice)
-            .test_upgrade_beacon_to_and_call(beacon2.address(), vec![].into())
+            .test_upgrade_beacon_to_and_call(BEACON_2, vec![].into())
             .expect("should be able to upgrade beacon second time");
 
-        let beacon = contract.sender(alice).test_get_beacon();
-        assert_eq!(beacon, beacon2.address());
+        let beacon = contract.test_get_beacon();
+        assert_eq!(beacon, BEACON_2);
 
         // verify events were emitted.
-        contract.assert_emitted(&erc1967::BeaconUpgraded {
-            beacon: beacon1.address()});
-        contract.assert_emitted(&erc1967::BeaconUpgraded {
-            beacon: beacon2.address()});
+        assert_emitted(&vm, &erc1967::BeaconUpgraded { beacon: BEACON });
+        assert_emitted(&vm, &erc1967::BeaconUpgraded { beacon: BEACON_2 });
     }
 
-    #[motsu::test]
-    fn upgrade_beacon_to_and_call_with_same_beacon(
-        contract: Contract<TestContract>,
-        beacon: Contract<MockBeacon>,
-        implementation: Contract<Implementation>,
-        alice: Address,
-    ) {
-        beacon.sender(alice).constructor(implementation.address());
+    #[test]
+    fn upgrade_beacon_to_and_call_with_same_beacon() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+        deploy(&vm, IMPLEMENTATION);
+        deploy_beacon(&vm, BEACON, IMPLEMENTATION);
 
         // first upgrade.
         contract
-            .sender(alice)
-            .test_upgrade_beacon_to_and_call(beacon.address(), vec![].into())
+            .test_upgrade_beacon_to_and_call(BEACON, vec![].into())
             .expect("should be able to upgrade beacon first time");
 
         // upgrade to same beacon.
         contract
-            .sender(alice)
-            .test_upgrade_beacon_to_and_call(beacon.address(), vec![].into())
+            .test_upgrade_beacon_to_and_call(BEACON, vec![].into())
             .expect("should be able to upgrade to same beacon");
 
-        let beacon_address = contract.sender(alice).test_get_beacon();
-        assert_eq!(beacon_address, beacon.address());
+        let beacon_address = contract.test_get_beacon();
+        assert_eq!(beacon_address, BEACON);
 
         // event should still be emitted.
-        contract.assert_emitted(&erc1967::BeaconUpgraded {
-            beacon: beacon.address()});
+        assert_emitted(&vm, &erc1967::BeaconUpgraded { beacon: BEACON });
     }
 
-    #[motsu::test]
-    fn upgrade_beacon_to_and_call_with_delegate_call_failure(
-        contract: Contract<TestContract>,
-        beacon: Contract<MockBeacon>,
-        implementation: Contract<Implementation>,
-        alice: Address,
-    ) {
-        beacon.sender(alice).constructor(implementation.address());
+    #[test]
+    fn upgrade_beacon_to_and_call_with_delegate_call_failure() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+        deploy(&vm, IMPLEMENTATION);
 
         let data = function_selector!("nonExistentFunction").to_vec();
 
-        let err = contract
-            .sender(alice)
-            .test_upgrade_beacon_to_and_call(
-                beacon.address(),
-                data.clone().into(),
-            )
-            .expect_err("should fail when delegate call fails");
+        // the delegate call reverts with a reason, which has to be the encoded
+        // address the beacon answers with (see `deploy_beacon`).
+        let vec = IMPLEMENTATION.abi_encode();
+        vm.mock_delegate_call(IMPLEMENTATION, data.clone(), Err(vec.clone()));
+        deploy_beacon(&vm, BEACON, IMPLEMENTATION);
 
-        let vec = format!(
-            "function not found for selector '{0}' and no fallback defined",
-            u32::from_be_bytes(TryInto::try_into(data).unwrap())
-        )
-        .as_bytes()
-        .to_vec();
+        let err = contract
+            .test_upgrade_beacon_to_and_call(BEACON, data.into())
+            .expect_err("should fail when delegate call fails");
 
         assert_eq!(
             err,
             Error::FailedCallWithReason(address::FailedCallWithReason {
-                reason: stylus_sdk::stylus_core::calls::errors::Error::Revert(vec).encode().into()
+                reason: stylus_sdk::stylus_core::calls::errors::Error::Revert(
+                    vec
+                )
+                .encode()
+                .into()
             })
             .encode(),
         );
     }
 
-    #[motsu::test]
-    fn upgrade_beacon_to_and_call_with_beacon_implementation_reverts(
-        contract: Contract<TestContract>,
-        beacon: Contract<MockBeacon>,
-        implementation: Contract<Implementation>,
-        alice: Address,
-    ) {
-        beacon.sender(alice).constructor(implementation.address());
+    #[test]
+    fn upgrade_beacon_to_and_call_with_beacon_implementation_reverts() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+        deploy(&vm, IMPLEMENTATION);
 
         let data = IImplementation::emitOrErrorCall { should_error: true }
             .abi_encode();
 
+        // the implementation reverts with a reason, which has to be the
+        // encoded address the beacon answers with (see `deploy_beacon`).
+        let reason = IMPLEMENTATION.abi_encode();
+        vm.mock_delegate_call(
+            IMPLEMENTATION,
+            data.clone(),
+            Err(reason.clone()),
+        );
+        deploy_beacon(&vm, BEACON, IMPLEMENTATION);
+
         let err = contract
-            .sender(alice)
-            .test_upgrade_beacon_to_and_call(
-                beacon.address(),
-                data.clone().into(),
-            )
+            .test_upgrade_beacon_to_and_call(BEACON, data.into())
             .expect_err("should fail when beacon implementation reverts");
 
         assert_eq!(
             err,
             Error::FailedCallWithReason(address::FailedCallWithReason {
-                reason: ImplementationError::ImplementationError(
-                    ImplementationSolidityError {}
-                )
-                .encode()
-                .into()})
+                reason: reason.into()
+            })
             .encode()
         );
     }
 
-    #[motsu::test]
-    fn upgrade_beacon_to_and_call_reverts_with_empty_data_with_value(
-        contract: Contract<TestContract>,
-        beacon: Contract<MockBeacon>,
-        implementation: Contract<Implementation>,
-        alice: Address,
-    ) {
-        beacon.sender(alice).constructor(implementation.address());
+    #[test]
+    fn upgrade_beacon_to_and_call_reverts_with_empty_data_with_value() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+        deploy(&vm, IMPLEMENTATION);
+        deploy_beacon(&vm, BEACON, IMPLEMENTATION);
 
-        alice.fund(U256::from(1000));
+        vm.set_balance(ALICE, U256::from(1000));
+        vm.set_value(U256::from(1000));
 
         let err = contract
-            .sender_and_value(alice, U256::from(1000))
-            .test_upgrade_beacon_to_and_call(beacon.address(), vec![].into())
+            .test_upgrade_beacon_to_and_call(BEACON, vec![].into())
             .expect_err("should fail with ERC1967NonPayable");
 
         assert_eq!(err, Error::NonPayable(ERC1967NonPayable {}).encode());
     }
 
     // test storage slot isolation.
-    #[motsu::test]
-    fn storage_slots_are_independent(
-        contract: Contract<TestContract>,
-        implementation: Contract<Implementation>,
-        beacon: Contract<MockBeacon>,
-        alice: Address,
-        bob: Address,
-    ) {
-        beacon.sender(alice).constructor(implementation.address());
+    #[test]
+    fn storage_slots_are_independent() {
+        let vm = TestVM::default();
+        let mut contract = TestContract::from(&vm);
+        vm.set_sender(ALICE);
+        deploy(&vm, IMPLEMENTATION);
+        deploy_beacon(&vm, BEACON, IMPLEMENTATION);
 
         // set implementation.
         contract
-            .sender(alice)
-            .test_upgrade_to_and_call(implementation.address(), vec![].into())
+            .test_upgrade_to_and_call(IMPLEMENTATION, vec![].into())
             .expect("should be able to set implementation");
 
         // set admin.
-        contract
-            .sender(alice)
-            .test_change_admin(bob)
-            .expect("should be able to set admin");
+        contract.test_change_admin(BOB).expect("should be able to set admin");
 
         // set beacon.
         contract
-            .sender(alice)
-            .test_upgrade_beacon_to_and_call(beacon.address(), vec![].into())
+            .test_upgrade_beacon_to_and_call(BEACON, vec![].into())
             .expect("should be able to set beacon");
 
         // verify all are set correctly.
-        let implementation_addr =
-            contract.sender(alice).test_get_implementation();
-        let admin = contract.sender(alice).test_get_admin();
-        let beacon_address = contract.sender(alice).test_get_beacon();
+        let implementation_addr = contract.test_get_implementation();
+        let admin = contract.test_get_admin();
+        let beacon_address = contract.test_get_beacon();
 
-        assert_eq!(implementation_addr, implementation.address());
-        assert_eq!(admin, bob);
-        assert_eq!(beacon_address, beacon.address());
+        assert_eq!(implementation_addr, IMPLEMENTATION);
+        assert_eq!(admin, BOB);
+        assert_eq!(beacon_address, BEACON);
     }
 }
