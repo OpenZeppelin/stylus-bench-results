@@ -1,32 +1,25 @@
 #!/bin/bash
-set -e
+# Checks every example's release WASM against the Stylus size limit with cargo-stylus.
+# Runs against RPC_URL (a devnet) when set, otherwise against the Arbitrum Sepolia RPC.
+set -euo pipefail
 
-mydir=$(dirname "$0")
-cd "$mydir" || exit
-cd ..
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 
-# Check contract wasm binary by crate name
-check_wasm() {
-  local CONTRACT_CRATE_NAME=$1
-  local CONTRACT_BIN_NAME="${CONTRACT_CRATE_NAME//-/_}.wasm"
+ENDPOINT="${RPC_URL:-https://sepolia-rollup.arbitrum.io/rpc}"
 
-  echo
-  echo "Checking contract $CONTRACT_CRATE_NAME"
-  cargo stylus check -e https://sepolia-rollup.arbitrum.io/rpc --wasm-file ./target/wasm32-unknown-unknown/release/"$CONTRACT_BIN_NAME"
-}
+cargo build --release --target wasm32-unknown-unknown
 
-# Retrieve all alphanumeric contract's crate names in `./examples` directory.
-get_example_crate_names() {
-  # shellcheck disable=SC2038
-  # NOTE: optimistically relying on the 'name = ' string at Cargo.toml file
-  find ./examples -maxdepth 2 -type f -name "Cargo.toml" | xargs grep -m 1 'name = ' | grep -oE '".*"' | tr -d "'\""
-}
-
-cargo build --release --target wasm32-unknown-unknown \
-  -Z build-std=std,panic_abort \
-  -Z build-std-features=panic_immediate_abort
-
-for CRATE_NAME in $(get_example_crate_names); do
-  check_wasm "$CRATE_NAME"
+FAILED=0
+for manifest in examples/*/Cargo.toml examples/*/*/Cargo.toml; do
+  [ -f "$manifest" ] || continue
+  name=$(grep -m1 '^name = ' "$manifest" | grep -oE '"[^"]+"' | tr -d '"')
+  wasm="target/wasm32-unknown-unknown/release/${name//-/_}.wasm"
+  [ -f "$wasm" ] || continue
+  echo "checking $name"
+  if ! cargo stylus check -e "$ENDPOINT" --wasm-file "$wasm"; then
+    FAILED=1
+  fi
   sleep 2
 done
+exit $FAILED

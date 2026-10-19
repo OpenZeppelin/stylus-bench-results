@@ -32,7 +32,7 @@ jobs:
       matrix:
         # Run on stable and beta to ensure that tests won't break on the next
         # version of the rust toolchain.
-        toolchain: [stable, beta]
+        toolchain: [1.91.0]
     steps:
       - uses: actions/checkout@v4
         with:

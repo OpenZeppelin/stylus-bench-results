@@ -55,7 +55,7 @@ jobs:
       matrix:
         # Get early warning of new lints which are regularly introduced in beta
         # channels.
-        toolchain: [stable, beta]
+        toolchain: [1.91.0]
     steps:
       - uses: actions/checkout@v4
         with:

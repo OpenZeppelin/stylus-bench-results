@@ -1,48 +1,37 @@
 #!/bin/bash
-set -e
+# Gas benchmarks. Builds the examples for wasm, optimizes them with wasm-opt, and runs
+# the benches against a Stylus SDK devnet.
+#
+# Environment:
+#   RPC_URL         a running devnet; a fresh one is started for the run when unset.
+#   BENCH_WASM_DIR  directory with the <name>.wasm files to benchmark; defaults to the
+#                   release output of this workspace. Point it at another build to
+#                   compare two versions on the same devnet.
+set -euo pipefail
 
-MYDIR=$(realpath "$(dirname "$0")")
-cd "$MYDIR"
-cd ..
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 
-# Optimize contract's wasm binary by crate name.
-opt_wasm() {
-  local CONTRACT_CRATE_NAME=$1
-  local CONTRACT_BIN_NAME="${CONTRACT_CRATE_NAME//-/_}.wasm"
-  local CONTRACT_OPT_BIN_NAME="${CONTRACT_CRATE_NAME//-/_}_opt.wasm"
+if [ -z "${RPC_URL:-}" ]; then
+  RPC_URL="$(scripts/devnet.sh start)"
+  export RPC_URL
+  trap 'scripts/devnet.sh stop' EXIT
+fi
 
-  echo
-  echo "Optimizing $CONTRACT_CRATE_NAME WASM binary"
-  # https://rustwasm.github.io/book/reference/code-size.html#use-the-wasm-opt-tool
-  wasm-opt --enable-bulk-memory -O3 -o ./target/wasm32-unknown-unknown/release/"$CONTRACT_OPT_BIN_NAME" ./target/wasm32-unknown-unknown/release/"$CONTRACT_BIN_NAME"
-}
+cargo build --release --target wasm32-unknown-unknown
 
-# Retrieve all alphanumeric contract's crate names in `./examples` directory.
-get_example_crate_names() {
-  # shellcheck disable=SC2038
-  # NOTE: optimistically relying on the 'name = ' string at Cargo.toml file
-  find ./examples -maxdepth 2 -type f -name "Cargo.toml" | xargs grep 'name = ' | grep -oE '".*"' | tr -d "'\""
-}
+WASM_DIR="${BENCH_WASM_DIR:-$ROOT/target/wasm32-unknown-unknown/release}"
+export BENCH_WASM_DIR="$WASM_DIR"
 
-cargo build --release --target wasm32-unknown-unknown \
-  -Z build-std=std,panic_abort \
-  -Z build-std-features=panic_immediate_abort
-
-# Optimize contract's wasm for gas usage.
-for CRATE_NAME in $(get_example_crate_names); do
-  opt_wasm "$CRATE_NAME"
+# Optimize every example's WASM for gas usage (binaryen 116, as the gas workflow pins).
+for manifest in examples/*/Cargo.toml examples/*/*/Cargo.toml; do
+  [ -f "$manifest" ] || continue
+  name=$(grep -m1 '^name = ' "$manifest" | grep -oE '"[^"]+"' | tr -d '"')
+  bin="${name//-/_}.wasm"
+  if [ -f "$WASM_DIR/$bin" ]; then
+    wasm-opt --enable-bulk-memory -O3 -o "$WASM_DIR/${bin%.wasm}_opt.wasm" "$WASM_DIR/$bin"
+  fi
 done
 
-export RPC_URL=http://localhost:8547
 export DEPLOYER_ADDRESS=0xcEcba2F1DC234f70Dd89F2041029807F8D03A990
-
-# No need to compile benchmarks with `--release`
-# since this only runs the benchmarking code and the contracts have already been compiled with `--release`.
 cargo run -p benches
-echo "This benchmarks measure gas execution cost,
- the 21000 EVM base gas fee is omitted."
-echo
-echo "To measure non cached contract's gas usage correctly,
- benchmarks should run on a clean instance of the nitro test node."
-echo
-echo "Finished running benches!"
