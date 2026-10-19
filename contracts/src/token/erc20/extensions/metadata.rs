@@ -15,11 +15,14 @@ pub const DEFAULT_DECIMALS: U8 = uint!(18_U8);
 #[storage]
 pub struct Erc20Metadata {
     /// [`Metadata`] contract.
-    pub(crate) metadata: Metadata}
+    pub(crate) metadata: Metadata,
+}
 
 /// Interface for the optional metadata functions from the ERC-20 standard.
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait IErc20Metadata: IErc165 {
     /// Returns the name of the token.
     ///
@@ -100,30 +103,29 @@ impl IErc165 for Erc20Metadata {
 
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::Contract;
-    use stylus_sdk::{alloy_primitives::Address, prelude::*};
+    use stylus_sdk::testing::TestVM;
 
     use super::*;
 
-    unsafe impl TopLevelStorage for Erc20Metadata {}
-
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual = <Erc20Metadata as IErc20Metadata>::interface_id();
         let expected: B32 = 0xa219a025_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
-    fn supports_interface(contract: Contract<Erc20Metadata>, alice: Address) {
-        assert!(contract.sender(alice).supports_interface(
+    #[test]
+    fn supports_interface() {
+        let vm = TestVM::default();
+        let contract = Erc20Metadata::from(&vm);
+
+        assert!(contract.supports_interface(
             <Erc20Metadata as IErc20Metadata>::interface_id()
         ));
         assert!(contract
-            .sender(alice)
             .supports_interface(<Erc20Metadata as IErc165>::interface_id()));
 
         let fake_interface_id: B32 = 0x12345678_u32.into();
-        assert!(!contract.sender(alice).supports_interface(fake_interface_id));
+        assert!(!contract.supports_interface(fake_interface_id));
     }
 }

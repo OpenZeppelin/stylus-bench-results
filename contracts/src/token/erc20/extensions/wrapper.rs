@@ -12,18 +12,21 @@
 //! See [`Erc20Wrapper::_recover`] for recovering value accrued to the wrapper.
 
 use alloc::{vec, vec::Vec};
-use stylus_sdk::stylus_core::calls::errors::MethodError;
 
 use alloy_primitives::{Address, U256, U8};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
-use stylus_sdk::{ prelude::*, storage::StorageAddress};
+use stylus_sdk::{
+    prelude::*, storage::StorageAddress,
+    stylus_core::calls::errors::MethodError,
+};
 
 use crate::token::erc20::{
     self,
     interface::{Erc20Interface, IErc20MetadataInterface},
     utils::{safe_erc20, ISafeErc20, SafeErc20},
-    Erc20, IErc20};
+    Erc20, IErc20,
+};
 
 /// Default number of decimals for an [ERC-20] token.
 ///
@@ -70,7 +73,8 @@ pub enum Error {
         safe_erc20::SafeErc20FailedDecreaseAllowance,
     ),
     /// The underlying token couldn't be wrapped.
-    InvalidUnderlying(ERC20InvalidUnderlying)}
+    InvalidUnderlying(ERC20InvalidUnderlying),
+}
 
 impl From<erc20::Error> for Error {
     fn from(value: erc20::Error) -> Self {
@@ -84,7 +88,8 @@ impl From<erc20::Error> for Error {
                 Error::InsufficientAllowance(e)
             }
             erc20::Error::InvalidSpender(e) => Error::InvalidSpender(e),
-            erc20::Error::InvalidApprover(e) => Error::InvalidApprover(e)}
+            erc20::Error::InvalidApprover(e) => Error::InvalidApprover(e),
+        }
     }
 }
 
@@ -113,11 +118,14 @@ pub struct Erc20Wrapper {
     /// Address of the underlying token.
     pub(crate) underlying: StorageAddress,
     /// [`SafeErc20`] contract.
-    safe_erc20: SafeErc20}
+    safe_erc20: SafeErc20,
+}
 
 /// ERC-20 Wrapper Standard Interface
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait IErc20Wrapper {
     /// The error type associated to the trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -166,10 +174,10 @@ pub trait IErc20Wrapper {
     ///
     /// # Errors
     ///
-    /// * [`Error::InvalidSender`] - If the `self.vm().msg_sender()`'s address is the
-    ///   `contract:address()`.
-    /// * [`Error::InvalidReceiver`] - If the `account` address is a
-    ///   `contract:address()`.
+    /// * [`Error::InvalidSender`] - If the caller's address is the address of
+    ///   this contract.
+    /// * [`Error::InvalidReceiver`] - If the `account` address is the address
+    ///   of this contract.
     /// * [`Error::SafeErc20FailedOperation`] - If caller lacks sufficient
     ///   balance or hasn't approved enough tokens to the [`Erc20Wrapper`]
     ///   contract.
@@ -196,8 +204,8 @@ pub trait IErc20Wrapper {
     ///
     /// # Errors
     ///
-    /// * [`Error::InvalidReceiver`] - If the `account`'s address is a
-    ///   `contract:address()`.
+    /// * [`Error::InvalidReceiver`] - If the `account`'s address is the address
+    ///   of this contract.
     /// * [`Error::InvalidSender`] - If the `from` address is [`Address::ZERO`].
     /// * [`Error::InsufficientBalance`] - If the `from` address doesn't have
     ///   enough tokens.
@@ -221,7 +229,7 @@ impl Erc20Wrapper {
     pub fn decimals(&self) -> U8 {
         U8::from(
             IErc20MetadataInterface::new(self.underlying())
-                .decimals(self)
+                .decimals(self.vm(), Call::new())
                 .unwrap_or(DEFAULT_DECIMALS),
         )
     }
@@ -306,7 +314,8 @@ impl Erc20Wrapper {
     ) -> Result<(), Error> {
         if underlying_token == self.vm().contract_address() {
             return Err(Error::InvalidUnderlying(ERC20InvalidUnderlying {
-                token: underlying_token}));
+                token: underlying_token,
+            }));
         }
         self.underlying.set(underlying_token);
         Ok(())
@@ -345,7 +354,7 @@ impl Erc20Wrapper {
         let underlying_token = Erc20Interface::new(self.underlying());
 
         let underlying_balance = underlying_token
-            .balance_of(Call::new_in(self), contract_address)
+            .balance_of(self.vm(), Call::new(), contract_address)
             .map_err(|_| ERC20InvalidUnderlying { token: contract_address })?;
 
         let value = underlying_balance
@@ -362,51 +371,106 @@ impl Erc20Wrapper {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{aliases::B32, uint};
-    use motsu::prelude::*;
+    use alloy_primitives::{address, aliases::B32, uint};
+    use alloy_sol_types::{sol, SolCall, SolValue};
+    use stylus_sdk::testing::TestVM;
 
     use super::*;
-    use crate::{
-        token::erc20::extensions::IErc20Metadata,
-        utils::introspection::erc165::IErc165};
+    use crate::{test_utils::ALICE, token::erc20::tests::assert_emitted};
+
+    sol! {
+        /// The calls that the wrapper makes to its underlying token.
+        interface IERC20 {
+            function balanceOf(address account) external view returns (uint256);
+            function decimals() external view returns (uint8);
+            function transfer(address to, uint256 value) external returns (bool);
+            function transferFrom(address from, address to, uint256 value) external returns (bool);
+        }
+    }
 
     const DUMMY_TEST_DECIMALS: u8 = 12;
-    #[storage]
-    struct DummyErc20Metadata {}
 
-    #[public]
-    #[implements(IErc20Metadata, IErc165)]
-    impl DummyErc20Metadata {}
+    /// Address of the underlying token of the wrapper.
+    const UNDERLYING: Address =
+        address!("0x00000000000000000000000000000000000e2c20");
 
-    #[public]
-    impl IErc20Metadata for DummyErc20Metadata {
-        fn name(&self) -> String {
-            "DummyErc20Metadata".into()
-        }
-
-        fn symbol(&self) -> String {
-            "TTK".into()
-        }
-
-        fn decimals(&self) -> U8 {
-            U8::from(DUMMY_TEST_DECIMALS)
-        }
+    /// The ERC-20 token wrapped by the contract under test.
+    ///
+    /// A [`TestVM`] cannot call into another contract, so the token lives in
+    /// its own VM and the calls that the wrapper makes to it are mocked with
+    /// the outcome of the same calls on the token. The `TestVM` returns the
+    /// data of the last registered mock to every call, so a mock is registered
+    /// right before the call that reads it.
+    struct Underlying {
+        vm: TestVM,
+        token: Erc20,
     }
 
-    #[public]
-    impl IErc165 for DummyErc20Metadata {
-        fn supports_interface(&self, _interface_id: B32) -> bool {
-            // dummy implementation, required by [`IErc20Metadata`] trait.
-            true
+    impl Underlying {
+        /// Deploys the token at [`UNDERLYING`], where `caller` sees a contract.
+        fn deploy(caller: &TestVM) -> Self {
+            let vm = TestVM::default();
+            vm.set_contract_address(UNDERLYING);
+            let token = Erc20::from(&vm);
+
+            caller.set_code(UNDERLYING, vec![1]);
+
+            Self { vm, token }
+        }
+
+        /// Mocks the `transferFrom` call that `caller` makes to the token.
+        fn mock_transfer_from(
+            &mut self,
+            caller: &TestVM,
+            from: Address,
+            to: Address,
+            value: U256,
+        ) {
+            self.vm.set_sender(caller.contract_address());
+            let result = self.token.transfer_from(from, to, value);
+            caller.mock_call(
+                UNDERLYING,
+                IERC20::transferFromCall { from, to, value }.abi_encode(),
+                U256::ZERO,
+                Self::response(result),
+            );
+        }
+
+        /// Mocks the `transfer` call that `caller` makes to the token.
+        fn mock_transfer(&mut self, caller: &TestVM, to: Address, value: U256) {
+            self.vm.set_sender(caller.contract_address());
+            let result = self.token.transfer(to, value);
+            caller.mock_call(
+                UNDERLYING,
+                IERC20::transferCall { to, value }.abi_encode(),
+                U256::ZERO,
+                Self::response(result),
+            );
+        }
+
+        /// Mocks the `balanceOf` call that `caller` makes to the token.
+        fn mock_balance_of(&self, caller: &TestVM, account: Address) {
+            caller.mock_static_call(
+                UNDERLYING,
+                IERC20::balanceOfCall { account }.abi_encode(),
+                Self::response(Ok(self.token.balance_of(account))),
+            );
+        }
+
+        /// Encodes the outcome of a call on the token as the response to the
+        /// call.
+        fn response<T: SolValue>(
+            result: Result<T, erc20::Error>,
+        ) -> Result<Vec<u8>, Vec<u8>> {
+            result.map(|value| value.abi_encode()).map_err(Into::into)
         }
     }
-
-    unsafe impl TopLevelStorage for DummyErc20Metadata {}
 
     #[storage]
     struct Erc20WrapperTestExample {
         wrapper: Erc20Wrapper,
-        erc20: Erc20}
+        erc20: Erc20,
+    }
 
     #[public]
     #[implements(IErc20Wrapper<Error = Error>)]
@@ -453,51 +517,59 @@ mod tests {
         }
     }
 
-    unsafe impl TopLevelStorage for Erc20WrapperTestExample {}
+    #[test]
+    fn decimals_works() {
+        let vm = TestVM::default();
+        let mut contract = Erc20WrapperTestExample::from(&vm);
 
-    #[motsu::test]
-    fn decimals_works(
-        contract: Contract<Erc20WrapperTestExample>,
-        metadata: Contract<DummyErc20Metadata>,
-        alice: Address,
-    ) {
-        contract
-            .sender(alice)
-            .constructor(metadata.address())
-            .motsu_expect("should construct");
-        assert_eq!(
-            contract.sender(alice).decimals(),
-            U8::from(DUMMY_TEST_DECIMALS)
+        vm.mock_static_call(
+            UNDERLYING,
+            IERC20::decimalsCall {}.abi_encode(),
+            Ok(IERC20::decimalsCall::abi_encode_returns(&DUMMY_TEST_DECIMALS)),
         );
+
+        contract.constructor(UNDERLYING).expect("should construct");
+        assert_eq!(contract.decimals(), U8::from(DUMMY_TEST_DECIMALS));
     }
 
-    #[motsu::test]
-    fn underlying_works(
-        contract: Contract<Erc20WrapperTestExample>,
-        erc20_contract: Contract<Erc20>,
-        alice: Address,
-    ) {
-        let erc20_address = erc20_contract.address();
+    #[test]
+    fn decimals_defaults_when_underlying_reverts() {
+        let vm = TestVM::default();
+        let mut contract = Erc20WrapperTestExample::from(&vm);
 
-        contract
-            .sender(alice)
-            .constructor(erc20_address)
-            .motsu_expect("should construct");
+        vm.mock_static_call(
+            UNDERLYING,
+            IERC20::decimalsCall {}.abi_encode(),
+            Err(vec![]),
+        );
 
-        assert_eq!(contract.sender(alice).underlying(), erc20_address);
+        contract.constructor(UNDERLYING).expect("should construct");
+        assert_eq!(contract.decimals(), U8::from(DEFAULT_DECIMALS));
     }
 
-    #[motsu::test]
-    fn constructor_reverts_when_invalid_asset(
-        contract: Contract<Erc20WrapperTestExample>,
-        alice: Address,
-    ) {
-        let invalid_asset = contract.address();
+    #[test]
+    fn underlying_works() {
+        let vm = TestVM::default();
+        let mut contract = Erc20WrapperTestExample::from(&vm);
+        let underlying = Underlying::deploy(&vm);
+
+        let erc20_address = underlying.vm.contract_address();
+
+        contract.constructor(erc20_address).expect("should construct");
+
+        assert_eq!(contract.underlying(), erc20_address);
+    }
+
+    #[test]
+    fn constructor_reverts_when_invalid_asset() {
+        let vm = TestVM::default();
+        let mut contract = Erc20WrapperTestExample::from(&vm);
+
+        let invalid_asset = vm.contract_address();
 
         let err = contract
-            .sender(alice)
             .constructor(invalid_asset)
-            .motsu_expect_err("should return Error::InvalidUnderlying");
+            .expect_err("should return Error::InvalidUnderlying");
 
         assert!(matches!(
             err,
@@ -506,20 +578,19 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    #[ignore = "TODO: unignore once motsu fixes https://github.com/OpenZeppelin/stylus-test-helpers/issues/115."]
-    fn deposit_for_reverts_when_invalid_asset(
-        contract: Contract<Erc20WrapperTestExample>,
-        alice: Address,
-    ) {
-        // assume an invalid underlying asset is somehow set in the contract
-        let invalid_asset = alice;
-        contract.sender(alice).wrapper.underlying.set(invalid_asset);
+    #[test]
+    fn deposit_for_reverts_when_invalid_asset() {
+        let vm = TestVM::default();
+        let mut contract = Erc20WrapperTestExample::from(&vm);
 
+        // assume an invalid underlying asset is somehow set in the contract
+        let invalid_asset = ALICE;
+        contract.wrapper.underlying.set(invalid_asset);
+
+        vm.set_sender(ALICE);
         let err = contract
-            .sender(alice)
-            .deposit_for(alice, uint!(10_U256))
-            .motsu_expect_err("should return Error::SafeErc20FailedOperation");
+            .deposit_for(ALICE, uint!(10_U256))
+            .expect_err("should return Error::SafeErc20FailedOperation");
 
         assert!(matches!(
             err,
@@ -529,23 +600,22 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn deposit_for_reverts_when_invalid_sender(
-        contract: Contract<Erc20WrapperTestExample>,
-        erc20_contract: Contract<Erc20>,
-        alice: Address,
-    ) {
-        let invalid_sender = contract.address();
+    #[test]
+    fn deposit_for_reverts_when_invalid_sender() {
+        let vm = TestVM::default();
+        let mut contract = Erc20WrapperTestExample::from(&vm);
+        let underlying = Underlying::deploy(&vm);
+
+        let invalid_sender = vm.contract_address();
 
         contract
-            .sender(alice)
-            .constructor(erc20_contract.address())
-            .motsu_expect("should construct");
+            .constructor(underlying.vm.contract_address())
+            .expect("should construct");
 
+        vm.set_sender(invalid_sender);
         let err = contract
-            .sender(invalid_sender)
-            .deposit_for(alice, uint!(10_U256))
-            .motsu_expect_err("should return Error::InvalidSender");
+            .deposit_for(ALICE, uint!(10_U256))
+            .expect_err("should return Error::InvalidSender");
 
         assert!(matches!(
             err,
@@ -553,23 +623,22 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn deposit_for_reverts_when_invalid_receiver(
-        contract: Contract<Erc20WrapperTestExample>,
-        erc20_contract: Contract<Erc20>,
-        alice: Address,
-    ) {
-        let invalid_receiver = contract.address();
+    #[test]
+    fn deposit_for_reverts_when_invalid_receiver() {
+        let vm = TestVM::default();
+        let mut contract = Erc20WrapperTestExample::from(&vm);
+        let underlying = Underlying::deploy(&vm);
+
+        let invalid_receiver = vm.contract_address();
 
         contract
-            .sender(alice)
-            .constructor(erc20_contract.address())
-            .motsu_expect("should construct");
+            .constructor(underlying.vm.contract_address())
+            .expect("should construct");
 
+        vm.set_sender(ALICE);
         let err = contract
-            .sender(alice)
             .deposit_for(invalid_receiver, uint!(10_U256))
-            .motsu_expect_err("should return Error::InvalidReceiver");
+            .expect_err("should return Error::InvalidReceiver");
 
         assert!(matches!(
             err,
@@ -577,162 +646,170 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn deposit_for_reverts_when_insufficient_allowance(
-        contract: Contract<Erc20WrapperTestExample>,
-        erc20_contract: Contract<Erc20>,
-        alice: Address,
-    ) {
+    #[test]
+    fn deposit_for_reverts_when_insufficient_allowance() {
+        let vm = TestVM::default();
+        let mut contract = Erc20WrapperTestExample::from(&vm);
+        let mut underlying = Underlying::deploy(&vm);
+
         let amount = uint!(10_U256);
 
         contract
-            .sender(alice)
-            .constructor(erc20_contract.address())
-            .motsu_expect("should construct");
+            .constructor(underlying.vm.contract_address())
+            .expect("should construct");
 
-        erc20_contract
-            .sender(alice)
-            ._mint(alice, amount)
-            .motsu_expect("should mint");
+        underlying.token._mint(ALICE, amount).expect("should mint");
 
+        underlying.mock_transfer_from(
+            &vm,
+            ALICE,
+            vm.contract_address(),
+            amount,
+        );
+
+        vm.set_sender(ALICE);
         let err = contract
-            .sender(alice)
-            .deposit_for(alice, amount)
-            .motsu_expect_err("should return Error::SafeErc20");
+            .deposit_for(ALICE, amount)
+            .expect_err("should return Error::SafeErc20");
 
         assert!(matches!(
             err,
             Error::SafeErc20FailedOperation(
                 safe_erc20::SafeErc20FailedOperation { token }
-            ) if token == erc20_contract.address()
+            ) if token == underlying.vm.contract_address()
         ));
     }
 
-    #[motsu::test]
-    fn deposit_for_reverts_when_insufficient_balance(
-        contract: Contract<Erc20WrapperTestExample>,
-        erc20_contract: Contract<Erc20>,
-        alice: Address,
-    ) {
+    #[test]
+    fn deposit_for_reverts_when_insufficient_balance() {
+        let vm = TestVM::default();
+        let mut contract = Erc20WrapperTestExample::from(&vm);
+        let mut underlying = Underlying::deploy(&vm);
+
         let amount = uint!(10_U256);
 
         let exceeding_value = amount + uint!(1_U256);
 
         contract
-            .sender(alice)
-            .constructor(erc20_contract.address())
-            .motsu_expect("should construct");
+            .constructor(underlying.vm.contract_address())
+            .expect("should construct");
 
-        erc20_contract
-            .sender(alice)
-            ._mint(alice, amount)
-            .motsu_expect("should mint");
+        underlying.token._mint(ALICE, amount).expect("should mint");
 
-        erc20_contract
-            .sender(alice)
-            .approve(contract.address(), exceeding_value)
-            .motsu_expect("should approve");
+        underlying.vm.set_sender(ALICE);
+        underlying
+            .token
+            .approve(vm.contract_address(), exceeding_value)
+            .expect("should approve");
 
+        underlying.mock_transfer_from(
+            &vm,
+            ALICE,
+            vm.contract_address(),
+            exceeding_value,
+        );
+
+        vm.set_sender(ALICE);
         let err = contract
-            .sender(alice)
-            .deposit_for(alice, exceeding_value)
-            .motsu_expect_err("should return Error::SafeErc20");
+            .deposit_for(ALICE, exceeding_value)
+            .expect_err("should return Error::SafeErc20");
 
         assert!(matches!(
             err,
             Error::SafeErc20FailedOperation(
                 safe_erc20::SafeErc20FailedOperation { token }
-            ) if token == erc20_contract.address()
+            ) if token == underlying.vm.contract_address()
         ));
     }
 
-    #[motsu::test]
-    fn deposit_for_works(
-        contract: Contract<Erc20WrapperTestExample>,
-        erc20_contract: Contract<Erc20>,
-        alice: Address,
-    ) {
+    #[test]
+    fn deposit_for_works() {
+        let vm = TestVM::default();
+        let mut contract = Erc20WrapperTestExample::from(&vm);
+        let mut underlying = Underlying::deploy(&vm);
+
         let amount = uint!(10_U256);
 
         contract
-            .sender(alice)
-            .constructor(erc20_contract.address())
-            .motsu_expect("should construct");
+            .constructor(underlying.vm.contract_address())
+            .expect("should construct");
 
-        erc20_contract
-            .sender(alice)
-            ._mint(alice, amount)
-            .motsu_expect("should mint");
+        underlying.token._mint(ALICE, amount).expect("should mint");
 
-        let initial_balance = erc20_contract.sender(alice).balance_of(alice);
-        let initial_wrapped_balance =
-            contract.sender(alice).erc20.balance_of(alice);
+        let initial_balance = underlying.token.balance_of(ALICE);
+        let initial_wrapped_balance = contract.erc20.balance_of(ALICE);
 
         let initial_contract_balance =
-            erc20_contract.sender(alice).balance_of(contract.address());
+            underlying.token.balance_of(vm.contract_address());
 
-        let initial_wrapped_supply =
-            contract.sender(alice).erc20.total_supply();
+        let initial_wrapped_supply = contract.erc20.total_supply();
 
-        erc20_contract
-            .sender(alice)
-            .approve(contract.address(), amount)
-            .motsu_expect("should approve");
+        underlying.vm.set_sender(ALICE);
+        underlying
+            .token
+            .approve(vm.contract_address(), amount)
+            .expect("should approve");
 
-        assert!(contract
-            .sender(alice)
-            .deposit_for(alice, amount)
-            .motsu_expect("should deposit"));
+        underlying.mock_transfer_from(
+            &vm,
+            ALICE,
+            vm.contract_address(),
+            amount,
+        );
 
-        erc20_contract.assert_emitted(&erc20::Transfer {
-            from: alice,
-            to: contract.address(),
-            value: amount});
+        vm.set_sender(ALICE);
+        assert!(contract.deposit_for(ALICE, amount).expect("should deposit"));
 
-        contract.assert_emitted(&erc20::Transfer {
-            from: Address::ZERO,
-            to: alice,
-            value: amount});
+        assert_emitted(
+            &underlying.vm,
+            &erc20::Transfer {
+                from: ALICE,
+                to: vm.contract_address(),
+                value: amount,
+            },
+        );
+
+        assert_emitted(
+            &vm,
+            &erc20::Transfer { from: Address::ZERO, to: ALICE, value: amount },
+        );
 
         assert_eq!(
-            erc20_contract.sender(alice).balance_of(alice),
+            underlying.token.balance_of(ALICE),
             initial_balance - amount
         );
 
         assert_eq!(
-            contract.sender(alice).erc20.balance_of(alice),
+            contract.erc20.balance_of(ALICE),
             initial_wrapped_balance + amount
         );
 
         assert_eq!(
-            erc20_contract
-                .sender(contract.address())
-                .balance_of(contract.address()),
+            underlying.token.balance_of(vm.contract_address()),
             initial_contract_balance + amount
         );
 
         assert_eq!(
-            contract.sender(alice).erc20.total_supply(),
+            contract.erc20.total_supply(),
             initial_wrapped_supply + amount
         );
     }
 
-    #[motsu::test]
-    fn withdraw_to_reverts_when_invalid_receiver(
-        contract: Contract<Erc20WrapperTestExample>,
-        erc20_contract: Contract<Erc20>,
-        alice: Address,
-    ) {
-        let invalid_receiver = contract.address();
-        contract
-            .sender(alice)
-            .constructor(erc20_contract.address())
-            .motsu_expect("should construct");
+    #[test]
+    fn withdraw_to_reverts_when_invalid_receiver() {
+        let vm = TestVM::default();
+        let mut contract = Erc20WrapperTestExample::from(&vm);
+        let underlying = Underlying::deploy(&vm);
 
+        let invalid_receiver = vm.contract_address();
+        contract
+            .constructor(underlying.vm.contract_address())
+            .expect("should construct");
+
+        vm.set_sender(ALICE);
         let err = contract
-            .sender(alice)
             .withdraw_to(invalid_receiver, uint!(10_U256))
-            .motsu_expect_err("should return Error::InvalidReceiver");
+            .expect_err("should return Error::InvalidReceiver");
 
         assert!(matches!(
             err,
@@ -740,40 +817,41 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn withdraw_to_reverts_when_insufficient_balance(
-        contract: Contract<Erc20WrapperTestExample>,
-        erc20_contract: Contract<Erc20>,
-        alice: Address,
-    ) {
+    #[test]
+    fn withdraw_to_reverts_when_insufficient_balance() {
+        let vm = TestVM::default();
+        let mut contract = Erc20WrapperTestExample::from(&vm);
+        let mut underlying = Underlying::deploy(&vm);
+
         let amount = uint!(10_U256);
 
         contract
-            .sender(alice)
-            .constructor(erc20_contract.address())
-            .motsu_expect("should construct");
+            .constructor(underlying.vm.contract_address())
+            .expect("should construct");
 
-        erc20_contract
-            .sender(alice)
-            ._mint(alice, amount)
-            .motsu_expect("should mint");
+        underlying.token._mint(ALICE, amount).expect("should mint");
 
-        erc20_contract
-            .sender(alice)
-            .approve(contract.address(), amount)
-            .motsu_expect("should approve");
+        underlying.vm.set_sender(ALICE);
+        underlying
+            .token
+            .approve(vm.contract_address(), amount)
+            .expect("should approve");
 
-        contract
-            .sender(alice)
-            .deposit_for(alice, amount)
-            .motsu_expect("should deposit");
+        underlying.mock_transfer_from(
+            &vm,
+            ALICE,
+            vm.contract_address(),
+            amount,
+        );
+
+        vm.set_sender(ALICE);
+        contract.deposit_for(ALICE, amount).expect("should deposit");
 
         let exceeding_value = amount + uint!(1_U256);
 
         let err = contract
-            .sender(alice)
-            .withdraw_to(alice, exceeding_value)
-            .motsu_expect_err("should return Error::SafeErc20");
+            .withdraw_to(ALICE, exceeding_value)
+            .expect_err("should return Error::SafeErc20");
 
         assert!(matches!(
             err,
@@ -783,242 +861,239 @@ mod tests {
                     balance,
                     needed
                 }
-            ) if sender == alice && balance == amount && needed == exceeding_value
+            ) if sender == ALICE && balance == amount && needed == exceeding_value
         ));
     }
 
-    #[motsu::test]
-    fn withdraw_to_works(
-        contract: Contract<Erc20WrapperTestExample>,
-        erc20_contract: Contract<Erc20>,
-        alice: Address,
-    ) {
+    #[test]
+    fn withdraw_to_works() {
+        let vm = TestVM::default();
+        let mut contract = Erc20WrapperTestExample::from(&vm);
+        let mut underlying = Underlying::deploy(&vm);
+
         let amount = uint!(10_U256);
 
         contract
-            .sender(alice)
-            .constructor(erc20_contract.address())
-            .motsu_expect("should construct");
+            .constructor(underlying.vm.contract_address())
+            .expect("should construct");
 
-        erc20_contract
-            .sender(alice)
-            ._mint(alice, amount)
-            .motsu_expect("should mint");
+        underlying.token._mint(ALICE, amount).expect("should mint");
 
-        erc20_contract
-            .sender(alice)
-            .approve(contract.address(), amount)
-            .motsu_expect("should approve");
+        underlying.vm.set_sender(ALICE);
+        underlying
+            .token
+            .approve(vm.contract_address(), amount)
+            .expect("should approve");
 
-        contract
-            .sender(alice)
-            .deposit_for(alice, amount)
-            .motsu_expect("should deposit");
+        underlying.mock_transfer_from(
+            &vm,
+            ALICE,
+            vm.contract_address(),
+            amount,
+        );
 
-        let initial_balance = erc20_contract.sender(alice).balance_of(alice);
-        let initial_wrapped_balance =
-            contract.sender(alice).erc20.balance_of(alice);
+        vm.set_sender(ALICE);
+        contract.deposit_for(ALICE, amount).expect("should deposit");
+
+        let initial_balance = underlying.token.balance_of(ALICE);
+        let initial_wrapped_balance = contract.erc20.balance_of(ALICE);
 
         let initial_contract_balance =
-            erc20_contract.sender(alice).balance_of(contract.address());
+            underlying.token.balance_of(vm.contract_address());
 
-        let initial_wrapped_supply =
-            contract.sender(alice).erc20.total_supply();
+        let initial_wrapped_supply = contract.erc20.total_supply();
 
-        assert!(contract
-            .sender(alice)
-            .withdraw_to(alice, amount)
-            .motsu_expect("should withdraw"));
+        underlying.mock_transfer(&vm, ALICE, amount);
 
-        contract.assert_emitted(&erc20::Transfer {
-            from: alice,
-            to: Address::ZERO,
-            value: amount});
+        assert!(contract.withdraw_to(ALICE, amount).expect("should withdraw"));
 
-        erc20_contract.assert_emitted(&erc20::Transfer {
-            from: contract.address(),
-            to: alice,
-            value: amount});
+        assert_emitted(
+            &vm,
+            &erc20::Transfer { from: ALICE, to: Address::ZERO, value: amount },
+        );
+
+        assert_emitted(
+            &underlying.vm,
+            &erc20::Transfer {
+                from: vm.contract_address(),
+                to: ALICE,
+                value: amount,
+            },
+        );
 
         assert_eq!(
-            erc20_contract.sender(alice).balance_of(alice),
+            underlying.token.balance_of(ALICE),
             initial_balance + amount
         );
 
         assert_eq!(
-            contract.sender(alice).erc20.balance_of(alice),
+            contract.erc20.balance_of(ALICE),
             initial_wrapped_balance - amount
         );
 
         assert_eq!(
-            erc20_contract
-                .sender(contract.address())
-                .balance_of(contract.address()),
+            underlying.token.balance_of(vm.contract_address()),
             initial_contract_balance - amount
         );
 
         assert_eq!(
-            contract.sender(alice).erc20.total_supply(),
+            contract.erc20.total_supply(),
             initial_wrapped_supply - amount
         );
     }
 
-    #[storage]
-    struct NonErc20;
+    #[test]
+    #[ignore = "`_recover` reports the address of the wrapper, not the one of the underlying token, in `ERC20InvalidUnderlying`"]
+    fn recover_reverts_when_invalid_underlying() {
+        let vm = TestVM::default();
+        let mut contract = Erc20WrapperTestExample::from(&vm);
 
-    #[public]
-    impl NonErc20 {}
+        let invalid_underlying = ALICE;
+        contract.wrapper.underlying.set(invalid_underlying);
 
-    unsafe impl TopLevelStorage for NonErc20 {}
-
-    // TODO: Should be a test for the `Error::InvalidUnderlying` error,
-    // but impossible with current motsu limitations.
-    #[motsu::test]
-    #[ignore = "impossible with current motsu limitations"]
-    fn recover_reverts_when_invalid_underlying(
-        contract: Contract<Erc20WrapperTestExample>,
-        alice: Address,
-    ) {
-        let invalid_underlying = alice;
-        contract.sender(alice).wrapper.underlying.set(invalid_underlying);
-
+        vm.set_sender(ALICE);
         let err = contract
-            .sender(alice)
-            .recover(alice)
-            .motsu_expect_err("should return Error::InvalidUnderlying");
+            .recover(ALICE)
+            .expect_err("should return Error::InvalidUnderlying");
 
         assert!(matches!(
             err, Error::InvalidUnderlying(ERC20InvalidUnderlying { token }) if token == invalid_underlying
         ));
     }
 
-    #[motsu::test]
+    #[test]
     #[should_panic = "underlying balance should be greater than the `IErc20::total_supply`"]
-    fn recover_panics_when_underlying_balance_is_less_than_total_supply(
-        contract: Contract<Erc20WrapperTestExample>,
-        erc20_contract: Contract<Erc20>,
-        alice: Address,
-    ) {
+    fn recover_panics_when_underlying_balance_is_less_than_total_supply() {
+        let vm = TestVM::default();
+        let mut contract = Erc20WrapperTestExample::from(&vm);
+        let mut underlying = Underlying::deploy(&vm);
+
         let amount = uint!(10_U256);
 
         contract
-            .sender(alice)
-            .constructor(erc20_contract.address())
-            .motsu_expect("should construct");
+            .constructor(underlying.vm.contract_address())
+            .expect("should construct");
 
-        erc20_contract
-            .sender(alice)
-            ._mint(alice, amount)
-            .motsu_expect("should mint");
+        underlying.token._mint(ALICE, amount).expect("should mint");
 
-        erc20_contract
-            .sender(alice)
-            .approve(contract.address(), amount)
-            .motsu_expect("should approve");
+        underlying.vm.set_sender(ALICE);
+        underlying
+            .token
+            .approve(vm.contract_address(), amount)
+            .expect("should approve");
 
-        contract
-            .sender(alice)
-            .deposit_for(alice, amount)
-            .motsu_expect("should deposit");
+        underlying.mock_transfer_from(
+            &vm,
+            ALICE,
+            vm.contract_address(),
+            amount,
+        );
+
+        vm.set_sender(ALICE);
+        contract.deposit_for(ALICE, amount).expect("should deposit");
 
         // Unexpected mint.
-        contract
-            .sender(alice)
-            .erc20
-            ._mint(alice, amount)
-            .motsu_expect("should mint");
+        contract.erc20._mint(ALICE, amount).expect("should mint");
+
+        underlying.mock_balance_of(&vm, vm.contract_address());
 
         // This should panic.
-        _ = contract.sender(alice).recover(alice);
+        _ = contract.recover(ALICE);
     }
 
-    #[motsu::test]
-    fn recover_works_when_underlying_balance_is_equal_to_total_supply(
-        contract: Contract<Erc20WrapperTestExample>,
-        erc20_contract: Contract<Erc20>,
-        alice: Address,
-    ) {
+    #[test]
+    fn recover_works_when_underlying_balance_is_equal_to_total_supply() {
+        let vm = TestVM::default();
+        let mut contract = Erc20WrapperTestExample::from(&vm);
+        let mut underlying = Underlying::deploy(&vm);
+
         let amount = uint!(10_U256);
 
         contract
-            .sender(alice)
-            .constructor(erc20_contract.address())
-            .motsu_expect("should construct");
+            .constructor(underlying.vm.contract_address())
+            .expect("should construct");
 
-        erc20_contract
-            .sender(alice)
-            ._mint(alice, amount)
-            .motsu_expect("should mint");
+        underlying.token._mint(ALICE, amount).expect("should mint");
 
-        erc20_contract
-            .sender(alice)
-            .approve(contract.address(), amount)
-            .motsu_expect("should approve");
+        underlying.vm.set_sender(ALICE);
+        underlying
+            .token
+            .approve(vm.contract_address(), amount)
+            .expect("should approve");
 
-        contract
-            .sender(alice)
-            .deposit_for(alice, amount)
-            .motsu_expect("should deposit");
+        underlying.mock_transfer_from(
+            &vm,
+            ALICE,
+            vm.contract_address(),
+            amount,
+        );
+
+        vm.set_sender(ALICE);
+        contract.deposit_for(ALICE, amount).expect("should deposit");
+
+        underlying.mock_balance_of(&vm, vm.contract_address());
 
         assert_eq!(
-            contract
-                .sender(alice)
-                .recover(alice)
-                .motsu_expect("should recover"),
+            contract.recover(ALICE).expect("should recover"),
             U256::ZERO
         );
     }
 
-    #[motsu::test]
-    fn recover_works_when_underlying_balance_is_greater_than_total_supply(
-        contract: Contract<Erc20WrapperTestExample>,
-        erc20_contract: Contract<Erc20>,
-        alice: Address,
-    ) {
+    #[test]
+    fn recover_works_when_underlying_balance_is_greater_than_total_supply() {
+        let vm = TestVM::default();
+        let mut contract = Erc20WrapperTestExample::from(&vm);
+        let mut underlying = Underlying::deploy(&vm);
+
         let amount = uint!(10_U256);
 
         contract
-            .sender(alice)
-            .constructor(erc20_contract.address())
-            .motsu_expect("should construct");
+            .constructor(underlying.vm.contract_address())
+            .expect("should construct");
 
-        erc20_contract
-            .sender(alice)
-            ._mint(alice, amount)
-            .motsu_expect("should mint");
+        underlying.token._mint(ALICE, amount).expect("should mint");
 
-        erc20_contract
-            .sender(alice)
-            .approve(contract.address(), amount)
-            .motsu_expect("should approve");
+        underlying.vm.set_sender(ALICE);
+        underlying
+            .token
+            .approve(vm.contract_address(), amount)
+            .expect("should approve");
 
-        contract
-            .sender(alice)
-            .deposit_for(alice, amount)
-            .motsu_expect("should deposit");
+        underlying.mock_transfer_from(
+            &vm,
+            ALICE,
+            vm.contract_address(),
+            amount,
+        );
+
+        vm.set_sender(ALICE);
+        contract.deposit_for(ALICE, amount).expect("should deposit");
 
         // Unexpected mint.
         let unexpected_delta = uint!(1_U256);
-        erc20_contract
-            .sender(alice)
-            ._mint(contract.address(), unexpected_delta)
-            .motsu_expect("should mint");
+        underlying
+            .token
+            ._mint(vm.contract_address(), unexpected_delta)
+            .expect("should mint");
+
+        underlying.mock_balance_of(&vm, vm.contract_address());
 
         assert_eq!(
-            contract
-                .sender(alice)
-                .recover(alice)
-                .motsu_expect("should recover"),
+            contract.recover(ALICE).expect("should recover"),
             unexpected_delta
         );
 
-        contract.assert_emitted(&erc20::Transfer {
-            from: Address::ZERO,
-            to: alice,
-            value: unexpected_delta});
+        assert_emitted(
+            &vm,
+            &erc20::Transfer {
+                from: Address::ZERO,
+                to: ALICE,
+                value: unexpected_delta,
+            },
+        );
     }
 
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual = <Erc20WrapperTestExample as IErc20Wrapper>::interface_id();
         let expected: B32 = 0x511f913e_u32.into();

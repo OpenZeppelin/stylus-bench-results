@@ -10,7 +10,9 @@ use alloc::{vec, vec::Vec};
 use alloy_primitives::U256;
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
-use stylus_sdk::{stylus_core::calls::errors::MethodError, prelude::*, storage::StorageU256};
+use stylus_sdk::{
+    prelude::*, storage::StorageU256, stylus_core::calls::errors::MethodError,
+};
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -39,7 +41,8 @@ pub enum Error {
     ExceededCap(ERC20ExceededCap),
     /// Indicates an error related to the operation that failed
     /// because the supplied `cap` is not a valid cap value.
-    InvalidCap(ERC20InvalidCap)}
+    InvalidCap(ERC20InvalidCap),
+}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -51,11 +54,14 @@ impl MethodError for Error {
 #[storage]
 pub struct Capped {
     /// A cap to the supply of tokens.
-    pub(crate) cap: StorageU256}
+    pub(crate) cap: StorageU256,
+}
 
 /// Interface for the token supply cap logic.
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait ICapped {
     /// Returns the cap on the token's total supply.
     #[must_use]
@@ -94,29 +100,26 @@ impl ICapped for Capped {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{uint, Address};
-    use motsu::prelude::Contract;
-    use stylus_sdk::prelude::*;
+    use alloy_primitives::uint;
+    use stylus_sdk::testing::TestVM;
 
     use super::*;
 
-    unsafe impl TopLevelStorage for Capped {}
+    #[test]
+    fn cap_works() {
+        let vm = TestVM::default();
+        let mut contract = Capped::from(&vm);
 
-    #[motsu::test]
-    fn cap_works(contract: Contract<Capped>, alice: Address) {
         let value = uint!(2024_U256);
-        contract.sender(alice).constructor(value).expect("should set cap");
-        assert_eq!(contract.sender(alice).cap(), value);
+        contract.constructor(value).expect("should set cap");
+        assert_eq!(contract.cap(), value);
 
         let value = uint!(1_U256);
-        contract.sender(alice).constructor(value).expect("should set cap");
-        assert_eq!(contract.sender(alice).cap(), value);
+        contract.constructor(value).expect("should set cap");
+        assert_eq!(contract.cap(), value);
 
         let value = uint!(0_U256);
-        let err = contract
-            .sender(alice)
-            .constructor(value)
-            .expect_err("should return error");
+        let err = contract.constructor(value).expect_err("should return error");
         assert!(matches!(
             err,
             Error::InvalidCap(ERC20InvalidCap { cap }) if cap == value

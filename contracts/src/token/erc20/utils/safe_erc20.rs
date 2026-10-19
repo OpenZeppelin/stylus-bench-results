@@ -10,17 +10,20 @@
 //! operations as `contract.safe_transfer(token_addr, ...)`, etc.
 
 use alloc::{vec, vec::Vec};
-use stylus_sdk::stylus_core::calls::errors::MethodError;
 
 use alloy_primitives::{aliases::B32, Address, U256};
 use alloy_sol_types::{sol_data::Bool, SolCall, SolType};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
-use stylus_sdk::{abi::Bytes, call::RawCall, function_selector, prelude::*};
+use stylus_sdk::{
+    abi::Bytes, call::RawCall, function_selector, prelude::*,
+    stylus_core::calls::errors::MethodError,
+};
 
 use crate::{
     token::erc20::interface::Erc20Interface,
-    utils::introspection::erc165::IErc165};
+    utils::{address::AddressUtils, introspection::erc165::IErc165},
+};
 
 const BOOL_TYPE_SIZE: usize = 32;
 
@@ -57,7 +60,8 @@ pub enum Error {
     /// An operation with an ERC-20 token failed.
     SafeErc20FailedOperation(SafeErc20FailedOperation),
     /// Indicates a failed [`ISafeErc20::safe_decrease_allowance`] request.
-    SafeErc20FailedDecreaseAllowance(SafeErc20FailedDecreaseAllowance)}
+    SafeErc20FailedDecreaseAllowance(SafeErc20FailedDecreaseAllowance),
+}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -104,6 +108,8 @@ unsafe impl TopLevelStorage for SafeErc20 {}
 /// Required interface of a [`SafeErc20`] utility contract.
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait ISafeErc20 {
     /// The error type associated to this trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -366,10 +372,10 @@ impl ISafeErc20 for SafeErc20 {
         token: Address,
         to: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let call = IERC20::transferCall { to, value };
 
-        Self::call_optional_return(token, &call)
+        self.call_optional_return(token, &call)
     }
 
     fn safe_transfer_from(
@@ -378,10 +384,10 @@ impl ISafeErc20 for SafeErc20 {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let call = IERC20::transferFromCall { from, to, value };
 
-        Self::call_optional_return(token, &call)
+        self.call_optional_return(token, &call)
     }
 
     fn try_safe_transfer(
@@ -408,7 +414,7 @@ impl ISafeErc20 for SafeErc20 {
         token: Address,
         spender: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let current_allowance = self.allowance(token, spender)?;
         let new_allowance = current_allowance
             .checked_add(value)
@@ -421,14 +427,15 @@ impl ISafeErc20 for SafeErc20 {
         token: Address,
         spender: Address,
         requested_decrease: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let current_allowance = self.allowance(token, spender)?;
 
         if current_allowance < requested_decrease {
             return Err(SafeErc20FailedDecreaseAllowance {
                 spender,
                 current_allowance,
-                requested_decrease}
+                requested_decrease,
+            }
             .into());
         }
 
@@ -444,11 +451,11 @@ impl ISafeErc20 for SafeErc20 {
         token: Address,
         spender: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let approve_call = IERC20::approveCall { spender, value };
 
         // Try performing the approval with the desired value.
-        if Self::call_optional_return(token, &approve_call).is_ok() {
+        if self.call_optional_return(token, &approve_call).is_ok() {
             return Ok(());
         }
 
@@ -456,8 +463,8 @@ impl ISafeErc20 for SafeErc20 {
         // approval.
         let reset_approval_call =
             IERC20::approveCall { spender, value: U256::ZERO };
-        Self::call_optional_return(token, &reset_approval_call)?;
-        Self::call_optional_return(token, &approve_call)
+        self.call_optional_return(token, &reset_approval_call)?;
+        self.call_optional_return(token, &approve_call)
     }
 
     fn transfer_and_call_relaxed(
@@ -466,19 +473,21 @@ impl ISafeErc20 for SafeErc20 {
         to: Address,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
-        if !to.has_code() {
+    ) -> Result<(), Error> {
+        if !AddressUtils::has_code(self, to) {
             return self.safe_transfer(token, to, value);
         }
 
-        if !token.has_code() {
+        if !AddressUtils::has_code(self, token) {
             return Err(Error::SafeErc20FailedOperation(
                 SafeErc20FailedOperation { token },
             ));
         }
 
+        let call = Call::new_mutating(self);
         match Erc1363Interface::new(token).transfer_and_call(
-            self,
+            self.vm(),
+            call,
             to,
             value,
             data.to_vec().into(),
@@ -486,7 +495,8 @@ impl ISafeErc20 for SafeErc20 {
             Ok(true) => Ok(()),
             _ => {
                 Err(Error::SafeErc20FailedOperation(SafeErc20FailedOperation {
-                    token}))
+                    token,
+                }))
             }
         }
     }
@@ -498,19 +508,21 @@ impl ISafeErc20 for SafeErc20 {
         to: Address,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
-        if !to.has_code() {
+    ) -> Result<(), Error> {
+        if !AddressUtils::has_code(self, to) {
             return self.safe_transfer_from(token, from, to, value);
         }
 
-        if !token.has_code() {
+        if !AddressUtils::has_code(self, token) {
             return Err(Error::SafeErc20FailedOperation(
                 SafeErc20FailedOperation { token },
             ));
         }
 
+        let call = Call::new_mutating(self);
         match Erc1363Interface::new(token).transfer_from_and_call(
-            self,
+            self.vm(),
+            call,
             from,
             to,
             value,
@@ -519,7 +531,8 @@ impl ISafeErc20 for SafeErc20 {
             Ok(true) => Ok(()),
             _ => {
                 Err(Error::SafeErc20FailedOperation(SafeErc20FailedOperation {
-                    token}))
+                    token,
+                }))
             }
         }
     }
@@ -530,19 +543,21 @@ impl ISafeErc20 for SafeErc20 {
         spender: Address,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
-        if !spender.has_code() {
+    ) -> Result<(), Error> {
+        if !AddressUtils::has_code(self, spender) {
             return self.force_approve(token, spender, value);
         }
 
-        if !token.has_code() {
+        if !AddressUtils::has_code(self, token) {
             return Err(Error::SafeErc20FailedOperation(
                 SafeErc20FailedOperation { token },
             ));
         }
 
+        let call = Call::new_mutating(self);
         match Erc1363Interface::new(token).approve_and_call(
-            self,
+            self.vm(),
+            call,
             spender,
             value,
             data.to_vec().into(),
@@ -550,7 +565,8 @@ impl ISafeErc20 for SafeErc20 {
             Ok(true) => Ok(()),
             _ => {
                 Err(Error::SafeErc20FailedOperation(SafeErc20FailedOperation {
-                    token}))
+                    token,
+                }))
             }
         }
     }
@@ -563,6 +579,7 @@ impl SafeErc20 {
     ///
     /// # Arguments
     ///
+    /// * `&self` - Read access to the contract's state.
     /// * `token` - Address of the ERC-20 token contract.
     /// * `call` - [`IErc20`] call that implements [`SolCall`] trait.
     ///
@@ -572,17 +589,18 @@ impl SafeErc20 {
     ///   contract, the contract fails to execute the call or the call returns
     ///   value that is not `true`.
     fn call_optional_return(
+        &self,
         token: Address,
         call: &impl SolCall,
     ) -> Result<(), Error> {
-        if !token.has_code() {
+        if !AddressUtils::has_code(self, token) {
             return Err(Error::SafeErc20FailedOperation(
                 SafeErc20FailedOperation { token },
             ));
         }
 
         let result = unsafe {
-            RawCall::new()
+            RawCall::new(self.vm())
                 .limit_return_data(0, BOOL_TYPE_SIZE)
                 .flush_storage_cache()
                 .call(token, &call.abi_encode())
@@ -591,12 +609,13 @@ impl SafeErc20 {
         match result {
             Ok(data)
                 if data.is_empty()
-                    || Bool::abi_decode(&data, true)
+                    || Bool::abi_decode_validate(&data)
                         .is_ok_and(|success| success) =>
             {
                 Ok(())
             }
-            _ => Err(SafeErc20FailedOperation { token }.into())}
+            _ => Err(SafeErc20FailedOperation { token }.into()),
+        }
     }
 
     /// Returns the remaining number of ERC-20 tokens that `spender`
@@ -617,14 +636,23 @@ impl SafeErc20 {
         token: Address,
         spender: Address,
     ) -> Result<U256, Error> {
-        if !Address::has_code(&token) {
+        if !AddressUtils::has_code(self, token) {
             return Err(SafeErc20FailedOperation { token }.into());
         }
 
         let erc20 = Erc20Interface::new(token);
-        erc20.allowance(self, self.vm().contract_address(), spender).map_err(|_e| {
-            Error::SafeErc20FailedOperation(SafeErc20FailedOperation { token })
-        })
+        erc20
+            .allowance(
+                self.vm(),
+                Call::new(),
+                self.vm().contract_address(),
+                spender,
+            )
+            .map_err(|_e| {
+                Error::SafeErc20FailedOperation(SafeErc20FailedOperation {
+                    token,
+                })
+            })
     }
 }
 
@@ -639,16 +667,38 @@ impl IErc165 for SafeErc20 {
 #[cfg_attr(coverage_nightly, coverage(off))]
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{uint, Address};
-    use motsu::prelude::*;
+    use alloy_primitives::{address, uint};
+    use alloy_sol_types::{sol, SolValue};
+    use stylus_sdk::testing::TestVM;
 
     use super::*;
-    use crate::token::erc20::{Erc20, IErc20};
+    use crate::{
+        test_utils::{ALICE, BOB},
+        token::erc20::{Erc20, IErc20},
+    };
+
+    sol! {
+        /// The ERC-1363 calls that `SafeErc20` makes to a token.
+        interface IERC1363 {
+            function transferAndCall(address to, uint256 value, bytes calldata data) external returns (bool);
+            function transferFromAndCall(address from, address to, uint256 value, bytes calldata data) external returns (bool);
+            function approveAndCall(address spender, uint256 value, bytes calldata data) external returns (bool);
+        }
+    }
+
+    /// Address of the ERC-20 token that the examples interact with.
+    const TOKEN: Address =
+        address!("0x00000000000000000000000000000000000e2c20");
+
+    /// Address of a contract that the tokens are sent to.
+    const RECEIVER: Address =
+        address!("0x00000000000000000000000000000000000ec1e1");
 
     #[storage]
     #[entrypoint]
     struct SafeErc20Example {
-        safe_erc20: SafeErc20}
+        safe_erc20: SafeErc20,
+    }
 
     #[public]
     #[implements(ISafeErc20<Error = Error>)]
@@ -663,7 +713,7 @@ mod tests {
             token: Address,
             to: Address,
             value: U256,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), Error> {
             self.safe_erc20.safe_transfer(token, to, value)
         }
 
@@ -673,7 +723,7 @@ mod tests {
             from: Address,
             to: Address,
             value: U256,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), Error> {
             self.safe_erc20.safe_transfer_from(token, from, to, value)
         }
 
@@ -701,7 +751,7 @@ mod tests {
             token: Address,
             spender: Address,
             value: U256,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), Error> {
             self.safe_erc20.safe_increase_allowance(token, spender, value)
         }
 
@@ -710,7 +760,7 @@ mod tests {
             token: Address,
             spender: Address,
             requested_decrease: U256,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), Error> {
             self.safe_erc20.safe_decrease_allowance(
                 token,
                 spender,
@@ -723,7 +773,7 @@ mod tests {
             token: Address,
             spender: Address,
             value: U256,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), Error> {
             self.safe_erc20.force_approve(token, spender, value)
         }
 
@@ -733,7 +783,7 @@ mod tests {
             to: Address,
             value: U256,
             data: Bytes,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), Error> {
             self.safe_erc20.transfer_and_call_relaxed(token, to, value, data)
         }
 
@@ -744,7 +794,7 @@ mod tests {
             to: Address,
             value: U256,
             data: Bytes,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), Error> {
             self.safe_erc20
                 .transfer_from_and_call_relaxed(token, from, to, value, data)
         }
@@ -755,100 +805,468 @@ mod tests {
             spender: Address,
             value: U256,
             data: Bytes,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), Error> {
             self.safe_erc20
                 .approve_and_call_relaxed(token, spender, value, data)
         }
     }
 
-    #[motsu::test]
-    fn try_safe_transfer(
-        contract: Contract<SafeErc20Example>,
-        erc20: Contract<Erc20>,
-        alice: Address,
-    ) {
-        let token = erc20.address();
-        let value = U256::from(1);
-        erc20.sender(alice)._mint(contract.address(), value).unwrap();
+    /// Creates the VM of the ERC-20 token at [`TOKEN`].
+    ///
+    /// A [`TestVM`] cannot call into another contract, so the token lives in
+    /// its own VM and the calls that the contract under test makes to it are
+    /// mocked with the response of the token. The `TestVM` returns the data of
+    /// the last registered mock to every call, so a mock is registered right
+    /// before the call that reads it.
+    fn deploy_token(caller_vm: &TestVM) -> (TestVM, Erc20) {
+        let vm = TestVM::default();
+        vm.set_contract_address(TOKEN);
+        let erc20 = Erc20::from(&vm);
 
-        let balance = erc20.sender(alice).balance_of(contract.address());
+        // Make `TOKEN` look like a contract for the caller.
+        caller_vm.set_code(TOKEN, vec![1]);
+
+        (vm, erc20)
+    }
+
+    #[test]
+    fn try_safe_transfer() {
+        let vm = TestVM::default();
+        let mut contract = SafeErc20Example::from(&vm);
+        let (token_vm, mut erc20) = deploy_token(&vm);
+
+        let token = TOKEN;
+        let value = U256::from(1);
+        erc20._mint(vm.contract_address(), value).unwrap();
+
+        let balance = erc20.balance_of(vm.contract_address());
         assert_eq!(balance, value);
-        let balance = erc20.sender(alice).balance_of(alice);
+        let balance = erc20.balance_of(ALICE);
         assert_eq!(balance, U256::ZERO);
 
-        let result =
-            contract.sender(alice).try_safe_transfer(token, alice, value);
+        // The contract calls `transfer` of the token on its own behalf.
+        token_vm.set_sender(vm.contract_address());
+        let success = erc20.transfer(ALICE, value).unwrap();
+        vm.mock_call(
+            token,
+            IERC20::transferCall { to: ALICE, value }.abi_encode(),
+            U256::ZERO,
+            Ok(Bool::abi_encode(&success)),
+        );
+
+        vm.set_sender(ALICE);
+        let result = contract.try_safe_transfer(token, ALICE, value);
         assert!(result);
 
-        let balance = erc20.sender(alice).balance_of(contract.address());
+        let balance = erc20.balance_of(vm.contract_address());
         assert_eq!(balance, U256::ZERO);
-        let balance = erc20.sender(alice).balance_of(alice);
+        let balance = erc20.balance_of(ALICE);
         assert_eq!(balance, value);
     }
 
-    #[motsu::test]
-    fn try_safe_transfer_from(
-        contract: Contract<SafeErc20Example>,
-        erc20: Contract<Erc20>,
-        alice: Address,
-        bob: Address,
-    ) {
-        let token = erc20.address();
-        let value = U256::from(1);
-        erc20.sender(alice)._mint(alice, value).unwrap();
-        erc20.sender(alice).approve(contract.address(), value).unwrap();
+    #[test]
+    fn try_safe_transfer_from() {
+        let vm = TestVM::default();
+        let mut contract = SafeErc20Example::from(&vm);
+        let (token_vm, mut erc20) = deploy_token(&vm);
 
-        let balance = erc20.sender(alice).balance_of(alice);
+        let token = TOKEN;
+        let value = U256::from(1);
+        erc20._mint(ALICE, value).unwrap();
+        token_vm.set_sender(ALICE);
+        erc20.approve(vm.contract_address(), value).unwrap();
+
+        let balance = erc20.balance_of(ALICE);
         assert_eq!(balance, value);
-        let balance = erc20.sender(alice).balance_of(bob);
+        let balance = erc20.balance_of(BOB);
         assert_eq!(balance, U256::ZERO);
 
-        let result = contract
-            .sender(alice)
-            .try_safe_transfer_from(token, alice, bob, value);
+        // The contract calls `transferFrom` of the token on its own behalf.
+        token_vm.set_sender(vm.contract_address());
+        let success = erc20.transfer_from(ALICE, BOB, value).unwrap();
+        vm.mock_call(
+            token,
+            IERC20::transferFromCall { from: ALICE, to: BOB, value }
+                .abi_encode(),
+            U256::ZERO,
+            Ok(Bool::abi_encode(&success)),
+        );
+
+        vm.set_sender(ALICE);
+        let result = contract.try_safe_transfer_from(token, ALICE, BOB, value);
         assert!(result);
 
-        let balance = erc20.sender(alice).balance_of(alice);
+        let balance = erc20.balance_of(ALICE);
         assert_eq!(balance, U256::ZERO);
-        let balance = erc20.sender(alice).balance_of(bob);
+        let balance = erc20.balance_of(BOB);
         assert_eq!(balance, value);
     }
 
-    #[motsu::test]
-    fn safe_decrease_allowance_reverts_on_no_code_address(
-        contract: Contract<SafeErc20Example>,
-        alice: Address,
-        bob: Address,
-    ) {
-        let no_code_addr = alice;
+    #[test]
+    fn safe_decrease_allowance_reverts_on_no_code_address() {
+        let vm = TestVM::default();
+        let mut contract = SafeErc20Example::from(&vm);
+
+        let no_code_addr = ALICE;
+        vm.set_sender(ALICE);
         let err = contract
-            .sender(alice)
-            .safe_decrease_allowance(no_code_addr, bob, uint!(1_U256))
-            .motsu_expect_err("should revert on no code address");
+            .safe_decrease_allowance(no_code_addr, BOB, uint!(1_U256))
+            .expect_err("should revert on no code address");
         assert!(matches!(
         err,
         Error::SafeErc20FailedOperation(
             SafeErc20FailedOperation {
-                token}) if token == no_code_addr
+                token,
+            }) if token == no_code_addr
         ));
     }
 
-    #[motsu::test]
-    fn safe_increase_allowance_reverts_on_no_code_address(
-        contract: Contract<SafeErc20Example>,
-        alice: Address,
-        bob: Address,
-    ) {
-        let no_code_addr = alice;
+    #[test]
+    fn safe_increase_allowance_reverts_on_no_code_address() {
+        let vm = TestVM::default();
+        let mut contract = SafeErc20Example::from(&vm);
+
+        let no_code_addr = ALICE;
+        vm.set_sender(ALICE);
         let err = contract
-            .sender(alice)
-            .safe_increase_allowance(no_code_addr, bob, uint!(1_U256))
-            .motsu_expect_err("should revert on no code address");
+            .safe_increase_allowance(no_code_addr, BOB, uint!(1_U256))
+            .expect_err("should revert on no code address");
         assert!(matches!(
         err,
         Error::SafeErc20FailedOperation(
             SafeErc20FailedOperation {
-                token}) if token == no_code_addr
+                token,
+            }) if token == no_code_addr
         ));
+    }
+
+    #[test]
+    fn safe_transfer_works_when_token_returns_no_data() {
+        let vm = TestVM::default();
+        let mut contract = SafeErc20Example::from(&vm);
+        vm.set_code(TOKEN, vec![1]);
+
+        let value = U256::from(1);
+        vm.mock_call(
+            TOKEN,
+            IERC20::transferCall { to: ALICE, value }.abi_encode(),
+            U256::ZERO,
+            Ok(vec![]),
+        );
+
+        vm.set_sender(ALICE);
+        contract
+            .safe_transfer(TOKEN, ALICE, value)
+            .expect("should accept a token that returns no data");
+    }
+
+    #[test]
+    fn safe_transfer_reverts_when_token_returns_false() {
+        let vm = TestVM::default();
+        let mut contract = SafeErc20Example::from(&vm);
+        vm.set_code(TOKEN, vec![1]);
+
+        let value = U256::from(1);
+        vm.mock_call(
+            TOKEN,
+            IERC20::transferCall { to: ALICE, value }.abi_encode(),
+            U256::ZERO,
+            Ok(false.abi_encode()),
+        );
+
+        vm.set_sender(ALICE);
+        let err = contract
+            .safe_transfer(TOKEN, ALICE, value)
+            .expect_err("should revert when the token returns false");
+        assert!(matches!(
+            err,
+            Error::SafeErc20FailedOperation(
+                SafeErc20FailedOperation { token }
+            ) if token == TOKEN
+        ));
+        assert!(!contract.try_safe_transfer(TOKEN, ALICE, value));
+    }
+
+    #[test]
+    fn safe_transfer_reverts_when_token_returns_invalid_bool() {
+        let vm = TestVM::default();
+        let mut contract = SafeErc20Example::from(&vm);
+        vm.set_code(TOKEN, vec![1]);
+
+        let value = U256::from(1);
+        vm.mock_call(
+            TOKEN,
+            IERC20::transferCall { to: ALICE, value }.abi_encode(),
+            U256::ZERO,
+            Ok(U256::from(256).abi_encode()),
+        );
+
+        vm.set_sender(ALICE);
+        let err = contract
+            .safe_transfer(TOKEN, ALICE, value)
+            .expect_err("should revert when the returned data is no bool");
+        assert!(matches!(
+            err,
+            Error::SafeErc20FailedOperation(
+                SafeErc20FailedOperation { token }
+            ) if token == TOKEN
+        ));
+    }
+
+    #[test]
+    fn safe_transfer_reverts_when_token_reverts() {
+        let vm = TestVM::default();
+        let mut contract = SafeErc20Example::from(&vm);
+        vm.set_code(TOKEN, vec![1]);
+
+        let value = U256::from(1);
+        vm.mock_call(
+            TOKEN,
+            IERC20::transferCall { to: ALICE, value }.abi_encode(),
+            U256::ZERO,
+            Err(vec![]),
+        );
+
+        vm.set_sender(ALICE);
+        let err = contract
+            .safe_transfer(TOKEN, ALICE, value)
+            .expect_err("should revert when the token reverts");
+        assert!(matches!(
+            err,
+            Error::SafeErc20FailedOperation(
+                SafeErc20FailedOperation { token }
+            ) if token == TOKEN
+        ));
+    }
+
+    #[test]
+    fn safe_increase_allowance_works() {
+        let vm = TestVM::default();
+        let mut contract = SafeErc20Example::from(&vm);
+        vm.set_code(TOKEN, vec![1]);
+
+        // The `TestVM` answers every call with the data of the last registered
+        // mock, so the current allowance is one: it encodes like the `true`
+        // that `approve` returns.
+        vm.mock_static_call(
+            TOKEN,
+            IERC20::allowanceCall {
+                owner: vm.contract_address(),
+                spender: BOB,
+            }
+            .abi_encode(),
+            Ok(U256::from(1).abi_encode()),
+        );
+        vm.mock_call(
+            TOKEN,
+            IERC20::approveCall { spender: BOB, value: U256::from(5) }
+                .abi_encode(),
+            U256::ZERO,
+            Ok(true.abi_encode()),
+        );
+
+        vm.set_sender(ALICE);
+        contract
+            .safe_increase_allowance(TOKEN, BOB, U256::from(4))
+            .expect("should increase the allowance");
+    }
+
+    #[test]
+    fn safe_decrease_allowance_reverts_when_allowance_is_too_low() {
+        let vm = TestVM::default();
+        let mut contract = SafeErc20Example::from(&vm);
+        vm.set_code(TOKEN, vec![1]);
+
+        let current_allowance = U256::from(1);
+        let requested_decrease = U256::from(4);
+        vm.mock_static_call(
+            TOKEN,
+            IERC20::allowanceCall {
+                owner: vm.contract_address(),
+                spender: BOB,
+            }
+            .abi_encode(),
+            Ok(current_allowance.abi_encode()),
+        );
+
+        vm.set_sender(ALICE);
+        let err = contract
+            .safe_decrease_allowance(TOKEN, BOB, requested_decrease)
+            .expect_err("should revert when the allowance is too low");
+        assert!(matches!(
+            err,
+            Error::SafeErc20FailedDecreaseAllowance(
+                SafeErc20FailedDecreaseAllowance {
+                    spender,
+                    current_allowance: current,
+                    requested_decrease: requested
+                }
+            ) if spender == BOB
+                && current == current_allowance
+                && requested == requested_decrease
+        ));
+    }
+
+    #[test]
+    fn transfer_and_call_relaxed_calls_the_token_when_receiver_has_code() {
+        let vm = TestVM::default();
+        let mut contract = SafeErc20Example::from(&vm);
+        vm.set_code(TOKEN, vec![1]);
+        vm.set_code(RECEIVER, vec![1]);
+
+        let value = U256::from(3);
+        let data = vec![1, 2, 3];
+        vm.mock_call(
+            TOKEN,
+            IERC1363::transferAndCallCall {
+                to: RECEIVER,
+                value,
+                data: data.clone().into(),
+            }
+            .abi_encode(),
+            U256::ZERO,
+            Ok(true.abi_encode()),
+        );
+
+        vm.set_sender(ALICE);
+        contract
+            .transfer_and_call_relaxed(TOKEN, RECEIVER, value, data.into())
+            .expect("should transfer and call the receiver");
+    }
+
+    #[test]
+    fn transfer_and_call_relaxed_reverts_when_token_returns_false() {
+        let vm = TestVM::default();
+        let mut contract = SafeErc20Example::from(&vm);
+        vm.set_code(TOKEN, vec![1]);
+        vm.set_code(RECEIVER, vec![1]);
+
+        let value = U256::from(3);
+        vm.mock_call(
+            TOKEN,
+            IERC1363::transferAndCallCall {
+                to: RECEIVER,
+                value,
+                data: vec![].into(),
+            }
+            .abi_encode(),
+            U256::ZERO,
+            Ok(false.abi_encode()),
+        );
+
+        vm.set_sender(ALICE);
+        let err = contract
+            .transfer_and_call_relaxed(TOKEN, RECEIVER, value, vec![].into())
+            .expect_err("should revert when the token returns false");
+        assert!(matches!(
+            err,
+            Error::SafeErc20FailedOperation(
+                SafeErc20FailedOperation { token }
+            ) if token == TOKEN
+        ));
+    }
+
+    #[test]
+    fn transfer_and_call_relaxed_transfers_when_receiver_has_no_code() {
+        let vm = TestVM::default();
+        let mut contract = SafeErc20Example::from(&vm);
+        vm.set_code(TOKEN, vec![1]);
+
+        let value = U256::from(3);
+        vm.mock_call(
+            TOKEN,
+            IERC20::transferCall { to: BOB, value }.abi_encode(),
+            U256::ZERO,
+            Ok(true.abi_encode()),
+        );
+
+        vm.set_sender(ALICE);
+        contract
+            .transfer_and_call_relaxed(TOKEN, BOB, value, vec![1].into())
+            .expect("should transfer to an account without code");
+    }
+
+    #[test]
+    fn transfer_and_call_relaxed_reverts_when_token_has_no_code() {
+        let vm = TestVM::default();
+        let mut contract = SafeErc20Example::from(&vm);
+        vm.set_code(RECEIVER, vec![1]);
+
+        vm.set_sender(ALICE);
+        let err = contract
+            .transfer_and_call_relaxed(
+                TOKEN,
+                RECEIVER,
+                U256::from(3),
+                vec![].into(),
+            )
+            .expect_err("should revert on no code address");
+        assert!(matches!(
+            err,
+            Error::SafeErc20FailedOperation(
+                SafeErc20FailedOperation { token }
+            ) if token == TOKEN
+        ));
+    }
+
+    #[test]
+    fn transfer_from_and_call_relaxed_calls_the_token_when_receiver_has_code() {
+        let vm = TestVM::default();
+        let mut contract = SafeErc20Example::from(&vm);
+        vm.set_code(TOKEN, vec![1]);
+        vm.set_code(RECEIVER, vec![1]);
+
+        let value = U256::from(3);
+        let data = vec![1, 2, 3];
+        vm.mock_call(
+            TOKEN,
+            IERC1363::transferFromAndCallCall {
+                from: BOB,
+                to: RECEIVER,
+                value,
+                data: data.clone().into(),
+            }
+            .abi_encode(),
+            U256::ZERO,
+            Ok(true.abi_encode()),
+        );
+
+        vm.set_sender(ALICE);
+        contract
+            .transfer_from_and_call_relaxed(
+                TOKEN,
+                BOB,
+                RECEIVER,
+                value,
+                data.into(),
+            )
+            .expect("should transfer and call the receiver");
+    }
+
+    #[test]
+    fn approve_and_call_relaxed_calls_the_token_when_spender_has_code() {
+        let vm = TestVM::default();
+        let mut contract = SafeErc20Example::from(&vm);
+        vm.set_code(TOKEN, vec![1]);
+        vm.set_code(RECEIVER, vec![1]);
+
+        let value = U256::from(3);
+        let data = vec![1, 2, 3];
+        vm.mock_call(
+            TOKEN,
+            IERC1363::approveAndCallCall {
+                spender: RECEIVER,
+                value,
+                data: data.clone().into(),
+            }
+            .abi_encode(),
+            U256::ZERO,
+            Ok(true.abi_encode()),
+        );
+
+        vm.set_sender(ALICE);
+        contract
+            .approve_and_call_relaxed(TOKEN, RECEIVER, value, data.into())
+            .expect("should approve and call the spender");
     }
 }
