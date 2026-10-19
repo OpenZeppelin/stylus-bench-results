@@ -1072,20 +1072,12 @@ impl Erc721 {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{aliases::B32, fixed_bytes, uint, Address, U256};
+    use alloy_primitives::fixed_bytes;
     use alloy_sol_types::SolValue;
-    use stylus_sdk::{abi::Bytes, testing::TestVM};
+    use stylus_sdk::testing::TestVM;
 
-    use super::{
-        ERC721IncorrectOwner, ERC721InsufficientApproval,
-        ERC721InvalidApprover, ERC721InvalidOperator, ERC721InvalidOwner,
-        ERC721InvalidReceiver, ERC721InvalidSender, ERC721NonexistentToken,
-        Erc721, Error, IErc721, InvalidReceiverWithReason,
-    };
-    use crate::{
-        test_utils::{ALICE, BOB, CHARLIE, DAVE},
-        utils::introspection::erc165::IErc165,
-    };
+    use super::*;
+    use crate::test_utils::{ALICE, BOB, CHARLIE, DAVE};
 
     const TOKEN_ID: U256 = uint!(1_U256);
 
