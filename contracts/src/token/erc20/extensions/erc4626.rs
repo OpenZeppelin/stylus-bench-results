@@ -8,12 +8,15 @@
 //! "assets" token which is an independent contract.
 
 use alloc::{vec, vec::Vec};
-use stylus_sdk::stylus_core::calls::errors::MethodError;
 
 use alloy_primitives::{uint, Address, U256, U8};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
-use stylus_sdk::{ prelude::*, storage::{StorageAddress, StorageU8}};
+use stylus_sdk::{
+    prelude::*,
+    storage::{StorageAddress, StorageU8},
+    stylus_core::calls::errors::MethodError,
+};
 
 use super::IErc20Metadata;
 use crate::{
@@ -21,8 +24,10 @@ use crate::{
         self,
         interface::{Erc20Interface, IErc20MetadataInterface},
         utils::{safe_erc20, ISafeErc20, SafeErc20},
-        Erc20, IErc20},
-    utils::math::alloy::{Math, Rounding}};
+        Erc20, IErc20,
+    },
+    utils::math::alloy::{Math, Rounding},
+};
 
 const ONE: U256 = uint!(1_U256);
 const TEN: U256 = uint!(10_U256);
@@ -137,7 +142,8 @@ pub enum Error {
     InvalidSpender(erc20::ERC20InvalidSpender),
     /// Indicates a failure with the `approver` of a token to be approved. Used
     /// in approvals. approver Address initiating an approval operation.
-    InvalidApprover(erc20::ERC20InvalidApprover)}
+    InvalidApprover(erc20::ERC20InvalidApprover),
+}
 
 impl From<safe_erc20::Error> for Error {
     fn from(value: safe_erc20::Error) -> Self {
@@ -164,7 +170,8 @@ impl From<erc20::Error> for Error {
                 Error::InsufficientAllowance(e)
             }
             erc20::Error::InvalidSpender(e) => Error::InvalidSpender(e),
-            erc20::Error::InvalidApprover(e) => Error::InvalidApprover(e)}
+            erc20::Error::InvalidApprover(e) => Error::InvalidApprover(e),
+        }
     }
 }
 
@@ -184,7 +191,8 @@ pub struct Erc4626 {
     /// Decimals offset.
     pub(crate) decimals_offset: StorageU8,
     /// [`SafeErc20`] contract.
-    safe_erc20: SafeErc20}
+    safe_erc20: SafeErc20,
+}
 
 /// NOTE: Implementation of [`TopLevelStorage`] to be able use `&mut self` when
 /// calling other contracts and not `&mut (impl TopLevelStorage +
@@ -757,7 +765,8 @@ impl Erc4626 {
             return Err(Error::ExceededMaxDeposit(ERC4626ExceededMaxDeposit {
                 receiver,
                 assets,
-                max: max_assets}));
+                max: max_assets,
+            }));
         }
 
         let shares = self.preview_deposit(assets, erc20)?;
@@ -781,7 +790,8 @@ impl Erc4626 {
             return Err(Error::ExceededMaxMint(ERC4626ExceededMaxMint {
                 receiver,
                 shares,
-                max: max_shares}));
+                max: max_shares,
+            }));
         }
 
         let assets = self.preview_mint(shares, erc20)?;
@@ -808,7 +818,14 @@ impl Erc4626 {
         }
 
         let shares = self.preview_withdraw(assets, erc20)?;
-        self._withdraw(self.vm().msg_sender(), receiver, owner, assets, shares, erc20)?;
+        self._withdraw(
+            self.vm().msg_sender(),
+            receiver,
+            owner,
+            assets,
+            shares,
+            erc20,
+        )?;
 
         Ok(shares)
     }
@@ -827,12 +844,20 @@ impl Erc4626 {
             return Err(Error::ExceededMaxRedeem(ERC4626ExceededMaxRedeem {
                 owner,
                 shares,
-                max: max_shares}));
+                max: max_shares,
+            }));
         }
 
         let assets = self.preview_redeem(shares, erc20)?;
 
-        self._withdraw(self.vm().msg_sender(), receiver, owner, assets, shares, erc20)?;
+        self._withdraw(
+            self.vm().msg_sender(),
+            receiver,
+            owner,
+            assets,
+            shares,
+            erc20,
+        )?;
 
         Ok(assets)
     }
@@ -1027,7 +1052,12 @@ impl Erc4626 {
 
         erc20._mint(receiver, shares)?;
 
-        self.vm().log(Deposit { sender: caller, owner: receiver, assets, shares });
+        self.vm().log(Deposit {
+            sender: caller,
+            owner: receiver,
+            assets,
+            shares,
+        });
 
         Ok(())
     }
@@ -1079,7 +1109,13 @@ impl Erc4626 {
 
         self.safe_erc20.safe_transfer(self.asset(), receiver, assets)?;
 
-        self.vm().log(Withdraw { sender: caller, receiver, owner, assets, shares });
+        self.vm().log(Withdraw {
+            sender: caller,
+            receiver,
+            owner,
+            assets,
+            shares,
+        });
 
         Ok(())
     }
@@ -1124,14 +1160,17 @@ mod tests {
     use crate::{
         token::erc20::{
             extensions::{Erc20Metadata, IErc20Metadata},
-            Erc20},
-        utils::introspection::erc165::IErc165};
+            Erc20,
+        },
+        utils::introspection::erc165::IErc165,
+    };
 
     #[storage]
     struct Erc4626TestExample {
         erc4626: Erc4626,
         erc20: Erc20,
-        metadata: Erc20Metadata}
+        metadata: Erc20Metadata,
+    }
 
     #[public]
     #[implements(IErc4626<Error = Error>, IErc20Metadata, IErc165)]

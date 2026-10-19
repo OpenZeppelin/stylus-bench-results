@@ -10,7 +10,9 @@ use alloc::{vec, vec::Vec};
 use alloy_primitives::U256;
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
-use stylus_sdk::{stylus_core::calls::errors::MethodError, prelude::*, storage::StorageU256};
+use stylus_sdk::{
+    prelude::*, storage::StorageU256, stylus_core::calls::errors::MethodError,
+};
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -39,7 +41,8 @@ pub enum Error {
     ExceededCap(ERC20ExceededCap),
     /// Indicates an error related to the operation that failed
     /// because the supplied `cap` is not a valid cap value.
-    InvalidCap(ERC20InvalidCap)}
+    InvalidCap(ERC20InvalidCap),
+}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -51,7 +54,8 @@ impl MethodError for Error {
 #[storage]
 pub struct Capped {
     /// A cap to the supply of tokens.
-    pub(crate) cap: StorageU256}
+    pub(crate) cap: StorageU256,
+}
 
 /// Interface for the token supply cap logic.
 #[interface_id]

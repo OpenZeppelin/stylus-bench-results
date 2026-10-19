@@ -10,17 +10,20 @@
 //! operations as `contract.safe_transfer(token_addr, ...)`, etc.
 
 use alloc::{vec, vec::Vec};
-use stylus_sdk::stylus_core::calls::errors::MethodError;
 
 use alloy_primitives::{aliases::B32, Address, U256};
 use alloy_sol_types::{sol_data::Bool, SolCall, SolType};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
-use stylus_sdk::{abi::Bytes, call::RawCall, function_selector, prelude::*};
+use stylus_sdk::{
+    abi::Bytes, call::RawCall, function_selector, prelude::*,
+    stylus_core::calls::errors::MethodError,
+};
 
 use crate::{
     token::erc20::interface::Erc20Interface,
-    utils::introspection::erc165::IErc165};
+    utils::introspection::erc165::IErc165,
+};
 
 const BOOL_TYPE_SIZE: usize = 32;
 
@@ -57,7 +60,8 @@ pub enum Error {
     /// An operation with an ERC-20 token failed.
     SafeErc20FailedOperation(SafeErc20FailedOperation),
     /// Indicates a failed [`ISafeErc20::safe_decrease_allowance`] request.
-    SafeErc20FailedDecreaseAllowance(SafeErc20FailedDecreaseAllowance)}
+    SafeErc20FailedDecreaseAllowance(SafeErc20FailedDecreaseAllowance),
+}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -428,7 +432,8 @@ impl ISafeErc20 for SafeErc20 {
             return Err(SafeErc20FailedDecreaseAllowance {
                 spender,
                 current_allowance,
-                requested_decrease}
+                requested_decrease,
+            }
             .into());
         }
 
@@ -486,7 +491,8 @@ impl ISafeErc20 for SafeErc20 {
             Ok(true) => Ok(()),
             _ => {
                 Err(Error::SafeErc20FailedOperation(SafeErc20FailedOperation {
-                    token}))
+                    token,
+                }))
             }
         }
     }
@@ -519,7 +525,8 @@ impl ISafeErc20 for SafeErc20 {
             Ok(true) => Ok(()),
             _ => {
                 Err(Error::SafeErc20FailedOperation(SafeErc20FailedOperation {
-                    token}))
+                    token,
+                }))
             }
         }
     }
@@ -550,7 +557,8 @@ impl ISafeErc20 for SafeErc20 {
             Ok(true) => Ok(()),
             _ => {
                 Err(Error::SafeErc20FailedOperation(SafeErc20FailedOperation {
-                    token}))
+                    token,
+                }))
             }
         }
     }
@@ -596,7 +604,8 @@ impl SafeErc20 {
             {
                 Ok(())
             }
-            _ => Err(SafeErc20FailedOperation { token }.into())}
+            _ => Err(SafeErc20FailedOperation { token }.into()),
+        }
     }
 
     /// Returns the remaining number of ERC-20 tokens that `spender`
@@ -622,9 +631,13 @@ impl SafeErc20 {
         }
 
         let erc20 = Erc20Interface::new(token);
-        erc20.allowance(self, self.vm().contract_address(), spender).map_err(|_e| {
-            Error::SafeErc20FailedOperation(SafeErc20FailedOperation { token })
-        })
+        erc20.allowance(self, self.vm().contract_address(), spender).map_err(
+            |_e| {
+                Error::SafeErc20FailedOperation(SafeErc20FailedOperation {
+                    token,
+                })
+            },
+        )
     }
 }
 
@@ -648,7 +661,8 @@ mod tests {
     #[storage]
     #[entrypoint]
     struct SafeErc20Example {
-        safe_erc20: SafeErc20}
+        safe_erc20: SafeErc20,
+    }
 
     #[public]
     #[implements(ISafeErc20<Error = Error>)]

@@ -21,14 +21,20 @@ use alloc::{vec, vec::Vec};
 
 use alloy_primitives::{
     aliases::{B32, U96},
-    Address, U256};
+    Address, U256,
+};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
-use stylus_sdk::{stylus_core::calls::errors::MethodError, prelude::*, storage::{StorageAddress, StorageMap}};
+use stylus_sdk::{
+    prelude::*,
+    storage::{StorageAddress, StorageMap},
+    stylus_core::calls::errors::MethodError,
+};
 
 use crate::utils::{
     introspection::erc165::IErc165,
-    structs::checkpoints::{Size, S160}};
+    structs::checkpoints::{Size, S160},
+};
 
 type StorageU96 = <S160 as Size>::KeyStorage;
 
@@ -89,7 +95,8 @@ pub enum Error {
     InvalidTokenRoyalty(ERC2981InvalidTokenRoyalty),
 
     /// Indicates that the royalty receiver for `token_id` is invalid.
-    InvalidTokenRoyaltyReceiver(ERC2981InvalidTokenRoyaltyReceiver)}
+    InvalidTokenRoyaltyReceiver(ERC2981InvalidTokenRoyaltyReceiver),
+}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -104,7 +111,8 @@ pub struct RoyaltyInfo {
     /// The receiver address for royalty.
     receiver: StorageAddress,
     /// Fraction of royalty for receiver.
-    royalty_fraction: StorageU96}
+    royalty_fraction: StorageU96,
+}
 
 /// State of an [`Erc2981`] contract.
 #[storage]
@@ -115,7 +123,8 @@ pub struct Erc2981 {
     pub(crate) token_royalty_info: StorageMap<U256, RoyaltyInfo>,
     /// The fee denominator for royalty fraction.
     /// Should be set in the constructor.
-    pub fee_denominator: StorageU96}
+    pub fee_denominator: StorageU96,
+}
 
 /// Interface for the NFT Royalty Standard.
 ///
@@ -238,7 +247,8 @@ impl Erc2981 {
             return Err(Error::InvalidDefaultRoyalty(
                 ERC2981InvalidDefaultRoyalty {
                     numerator: U256::from(fee_numerator),
-                    denominator: U256::from(denominator)},
+                    denominator: U256::from(denominator),
+                },
             ));
         }
 
@@ -291,7 +301,8 @@ impl Erc2981 {
                 ERC2981InvalidTokenRoyalty {
                     token_id,
                     numerator: U256::from(fee_numerator),
-                    denominator: U256::from(denominator)},
+                    denominator: U256::from(denominator),
+                },
             ));
         }
 

@@ -16,7 +16,9 @@ use alloc::{vec, vec::Vec};
 
 use alloy_primitives::{aliases::B32, keccak256, Address, B256, U256, U8};
 use alloy_sol_types::SolType;
-use stylus_sdk::{stylus_core::calls::errors::MethodError, function_selector, prelude::*};
+use stylus_sdk::{
+    function_selector, prelude::*, stylus_core::calls::errors::MethodError,
+};
 
 use crate::{
     token::erc20::{self, Erc20},
@@ -25,8 +27,12 @@ use crate::{
         nonces::{INonces, Nonces},
         precompiles::{
             primitives::ecrecover::{
-                self, ECDSAInvalidSignature, ECDSAInvalidSignatureS},
-            Precompiles}}};
+                self, ECDSAInvalidSignature, ECDSAInvalidSignatureS,
+            },
+            Precompiles,
+        },
+    },
+};
 
 const PERMIT_TYPEHASH: [u8; 32] =
     keccak_const::Keccak256::new()
@@ -83,7 +89,8 @@ pub enum Error {
     /// The signature derives the [`Address::ZERO`].
     InvalidSignature(ECDSAInvalidSignature),
     /// The signature has an `S` value that is in the upper half order.
-    InvalidSignatureS(ECDSAInvalidSignatureS)}
+    InvalidSignatureS(ECDSAInvalidSignatureS),
+}
 
 impl From<erc20::Error> for Error {
     fn from(value: erc20::Error) -> Self {
@@ -97,7 +104,8 @@ impl From<erc20::Error> for Error {
                 Error::InsufficientAllowance(e)
             }
             erc20::Error::InvalidSpender(e) => Error::InvalidSpender(e),
-            erc20::Error::InvalidApprover(e) => Error::InvalidApprover(e)}
+            erc20::Error::InvalidApprover(e) => Error::InvalidApprover(e),
+        }
     }
 }
 
@@ -122,7 +130,8 @@ impl MethodError for Error {
 #[storage]
 pub struct Erc20Permit<T: IEip712 + StorageType> {
     /// Contract implementing [`IEip712`] trait.
-    pub(crate) eip712: T}
+    pub(crate) eip712: T,
+}
 
 /// NOTE: Implementation of [`TopLevelStorage`] to be able use `&mut self` when
 /// calling other contracts and not `&mut (impl TopLevelStorage +

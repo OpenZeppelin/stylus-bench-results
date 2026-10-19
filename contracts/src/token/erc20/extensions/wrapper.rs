@@ -12,18 +12,21 @@
 //! See [`Erc20Wrapper::_recover`] for recovering value accrued to the wrapper.
 
 use alloc::{vec, vec::Vec};
-use stylus_sdk::stylus_core::calls::errors::MethodError;
 
 use alloy_primitives::{Address, U256, U8};
 use openzeppelin_stylus_proc::interface_id;
 pub use sol::*;
-use stylus_sdk::{ prelude::*, storage::StorageAddress};
+use stylus_sdk::{
+    prelude::*, storage::StorageAddress,
+    stylus_core::calls::errors::MethodError,
+};
 
 use crate::token::erc20::{
     self,
     interface::{Erc20Interface, IErc20MetadataInterface},
     utils::{safe_erc20, ISafeErc20, SafeErc20},
-    Erc20, IErc20};
+    Erc20, IErc20,
+};
 
 /// Default number of decimals for an [ERC-20] token.
 ///
@@ -70,7 +73,8 @@ pub enum Error {
         safe_erc20::SafeErc20FailedDecreaseAllowance,
     ),
     /// The underlying token couldn't be wrapped.
-    InvalidUnderlying(ERC20InvalidUnderlying)}
+    InvalidUnderlying(ERC20InvalidUnderlying),
+}
 
 impl From<erc20::Error> for Error {
     fn from(value: erc20::Error) -> Self {
@@ -84,7 +88,8 @@ impl From<erc20::Error> for Error {
                 Error::InsufficientAllowance(e)
             }
             erc20::Error::InvalidSpender(e) => Error::InvalidSpender(e),
-            erc20::Error::InvalidApprover(e) => Error::InvalidApprover(e)}
+            erc20::Error::InvalidApprover(e) => Error::InvalidApprover(e),
+        }
     }
 }
 
@@ -113,7 +118,8 @@ pub struct Erc20Wrapper {
     /// Address of the underlying token.
     pub(crate) underlying: StorageAddress,
     /// [`SafeErc20`] contract.
-    safe_erc20: SafeErc20}
+    safe_erc20: SafeErc20,
+}
 
 /// ERC-20 Wrapper Standard Interface
 #[interface_id]
@@ -166,8 +172,8 @@ pub trait IErc20Wrapper {
     ///
     /// # Errors
     ///
-    /// * [`Error::InvalidSender`] - If the `self.vm().msg_sender()`'s address is the
-    ///   `contract:address()`.
+    /// * [`Error::InvalidSender`] - If the `self.vm().msg_sender()`'s address
+    ///   is the `contract:address()`.
     /// * [`Error::InvalidReceiver`] - If the `account` address is a
     ///   `contract:address()`.
     /// * [`Error::SafeErc20FailedOperation`] - If caller lacks sufficient
@@ -306,7 +312,8 @@ impl Erc20Wrapper {
     ) -> Result<(), Error> {
         if underlying_token == self.vm().contract_address() {
             return Err(Error::InvalidUnderlying(ERC20InvalidUnderlying {
-                token: underlying_token}));
+                token: underlying_token,
+            }));
         }
         self.underlying.set(underlying_token);
         Ok(())
@@ -368,7 +375,8 @@ mod tests {
     use super::*;
     use crate::{
         token::erc20::extensions::IErc20Metadata,
-        utils::introspection::erc165::IErc165};
+        utils::introspection::erc165::IErc165,
+    };
 
     const DUMMY_TEST_DECIMALS: u8 = 12;
     #[storage]
@@ -406,7 +414,8 @@ mod tests {
     #[storage]
     struct Erc20WrapperTestExample {
         wrapper: Erc20Wrapper,
-        erc20: Erc20}
+        erc20: Erc20,
+    }
 
     #[public]
     #[implements(IErc20Wrapper<Error = Error>)]
@@ -687,12 +696,14 @@ mod tests {
         erc20_contract.assert_emitted(&erc20::Transfer {
             from: alice,
             to: contract.address(),
-            value: amount});
+            value: amount,
+        });
 
         contract.assert_emitted(&erc20::Transfer {
             from: Address::ZERO,
             to: alice,
-            value: amount});
+            value: amount,
+        });
 
         assert_eq!(
             erc20_contract.sender(alice).balance_of(alice),
@@ -833,12 +844,14 @@ mod tests {
         contract.assert_emitted(&erc20::Transfer {
             from: alice,
             to: Address::ZERO,
-            value: amount});
+            value: amount,
+        });
 
         erc20_contract.assert_emitted(&erc20::Transfer {
             from: contract.address(),
             to: alice,
-            value: amount});
+            value: amount,
+        });
 
         assert_eq!(
             erc20_contract.sender(alice).balance_of(alice),
@@ -1015,7 +1028,8 @@ mod tests {
         contract.assert_emitted(&erc20::Transfer {
             from: Address::ZERO,
             to: alice,
-            value: unexpected_delta});
+            value: unexpected_delta,
+        });
     }
 
     #[motsu::test]
