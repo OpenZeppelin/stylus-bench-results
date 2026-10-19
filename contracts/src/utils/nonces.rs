@@ -132,46 +132,53 @@ impl Nonces {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{Address, U256};
-    use motsu::prelude::Contract;
-    use stylus_sdk::prelude::*;
+    use stylus_sdk::testing::TestVM;
 
-    use super::ONE;
-    use crate::utils::nonces::{Error, INonces, Nonces};
+    use super::*;
+    use crate::test_utils::ALICE;
 
-    unsafe impl TopLevelStorage for Nonces {}
+    #[test]
+    fn initiate_nonce() {
+        let vm = TestVM::default();
+        vm.set_sender(ALICE);
+        let contract = Nonces::from(&vm);
 
-    #[motsu::test]
-    fn initiate_nonce(contract: Contract<Nonces>, alice: Address) {
-        assert_eq!(contract.sender(alice).nonces(alice), U256::ZERO);
+        assert_eq!(contract.nonces(ALICE), U256::ZERO);
     }
 
-    #[motsu::test]
-    fn use_nonce(contract: Contract<Nonces>, alice: Address) {
-        let use_nonce = contract.sender(alice).use_nonce(alice);
+    #[test]
+    fn use_nonce() {
+        let vm = TestVM::default();
+        vm.set_sender(ALICE);
+        let mut contract = Nonces::from(&vm);
+
+        let use_nonce = contract.use_nonce(ALICE);
         assert_eq!(use_nonce, U256::ZERO);
 
-        let nonce = contract.sender(alice).nonces(alice);
+        let nonce = contract.nonces(ALICE);
         assert_eq!(nonce, ONE);
     }
 
-    #[motsu::test]
-    fn use_checked_nonce(contract: Contract<Nonces>, alice: Address) {
-        let use_checked_nonce =
-            contract.sender(alice).use_checked_nonce(alice, U256::ZERO);
+    #[test]
+    fn use_checked_nonce() {
+        let vm = TestVM::default();
+        vm.set_sender(ALICE);
+        let mut contract = Nonces::from(&vm);
+
+        let use_checked_nonce = contract.use_checked_nonce(ALICE, U256::ZERO);
         assert!(use_checked_nonce.is_ok());
 
-        let nonce = contract.sender(alice).nonces(alice);
+        let nonce = contract.nonces(ALICE);
         assert_eq!(nonce, ONE);
     }
 
-    #[motsu::test]
-    fn use_checked_nonce_invalid_nonce(
-        contract: Contract<Nonces>,
-        alice: Address,
-    ) {
-        let use_checked_nonce =
-            contract.sender(alice).use_checked_nonce(alice, ONE);
+    #[test]
+    fn use_checked_nonce_invalid_nonce() {
+        let vm = TestVM::default();
+        vm.set_sender(ALICE);
+        let mut contract = Nonces::from(&vm);
+
+        let use_checked_nonce = contract.use_checked_nonce(ALICE, ONE);
         assert!(matches!(
             use_checked_nonce,
             Err(Error::InvalidAccountNonce(_))
