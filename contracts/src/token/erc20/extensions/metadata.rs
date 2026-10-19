@@ -21,6 +21,8 @@ pub struct Erc20Metadata {
 /// Interface for the optional metadata functions from the ERC-20 standard.
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait IErc20Metadata: IErc165 {
     /// Returns the name of the token.
     ///

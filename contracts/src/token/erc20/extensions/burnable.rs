@@ -1,7 +1,9 @@
 //! Optional Burnable extension of the ERC-20 standard.
 
+use alloc::vec::Vec;
+
 use alloy_primitives::{Address, U256};
-use stylus_sdk::prelude::public;
+use stylus_sdk::prelude::*;
 
 use crate::token::erc20::{self, Erc20};
 
@@ -9,6 +11,8 @@ use crate::token::erc20::{self, Erc20};
 /// their own tokens and those that they have an allowance for,
 /// in a way that can be recognized off-chain (via event analysis).
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait IErc20Burnable {
     /// The error type associated to this ERC-20 Burnable trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -63,7 +67,7 @@ pub trait IErc20Burnable {
 impl IErc20Burnable for Erc20 {
     type Error = erc20::Error;
 
-    fn burn(&mut self, value: U256) -> Result<(), Self::Error> {
+    fn burn(&mut self, value: U256) -> Result<(), erc20::Error> {
         self._burn(self.vm().msg_sender(), value)
     }
 
@@ -71,7 +75,7 @@ impl IErc20Burnable for Erc20 {
         &mut self,
         account: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), erc20::Error> {
         self._spend_allowance(account, self.vm().msg_sender(), value)?;
         self._burn(account, value)
     }

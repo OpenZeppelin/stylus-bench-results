@@ -124,6 +124,8 @@ pub struct Erc20Wrapper {
 /// ERC-20 Wrapper Standard Interface
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait IErc20Wrapper {
     /// The error type associated to the trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -172,10 +174,10 @@ pub trait IErc20Wrapper {
     ///
     /// # Errors
     ///
-    /// * [`Error::InvalidSender`] - If the `self.vm().msg_sender()`'s address
-    ///   is the `contract:address()`.
-    /// * [`Error::InvalidReceiver`] - If the `account` address is a
-    ///   `contract:address()`.
+    /// * [`Error::InvalidSender`] - If the caller's address is the address of
+    ///   this contract.
+    /// * [`Error::InvalidReceiver`] - If the `account` address is the address
+    ///   of this contract.
     /// * [`Error::SafeErc20FailedOperation`] - If caller lacks sufficient
     ///   balance or hasn't approved enough tokens to the [`Erc20Wrapper`]
     ///   contract.
@@ -202,8 +204,8 @@ pub trait IErc20Wrapper {
     ///
     /// # Errors
     ///
-    /// * [`Error::InvalidReceiver`] - If the `account`'s address is a
-    ///   `contract:address()`.
+    /// * [`Error::InvalidReceiver`] - If the `account`'s address is the address
+    ///   of this contract.
     /// * [`Error::InvalidSender`] - If the `from` address is [`Address::ZERO`].
     /// * [`Error::InsufficientBalance`] - If the `from` address doesn't have
     ///   enough tokens.
@@ -227,7 +229,7 @@ impl Erc20Wrapper {
     pub fn decimals(&self) -> U8 {
         U8::from(
             IErc20MetadataInterface::new(self.underlying())
-                .decimals(self)
+                .decimals(self.vm(), Call::new())
                 .unwrap_or(DEFAULT_DECIMALS),
         )
     }
@@ -352,7 +354,7 @@ impl Erc20Wrapper {
         let underlying_token = Erc20Interface::new(self.underlying());
 
         let underlying_balance = underlying_token
-            .balance_of(Call::new_in(self), contract_address)
+            .balance_of(self.vm(), Call::new(), contract_address)
             .map_err(|_| ERC20InvalidUnderlying { token: contract_address })?;
 
         let value = underlying_balance

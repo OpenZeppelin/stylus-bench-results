@@ -28,7 +28,10 @@ use stylus_sdk::{
     stylus_core::calls::errors::MethodError,
 };
 
-use crate::token::erc20::{self, Erc20, IErc20};
+use crate::{
+    token::erc20::{self, Erc20, IErc20},
+    utils::address::AddressUtils,
+};
 
 /// The expected value returned from [`IERC3156FlashBorrower::on_flash_loan`].
 pub const BORROWER_CALLBACK_VALUE: [u8; 32] = keccak_const::Keccak256::new()
@@ -141,6 +144,7 @@ mod borrower {
             /// * `fee` - The additional amount of tokens to repay.
             /// * `data` - Arbitrary data structure, intended to contain user-defined parameters.
             #[allow(missing_docs)]
+            #[allow(clippy::too_many_arguments)]
             function onFlashLoan(
                 address initiator,
                 address token,
@@ -175,6 +179,8 @@ unsafe impl TopLevelStorage for Erc20FlashMint {}
 /// [ERC-3156]: https://eips.ethereum.org/EIPS/eip-3156
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait IErc3156FlashLender {
     /// The error type associated to this trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -232,8 +238,8 @@ pub trait IErc3156FlashLender {
     /// * `&mut self` - Write access to the contract's state.
     /// * `receiver` - The receiver of the flash loan. Should implement the
     ///   [`IERC3156FlashBorrower::on_flash_loan`] interface.
-    /// * `token` - The token to be flash loaned. Only
-    ///   [`self.vm().contract_address()`] is supported.
+    /// * `token` - The token to be flash loaned. Only the address of this
+    ///   contract (`self.vm().contract_address()`) is supported.
     /// * `value` - The amount of tokens to be loaned.
     /// * `data` - Arbitrary data that is passed to the receiver.
     ///
@@ -311,16 +317,18 @@ impl Erc20FlashMint {
         }
 
         let fee = self.flash_fee(token, value)?;
-        if !Address::has_code(&receiver) {
+        if !AddressUtils::has_code(self, receiver) {
             return Err(Error::ERC3156InvalidReceiver(
                 ERC3156InvalidReceiver { receiver },
             ));
         }
         erc20._mint(receiver, value)?;
         let loan_receiver = IERC3156FlashBorrower::new(receiver);
+        let call = Call::new_mutating(self);
         let loan_return = loan_receiver
             .on_flash_loan(
-                Call::new_in(self),
+                self.vm(),
+                call,
                 self.vm().msg_sender(),
                 token,
                 value,

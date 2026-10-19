@@ -60,6 +60,8 @@ pub struct Capped {
 /// Interface for the token supply cap logic.
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait ICapped {
     /// Returns the cap on the token's total supply.
     #[must_use]

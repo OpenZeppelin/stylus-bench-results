@@ -140,6 +140,8 @@ unsafe impl<T: IEip712 + StorageType> TopLevelStorage for Erc20Permit<T> {}
 
 /// Interface for [`Erc20Permit`]
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait IErc20Permit: INonces {
     /// The error type associated to this interface.
     type Error: Into<alloc::vec::Vec<u8>>;

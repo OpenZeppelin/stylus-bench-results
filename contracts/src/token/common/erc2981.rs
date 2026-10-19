@@ -133,6 +133,8 @@ pub struct Erc2981 {
 /// NFT marketplaces and ecosystem participants.
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait IErc2981: IErc165 {
     /// Returns how much royalty is owed and to whom, based on a sale price that
     /// may be denominated in any unit of exchange.

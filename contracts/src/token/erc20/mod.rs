@@ -145,6 +145,8 @@ unsafe impl TopLevelStorage for Erc20 {}
 /// Required interface of an [`Erc20`] compliant contract.
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait IErc20 {
     /// The error type associated to this ERC-20 trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -288,11 +290,7 @@ impl IErc20 for Erc20 {
         self.balances.get(account)
     }
 
-    fn transfer(
-        &mut self,
-        to: Address,
-        value: U256,
-    ) -> Result<bool, Self::Error> {
+    fn transfer(&mut self, to: Address, value: U256) -> Result<bool, Error> {
         let from = self.vm().msg_sender();
         self._transfer(from, to, value)?;
         Ok(true)
@@ -306,7 +304,7 @@ impl IErc20 for Erc20 {
         &mut self,
         spender: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, Error> {
         let owner = self.vm().msg_sender();
         self._approve(owner, spender, value, true)
     }
@@ -316,7 +314,7 @@ impl IErc20 for Erc20 {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, Error> {
         let spender = self.vm().msg_sender();
         self._spend_allowance(from, spender, value)?;
         self._transfer(from, to, value)?;

@@ -22,7 +22,7 @@ use stylus_sdk::{
 
 use crate::{
     token::erc20::interface::Erc20Interface,
-    utils::introspection::erc165::IErc165,
+    utils::{address::AddressUtils, introspection::erc165::IErc165},
 };
 
 const BOOL_TYPE_SIZE: usize = 32;
@@ -108,6 +108,8 @@ unsafe impl TopLevelStorage for SafeErc20 {}
 /// Required interface of a [`SafeErc20`] utility contract.
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait ISafeErc20 {
     /// The error type associated to this trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -370,10 +372,10 @@ impl ISafeErc20 for SafeErc20 {
         token: Address,
         to: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let call = IERC20::transferCall { to, value };
 
-        Self::call_optional_return(token, &call)
+        self.call_optional_return(token, &call)
     }
 
     fn safe_transfer_from(
@@ -382,10 +384,10 @@ impl ISafeErc20 for SafeErc20 {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let call = IERC20::transferFromCall { from, to, value };
 
-        Self::call_optional_return(token, &call)
+        self.call_optional_return(token, &call)
     }
 
     fn try_safe_transfer(
@@ -412,7 +414,7 @@ impl ISafeErc20 for SafeErc20 {
         token: Address,
         spender: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let current_allowance = self.allowance(token, spender)?;
         let new_allowance = current_allowance
             .checked_add(value)
@@ -425,7 +427,7 @@ impl ISafeErc20 for SafeErc20 {
         token: Address,
         spender: Address,
         requested_decrease: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let current_allowance = self.allowance(token, spender)?;
 
         if current_allowance < requested_decrease {
@@ -449,11 +451,11 @@ impl ISafeErc20 for SafeErc20 {
         token: Address,
         spender: Address,
         value: U256,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let approve_call = IERC20::approveCall { spender, value };
 
         // Try performing the approval with the desired value.
-        if Self::call_optional_return(token, &approve_call).is_ok() {
+        if self.call_optional_return(token, &approve_call).is_ok() {
             return Ok(());
         }
 
@@ -461,8 +463,8 @@ impl ISafeErc20 for SafeErc20 {
         // approval.
         let reset_approval_call =
             IERC20::approveCall { spender, value: U256::ZERO };
-        Self::call_optional_return(token, &reset_approval_call)?;
-        Self::call_optional_return(token, &approve_call)
+        self.call_optional_return(token, &reset_approval_call)?;
+        self.call_optional_return(token, &approve_call)
     }
 
     fn transfer_and_call_relaxed(
@@ -471,19 +473,21 @@ impl ISafeErc20 for SafeErc20 {
         to: Address,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
-        if !to.has_code() {
+    ) -> Result<(), Error> {
+        if !AddressUtils::has_code(self, to) {
             return self.safe_transfer(token, to, value);
         }
 
-        if !token.has_code() {
+        if !AddressUtils::has_code(self, token) {
             return Err(Error::SafeErc20FailedOperation(
                 SafeErc20FailedOperation { token },
             ));
         }
 
+        let call = Call::new_mutating(self);
         match Erc1363Interface::new(token).transfer_and_call(
-            self,
+            self.vm(),
+            call,
             to,
             value,
             data.to_vec().into(),
@@ -504,19 +508,21 @@ impl ISafeErc20 for SafeErc20 {
         to: Address,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
-        if !to.has_code() {
+    ) -> Result<(), Error> {
+        if !AddressUtils::has_code(self, to) {
             return self.safe_transfer_from(token, from, to, value);
         }
 
-        if !token.has_code() {
+        if !AddressUtils::has_code(self, token) {
             return Err(Error::SafeErc20FailedOperation(
                 SafeErc20FailedOperation { token },
             ));
         }
 
+        let call = Call::new_mutating(self);
         match Erc1363Interface::new(token).transfer_from_and_call(
-            self,
+            self.vm(),
+            call,
             from,
             to,
             value,
@@ -537,19 +543,21 @@ impl ISafeErc20 for SafeErc20 {
         spender: Address,
         value: U256,
         data: Bytes,
-    ) -> Result<(), Self::Error> {
-        if !spender.has_code() {
+    ) -> Result<(), Error> {
+        if !AddressUtils::has_code(self, spender) {
             return self.force_approve(token, spender, value);
         }
 
-        if !token.has_code() {
+        if !AddressUtils::has_code(self, token) {
             return Err(Error::SafeErc20FailedOperation(
                 SafeErc20FailedOperation { token },
             ));
         }
 
+        let call = Call::new_mutating(self);
         match Erc1363Interface::new(token).approve_and_call(
-            self,
+            self.vm(),
+            call,
             spender,
             value,
             data.to_vec().into(),
@@ -571,6 +579,7 @@ impl SafeErc20 {
     ///
     /// # Arguments
     ///
+    /// * `&self` - Read access to the contract's state.
     /// * `token` - Address of the ERC-20 token contract.
     /// * `call` - [`IErc20`] call that implements [`SolCall`] trait.
     ///
@@ -580,17 +589,18 @@ impl SafeErc20 {
     ///   contract, the contract fails to execute the call or the call returns
     ///   value that is not `true`.
     fn call_optional_return(
+        &self,
         token: Address,
         call: &impl SolCall,
     ) -> Result<(), Error> {
-        if !token.has_code() {
+        if !AddressUtils::has_code(self, token) {
             return Err(Error::SafeErc20FailedOperation(
                 SafeErc20FailedOperation { token },
             ));
         }
 
         let result = unsafe {
-            RawCall::new()
+            RawCall::new(self.vm())
                 .limit_return_data(0, BOOL_TYPE_SIZE)
                 .flush_storage_cache()
                 .call(token, &call.abi_encode())
@@ -599,7 +609,7 @@ impl SafeErc20 {
         match result {
             Ok(data)
                 if data.is_empty()
-                    || Bool::abi_decode(&data, true)
+                    || Bool::abi_decode_validate(&data)
                         .is_ok_and(|success| success) =>
             {
                 Ok(())
@@ -626,18 +636,23 @@ impl SafeErc20 {
         token: Address,
         spender: Address,
     ) -> Result<U256, Error> {
-        if !Address::has_code(&token) {
+        if !AddressUtils::has_code(self, token) {
             return Err(SafeErc20FailedOperation { token }.into());
         }
 
         let erc20 = Erc20Interface::new(token);
-        erc20.allowance(self, self.vm().contract_address(), spender).map_err(
-            |_e| {
+        erc20
+            .allowance(
+                self.vm(),
+                Call::new(),
+                self.vm().contract_address(),
+                spender,
+            )
+            .map_err(|_e| {
                 Error::SafeErc20FailedOperation(SafeErc20FailedOperation {
                     token,
                 })
-            },
-        )
+            })
     }
 }
 

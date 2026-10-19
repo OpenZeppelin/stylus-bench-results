@@ -202,6 +202,8 @@ unsafe impl TopLevelStorage for Erc4626 {}
 /// ERC-4626 Tokenized Vault Standard Interface
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait IErc4626: IErc20Metadata {
     /// The error type associated to the trait implementation.
     type Error: Into<alloc::vec::Vec<u8>>;
@@ -658,7 +660,7 @@ impl Erc4626 {
         let asset = self.asset();
         let erc20 = Erc20Interface::new(asset);
         erc20
-            .balance_of(self, self.vm().contract_address())
+            .balance_of(self.vm(), Call::new(), self.vm().contract_address())
             .map_err(|_| InvalidAsset { asset }.into())
     }
 
@@ -1133,10 +1135,9 @@ impl Erc4626 {
     /// Attempts to fetch the asset decimals. Returns None if the attempt failed
     /// in any way. This follows Rust's idiomatic Option pattern rather than
     /// Solidity's boolean tuple return.
-    fn try_get_asset_decimals(&mut self, asset: Address) -> Option<u8> {
+    fn try_get_asset_decimals(&self, asset: Address) -> Option<u8> {
         let erc20 = IErc20MetadataInterface::new(asset);
-        let call = Call::new_in(self);
-        erc20.decimals(call).ok()
+        erc20.decimals(self.vm(), Call::new()).ok()
     }
 }
 
