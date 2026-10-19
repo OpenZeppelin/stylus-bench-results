@@ -90,29 +90,25 @@ impl IErc165 for Erc1155MetadataUri {
 
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::Contract;
-    use stylus_sdk::{alloy_primitives::{uint, Address}, prelude::*};
+    use stylus_sdk::{alloy_primitives::uint, testing::TestVM};
 
     use super::*;
 
-    unsafe impl TopLevelStorage for Erc1155MetadataUri {}
-
-    #[motsu::test]
-    fn uri_ignores_token_id(
-        contract: Contract<Erc1155MetadataUri>,
-        alice: Address,
-    ) {
+    #[test]
+    fn uri_ignores_token_id() {
+        let vm = TestVM::default();
+        let mut contract = Erc1155MetadataUri::from(&vm);
         let uri = String::from("https://token-cdn-domain/\\{id\\}.json");
-        contract.sender(alice).constructor(uri.clone());
+        contract.constructor(uri.clone());
 
         let token_id = uint!(1_U256);
-        assert_eq!(uri, contract.sender(alice).uri(token_id));
+        assert_eq!(uri, contract.uri(token_id));
 
         let token_id = uint!(2_U256);
-        assert_eq!(uri, contract.sender(alice).uri(token_id));
+        assert_eq!(uri, contract.uri(token_id));
     }
 
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual =
             <Erc1155MetadataUri as IErc1155MetadataUri>::interface_id();
@@ -120,19 +116,18 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
-    fn supports_interface(
-        contract: Contract<Erc1155MetadataUri>,
-        alice: Address,
-    ) {
-        assert!(contract.sender(alice).supports_interface(
+    #[test]
+    fn supports_interface() {
+        let vm = TestVM::default();
+        let contract = Erc1155MetadataUri::from(&vm);
+        assert!(contract.supports_interface(
             <Erc1155MetadataUri as IErc1155MetadataUri>::interface_id()
         ));
-        assert!(contract.sender(alice).supports_interface(
+        assert!(contract.supports_interface(
             <Erc1155MetadataUri as IErc165>::interface_id()
         ));
 
         let fake_interface_id: B32 = 0x12345678_u32.into();
-        assert!(!contract.sender(alice).supports_interface(fake_interface_id));
+        assert!(!contract.supports_interface(fake_interface_id));
     }
 }

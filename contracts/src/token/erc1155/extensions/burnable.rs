@@ -117,13 +117,17 @@ impl Erc1155 {
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{Address, U256};
-    use motsu::prelude::Contract;
+    use stylus_sdk::testing::TestVM;
 
     use super::IErc1155Burnable;
-    use crate::token::erc1155::{
-        tests::{random_token_ids, random_values},
-        ERC1155InsufficientBalance, ERC1155InvalidSender,
-        ERC1155MissingApprovalForAll, Erc1155, Error, IErc1155};
+    use crate::{
+        test_utils::{ALICE, BOB},
+        token::erc1155::{
+            tests::{random_token_ids, random_values},
+            ERC1155InsufficientBalance, ERC1155InvalidSender,
+            ERC1155MissingApprovalForAll, Erc1155, Error, IErc1155,
+        },
+    };
 
     trait Init {
         fn init(
@@ -153,60 +157,57 @@ mod tests {
         }
     }
 
-    #[motsu::test]
-    fn burns(contract: Contract<Erc1155>, alice: Address) {
-        let (token_ids, values) = contract.sender(alice).init(alice, 1);
+    #[test]
+    fn burns() {
+        let vm = TestVM::default();
+        let mut contract = Erc1155::from(&vm);
+        vm.set_sender(ALICE);
+        let (token_ids, values) = contract.init(ALICE, 1);
 
-        let initial_balance =
-            contract.sender(alice).balance_of(alice, token_ids[0]);
+        let initial_balance = contract.balance_of(ALICE, token_ids[0]);
         assert_eq!(values[0], initial_balance);
 
         contract
-            .sender(alice)
-            .burn(alice, token_ids[0], values[0])
+            .burn(ALICE, token_ids[0], values[0])
             .expect("should burn own tokens");
 
-        let balance = contract.sender(alice).balance_of(alice, token_ids[0]);
+        let balance = contract.balance_of(ALICE, token_ids[0]);
         assert_eq!(U256::ZERO, balance);
     }
 
-    #[motsu::test]
-    fn burns_with_approval(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        bob: Address,
-    ) {
-        let (token_ids, values) = contract.sender(alice).init(bob, 1);
+    #[test]
+    fn burns_with_approval() {
+        let vm = TestVM::default();
+        let mut contract = Erc1155::from(&vm);
+        vm.set_sender(ALICE);
+        let (token_ids, values) = contract.init(BOB, 1);
 
-        let initial_balance =
-            contract.sender(alice).balance_of(bob, token_ids[0]);
+        let initial_balance = contract.balance_of(BOB, token_ids[0]);
         assert_eq!(values[0], initial_balance);
 
+        vm.set_sender(BOB);
         contract
-            .sender(bob)
-            .set_approval_for_all(alice, true)
+            .set_approval_for_all(ALICE, true)
             .expect("should approve Bob's tokens to Alice");
 
+        vm.set_sender(ALICE);
         contract
-            .sender(alice)
-            .burn(bob, token_ids[0], values[0])
+            .burn(BOB, token_ids[0], values[0])
             .expect("should burn Bob's token");
 
-        let balance = contract.sender(alice).balance_of(bob, token_ids[0]);
+        let balance = contract.balance_of(BOB, token_ids[0]);
         assert_eq!(U256::ZERO, balance);
     }
 
-    #[motsu::test]
-    fn error_when_missing_approval_burns(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        bob: Address,
-    ) {
-        let (token_ids, values) = contract.sender(alice).init(bob, 1);
+    #[test]
+    fn error_when_missing_approval_burns() {
+        let vm = TestVM::default();
+        let mut contract = Erc1155::from(&vm);
+        vm.set_sender(ALICE);
+        let (token_ids, values) = contract.init(BOB, 1);
 
         let err = contract
-            .sender(alice)
-            .burn(bob, token_ids[0], values[0])
+            .burn(BOB, token_ids[0], values[0])
             .expect_err("should not burn tokens without approval");
 
         assert!(matches!(
@@ -214,49 +215,49 @@ mod tests {
             Error::MissingApprovalForAll(ERC1155MissingApprovalForAll {
                 owner,
                 operator
-            }) if owner == bob && operator == alice
+            }) if owner == BOB && operator == ALICE
         ));
     }
 
-    #[motsu::test]
-    fn error_when_invalid_sender_burns(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
-        let (token_ids, values) = contract.sender(alice).init(alice, 1);
+    #[test]
+    fn error_when_invalid_sender_burns() {
+        let vm = TestVM::default();
+        let mut contract = Erc1155::from(&vm);
+        vm.set_sender(ALICE);
+        let (token_ids, values) = contract.init(ALICE, 1);
         let invalid_sender = Address::ZERO;
 
+        vm.set_sender(invalid_sender);
         contract
-            .sender(invalid_sender)
-            .set_approval_for_all(alice, true)
+            .set_approval_for_all(ALICE, true)
             .expect("should approve Bob's tokens to Alice");
 
+        vm.set_sender(ALICE);
         let err = contract
-            .sender(alice)
             .burn(invalid_sender, token_ids[0], values[0])
             .expect_err("should not burn tokens from the `Address::ZERO`");
 
         assert!(matches!(
             err,
             Error::InvalidSender(ERC1155InvalidSender {
-                sender}) if sender == invalid_sender
+                sender,
+            }) if sender == invalid_sender
         ));
     }
 
-    #[motsu::test]
-    fn error_when_insufficient_balance_burn(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
-        let (token_ids, values) = contract.sender(alice).init(alice, 1);
+    #[test]
+    fn error_when_insufficient_balance_burn() {
+        let vm = TestVM::default();
+        let mut contract = Erc1155::from(&vm);
+        vm.set_sender(ALICE);
+        let (token_ids, values) = contract.init(ALICE, 1);
 
         let token_id = token_ids[0];
         let value = values[0];
         let to_burn = value + U256::from(1);
 
         let err = contract
-            .sender(alice)
-            .burn(alice, token_id, to_burn)
+            .burn(ALICE, token_id, to_burn)
             .expect_err("should return `ERC1155InsufficientBalance`");
 
         assert!(matches!(
@@ -265,70 +266,70 @@ mod tests {
                 sender,
                 balance,
                 needed,
-                token_id}) if sender == alice && balance == value && needed == to_burn && token_id == token_id
+                token_id,
+            }) if sender == ALICE && balance == value && needed == to_burn && token_id == token_id
         ));
     }
 
-    #[motsu::test]
-    fn burns_batch(contract: Contract<Erc1155>, alice: Address) {
-        let (token_ids, values) = contract.sender(alice).init(alice, 4);
+    #[test]
+    fn burns_batch() {
+        let vm = TestVM::default();
+        let mut contract = Erc1155::from(&vm);
+        vm.set_sender(ALICE);
+        let (token_ids, values) = contract.init(ALICE, 4);
 
         for (&token_id, &value) in token_ids.iter().zip(values.iter()) {
-            let balance = contract.sender(alice).balance_of(alice, token_id);
+            let balance = contract.balance_of(ALICE, token_id);
             assert_eq!(value, balance);
         }
 
         contract
-            .sender(alice)
-            .burn_batch(alice, token_ids.clone(), values.clone())
+            .burn_batch(ALICE, token_ids.clone(), values.clone())
             .expect("should burn own tokens in batch");
 
         for token_id in token_ids {
-            let balance = contract.sender(alice).balance_of(alice, token_id);
+            let balance = contract.balance_of(ALICE, token_id);
             assert_eq!(U256::ZERO, balance);
         }
     }
 
-    #[motsu::test]
-    fn burns_batch_with_approval(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        bob: Address,
-    ) {
-        let (token_ids, values) = contract.sender(alice).init(bob, 4);
+    #[test]
+    fn burns_batch_with_approval() {
+        let vm = TestVM::default();
+        let mut contract = Erc1155::from(&vm);
+        vm.set_sender(ALICE);
+        let (token_ids, values) = contract.init(BOB, 4);
 
         for (&token_id, &value) in token_ids.iter().zip(values.iter()) {
-            let balance = contract.sender(alice).balance_of(bob, token_id);
+            let balance = contract.balance_of(BOB, token_id);
             assert_eq!(value, balance);
         }
 
+        vm.set_sender(BOB);
         contract
-            .sender(bob)
-            .set_approval_for_all(alice, true)
+            .set_approval_for_all(ALICE, true)
             .expect("should approve Bob's tokens to Alice");
 
+        vm.set_sender(ALICE);
         contract
-            .sender(alice)
-            .burn_batch(bob, token_ids.clone(), values.clone())
+            .burn_batch(BOB, token_ids.clone(), values.clone())
             .expect("should burn Bob's tokens in batch");
 
         for token_id in token_ids {
-            let balance = contract.sender(alice).balance_of(bob, token_id);
+            let balance = contract.balance_of(BOB, token_id);
             assert_eq!(U256::ZERO, balance);
         }
     }
 
-    #[motsu::test]
-    fn error_when_missing_approval_burn_batch(
-        contract: Contract<Erc1155>,
-        alice: Address,
-        bob: Address,
-    ) {
-        let (token_ids, values) = contract.sender(alice).init(bob, 2);
+    #[test]
+    fn error_when_missing_approval_burn_batch() {
+        let vm = TestVM::default();
+        let mut contract = Erc1155::from(&vm);
+        vm.set_sender(ALICE);
+        let (token_ids, values) = contract.init(BOB, 2);
 
         let err = contract
-            .sender(alice)
-            .burn_batch(bob, token_ids.clone(), values.clone())
+            .burn_batch(BOB, token_ids.clone(), values.clone())
             .expect_err("should not burn tokens in batch without approval");
 
         assert!(matches!(
@@ -336,25 +337,25 @@ mod tests {
             Error::MissingApprovalForAll(ERC1155MissingApprovalForAll {
                 owner,
                 operator
-            }) if owner == bob && operator == alice
+            }) if owner == BOB && operator == ALICE
         ));
     }
 
-    #[motsu::test]
-    fn error_when_invalid_sender_burn_batch(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
-        let (token_ids, values) = contract.sender(alice).init(alice, 5);
+    #[test]
+    fn error_when_invalid_sender_burn_batch() {
+        let vm = TestVM::default();
+        let mut contract = Erc1155::from(&vm);
+        vm.set_sender(ALICE);
+        let (token_ids, values) = contract.init(ALICE, 5);
         let invalid_sender = Address::ZERO;
 
+        vm.set_sender(invalid_sender);
         contract
-            .sender(invalid_sender)
-            .set_approval_for_all(alice, true)
+            .set_approval_for_all(ALICE, true)
             .expect("should approve Bob's tokens to Alice");
 
+        vm.set_sender(ALICE);
         let err = contract
-            .sender(alice)
             .burn_batch(invalid_sender, token_ids.clone(), values.clone())
             .expect_err(
                 "should not burn tokens in batch from the `Address::ZERO`",
@@ -363,22 +364,22 @@ mod tests {
         assert!(matches!(
             err,
             Error::InvalidSender(ERC1155InvalidSender {
-                sender}) if sender == invalid_sender
+                sender,
+            }) if sender == invalid_sender
         ));
     }
 
-    #[motsu::test]
-    fn error_when_insufficient_balance_burn_batch(
-        contract: Contract<Erc1155>,
-        alice: Address,
-    ) {
-        let (token_ids, values) = contract.sender(alice).init(alice, 5);
+    #[test]
+    fn error_when_insufficient_balance_burn_batch() {
+        let vm = TestVM::default();
+        let mut contract = Erc1155::from(&vm);
+        vm.set_sender(ALICE);
+        let (token_ids, values) = contract.init(ALICE, 5);
         let to_burn: Vec<U256> =
             values.iter().map(|v| v + U256::from(1)).collect();
 
         let err = contract
-            .sender(alice)
-            .burn_batch(alice, token_ids.clone(), to_burn.clone())
+            .burn_batch(ALICE, token_ids.clone(), to_burn.clone())
             .expect_err("should return `ERC1155InsufficientBalance`");
 
         assert!(matches!(
@@ -387,7 +388,8 @@ mod tests {
                 sender,
                 balance,
                 needed,
-                token_id}) if sender == alice && balance == values[0] && needed == to_burn[0] && token_id == token_ids[0]
+                token_id,
+            }) if sender == ALICE && balance == values[0] && needed == to_burn[0] && token_id == token_ids[0]
         ));
     }
 }
