@@ -149,39 +149,36 @@ pub trait IEip712: HostAccess {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{address, b256, uint, Address, U256};
+    use alloy_primitives::{address, b256, Address, U256};
+    use stylus_sdk::{prelude::*, testing::TestVM};
 
     use super::{to_typed_data_hash, IEip712, FIELDS, SALT};
 
-    const CHAIN_ID: U256 = uint!(42161_U256);
+    const CHAIN_ID: u64 = 42161;
 
     const CONTRACT_ADDRESS: Address =
         address!("000000000000000000000000000000000000dEaD");
 
-    #[derive(Default)]
+    #[storage]
     struct TestEIP712;
 
     impl IEip712 for TestEIP712 {
         const NAME: &'static str = "A Name";
         const VERSION: &'static str = "1";
-
-        fn chain_id() -> U256 {
-            CHAIN_ID
-        }
-
-        fn contract_address() -> Address {
-            CONTRACT_ADDRESS
-        }
     }
 
     #[test]
     fn domain_test() {
-        let contract = TestEIP712;
+        let vm = TestVM::default();
+        vm.set_chain_id(CHAIN_ID);
+        vm.set_contract_address(CONTRACT_ADDRESS);
+        let contract = TestEIP712::from(&vm);
+
         let domain = contract.eip712_domain();
         assert_eq!(FIELDS, domain.0);
         assert_eq!(TestEIP712::NAME, domain.1);
         assert_eq!(TestEIP712::VERSION, domain.2);
-        assert_eq!(CHAIN_ID, domain.3);
+        assert_eq!(U256::from(CHAIN_ID), domain.3);
         assert_eq!(CONTRACT_ADDRESS, domain.4);
         assert_eq!(SALT, domain.5);
         assert_eq!(Vec::<U256>::new(), domain.6);
