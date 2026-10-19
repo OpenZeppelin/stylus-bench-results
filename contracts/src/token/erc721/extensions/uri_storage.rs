@@ -47,9 +47,6 @@ pub struct Erc721UriStorage {
 
 /// Interface of an optional extension ERC-721 token providing storage based
 /// token URI management.
-#[public]
-// The `#[public]` macro adds an undocumented marker method to the trait.
-#[allow(missing_docs)]
 pub trait IErc721UriStorage: IErc721Metadata {}
 
 impl Erc721UriStorage {
