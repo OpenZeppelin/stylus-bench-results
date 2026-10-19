@@ -11,12 +11,10 @@
 //! [`eth_signTypedDataV4`]: https://docs.metamask.io/guide/signing-data.html
 
 use alloc::{borrow::ToOwned, string::String, vec::Vec};
-use stylus_sdk::prelude::HostAccess;
-use stylus_sdk::prelude::public;
 
 use alloy_primitives::{keccak256, Address, B256, U256};
 use alloy_sol_types::{sol, SolType};
-
+use stylus_sdk::prelude::{AccountAccess, ChainAccess, HostAccess};
 
 /// Keccak-256 hash of the EIP-712 domain separator type string.
 const TYPE_HASH: [u8; 32] =
@@ -60,6 +58,10 @@ pub fn to_typed_data_hash(
 }
 
 /// EIP-712 Contract interface.
+///
+/// The chain id and the contract's address are read from the host, so
+/// implementors must give access to it through [`HostAccess`] (which every
+/// `#[storage]` type already does).
 pub trait IEip712: HostAccess {
     /// Immutable name of EIP-712 instance.
     const NAME: &'static str;
@@ -75,12 +77,20 @@ pub trait IEip712: HostAccess {
         .finalize();
 
     /// Returns chain id.
+    ///
+    /// # Arguments
+    ///
+    /// * `&self` - Read access to the contract's state.
     #[must_use]
     fn chain_id(&self) -> U256 {
         U256::from(self.vm().chain_id())
     }
 
     /// Returns the contract's address.
+    ///
+    /// # Arguments
+    ///
+    /// * `&self` - Read access to the contract's state.
     #[must_use]
     fn contract_address(&self) -> Address {
         self.vm().contract_address()
