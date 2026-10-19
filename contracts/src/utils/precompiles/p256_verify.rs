@@ -1,6 +1,6 @@
 use alloy_primitives::{address, uint, Address, B256, U256};
 use alloy_sol_types::SolValue;
-use stylus_sdk::{call, stylus_core::StaticCallContext};
+use stylus_sdk::{call, host::VM, prelude::*};
 
 /// Address of the `P256VERIFY` EVM precompile as per [RIP-7212].
 ///
@@ -15,7 +15,7 @@ pub(crate) const HALF_N: U256 = uint!(
 );
 
 pub(crate) fn p256_verify(
-    context: impl StaticCallContext,
+    context: &impl HostAccess<Host = VM>,
     hash: B256,
     r: B256,
     s: B256,
@@ -31,8 +31,13 @@ pub(crate) fn p256_verify(
     // concatenate the input into the expected 160 bytes format
     let data = (hash, r, s, x, y).abi_encode();
 
-    let result = call::static_call(context, P256_VERIFY_ADDRESS, &data)
-        .expect("P256VERIFY precompile should not fail");
+    let result = call::static_call(
+        context.vm(),
+        Call::new(),
+        P256_VERIFY_ADDRESS,
+        &data,
+    )
+    .expect("P256VERIFY precompile should not fail");
 
     // `P256VERIFY` returns an encoded boolean `true` for a successful
     // verification and an empty vector on a failed verification
@@ -42,12 +47,11 @@ pub(crate) fn p256_verify(
 #[cfg_attr(coverage_nightly, coverage(off))]
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{b256, Address, B256, U256};
-    use motsu::prelude::*;
-    use stylus_sdk::prelude::*;
+    use alloy_primitives::{b256, B256, U256};
+    use stylus_sdk::{prelude::*, testing::TestVM};
 
     use super::*;
-    use crate::utils::precompiles::Precompiles;
+    use crate::{test_utils::ALICE, utils::precompiles::Precompiles};
 
     // Values from https://github.com/OffchainLabs/go-ethereum/blob/1a03a778cf634c4ed82780a5e1fad5adcd01489e/core/vm/testdata/precompiles/p256Verify.json#L3
     const VALID_HASH: B256 = b256!(
@@ -83,34 +87,45 @@ mod tests {
         }
     }
 
-    #[motsu::test]
-    fn test_p256_verify_rejects_higher_s(
-        contract: Contract<P256TestContract>,
-        alice: Address,
-    ) {
+    #[test]
+    fn test_p256_verify_rejects_higher_s() {
+        let vm = TestVM::default();
+        vm.set_sender(ALICE);
+        let contract = P256TestContract::from(&vm);
+
         let invalid_s: U256 = HALF_N + uint!(1_U256);
         let invalid_s: B256 = B256::from(invalid_s.to_be_bytes());
 
         // should return false before calling the `P256VERIFY` precompile.
-        assert!(!contract.sender(alice).secp256r1_verify(
+        assert!(!contract.secp256r1_verify(
             VALID_HASH, VALID_R, invalid_s, VALID_X, VALID_Y
         ));
     }
 
-    #[motsu::test]
-    #[ignore = "Motsu doesn't support P256VERIFY precompile yet"]
-    fn test_p256_verify(contract: Contract<P256TestContract>, alice: Address) {
+    #[test]
+    fn test_p256_verify() {
+        let vm = TestVM::default();
+        vm.set_sender(ALICE);
+        let contract = P256TestContract::from(&vm);
+
+        // `TestVM` doesn't run precompiles, so mock the `P256VERIFY` answer: an
+        // encoded `true` for a successful verification.
+        vm.mock_static_call(
+            P256_VERIFY_ADDRESS,
+            (VALID_HASH, VALID_R, VALID_S, VALID_X, VALID_Y).abi_encode(),
+            Ok(U256::from(1).to_be_bytes_vec()),
+        );
+
         assert!(contract
-            .sender(alice)
             .secp256r1_verify(VALID_HASH, VALID_R, VALID_S, VALID_X, VALID_Y));
     }
 
-    #[motsu::test]
-    #[ignore = "Motsu doesn't support P256VERIFY precompile yet"]
-    fn p256_verify_returns_false_on_failed_verification(
-        contract: Contract<P256TestContract>,
-        alice: Address,
-    ) {
+    #[test]
+    fn p256_verify_returns_false_on_failed_verification() {
+        let vm = TestVM::default();
+        vm.set_sender(ALICE);
+        let contract = P256TestContract::from(&vm);
+
         // Values from https://github.com/OffchainLabs/go-ethereum/blob/1a03a778cf634c4ed82780a5e1fad5adcd01489e/core/vm/testdata/precompiles/p256Verify.json#L10
         let hash: B256 = b256!(
             "bb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023"
@@ -128,8 +143,6 @@ mod tests {
             "c7787964eaac00e5921fb1498a60f4606766b3d9685001558d1a974e7341513e"
         );
 
-        assert!(!contract
-            .sender(alice)
-            .secp256r1_verify(hash, invalid_r, invalid_s, x, y));
+        assert!(!contract.secp256r1_verify(hash, invalid_r, invalid_s, x, y));
     }
 }

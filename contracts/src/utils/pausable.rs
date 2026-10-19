@@ -17,7 +17,9 @@
 use alloc::{vec, vec::Vec};
 
 pub use sol::*;
-use stylus_sdk::{stylus_core::calls::errors::MethodError, prelude::*, storage::StorageBool};
+use stylus_sdk::{
+    prelude::*, storage::StorageBool, stylus_core::calls::errors::MethodError,
+};
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -58,7 +60,8 @@ pub enum Error {
     EnforcedPause(EnforcedPause),
     /// Indicates an error related to the operation that failed
     /// because the contract had been in `Unpaused` state.
-    ExpectedPause(ExpectedPause)}
+    ExpectedPause(ExpectedPause),
+}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -70,10 +73,13 @@ impl MethodError for Error {
 #[storage]
 pub struct Pausable {
     /// Indicates whether the contract is `Paused`.
-    pub(crate) paused: StorageBool}
+    pub(crate) paused: StorageBool,
+}
 
 /// Pausable interface.
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait IPausable {
     /// Returns true if the contract is paused, and false otherwise.
     ///
@@ -164,110 +170,144 @@ impl Pausable {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::Address;
-    use motsu::prelude::Contract;
-    use stylus_sdk::prelude::*;
+    use alloy_sol_types::SolEvent;
+    use stylus_sdk::testing::TestVM;
 
-    use crate::utils::pausable::{Error, IPausable, Pausable};
+    use super::*;
+    use crate::test_utils::ALICE;
 
-    unsafe impl TopLevelStorage for Pausable {}
+    #[test]
+    fn paused_works() {
+        let vm = TestVM::default();
+        vm.set_sender(ALICE);
+        let mut contract = Pausable::from(&vm);
 
-    #[motsu::test]
-    fn paused_works(contract: Contract<Pausable>, alice: Address) {
-        contract.sender(alice).paused.set(true);
-        assert!(contract.sender(alice).paused());
+        contract.paused.set(true);
+        assert!(contract.paused());
 
-        contract.sender(alice).paused.set(false);
-        assert!(!contract.sender(alice).paused());
+        contract.paused.set(false);
+        assert!(!contract.paused());
     }
 
-    #[motsu::test]
-    fn when_not_paused_works(contract: Contract<Pausable>, alice: Address) {
-        contract.sender(alice).paused.set(false);
+    #[test]
+    fn when_not_paused_works() {
+        let vm = TestVM::default();
+        vm.set_sender(ALICE);
+        let mut contract = Pausable::from(&vm);
 
-        let result = contract.sender(alice).when_not_paused();
+        contract.paused.set(false);
+
+        let result = contract.when_not_paused();
         assert!(result.is_ok());
     }
 
-    #[motsu::test]
-    fn when_not_paused_errors_when_paused(
-        contract: Contract<Pausable>,
-        alice: Address,
-    ) {
-        contract.sender(alice).paused.set(true);
-        assert!(contract.sender(alice).paused());
+    #[test]
+    fn when_not_paused_errors_when_paused() {
+        let vm = TestVM::default();
+        vm.set_sender(ALICE);
+        let mut contract = Pausable::from(&vm);
 
-        let result = contract.sender(alice).when_not_paused();
+        contract.paused.set(true);
+        assert!(contract.paused());
+
+        let result = contract.when_not_paused();
         assert!(matches!(result, Err(Error::EnforcedPause(_))));
     }
 
-    #[motsu::test]
-    fn when_paused_works(contract: Contract<Pausable>, alice: Address) {
-        contract.sender(alice).pause().unwrap();
-        assert!(contract.sender(alice).paused());
+    #[test]
+    fn when_paused_works() {
+        let vm = TestVM::default();
+        vm.set_sender(ALICE);
+        let mut contract = Pausable::from(&vm);
 
-        let result = contract.sender(alice).when_paused();
+        contract.pause().unwrap();
+        assert!(contract.paused());
+
+        let result = contract.when_paused();
         assert!(result.is_ok());
     }
 
-    #[motsu::test]
-    fn when_paused_errors_when_not_paused(
-        contract: Contract<Pausable>,
-        alice: Address,
-    ) {
-        contract.sender(alice).paused.set(false);
-        assert!(!contract.sender(alice).paused());
+    #[test]
+    fn when_paused_errors_when_not_paused() {
+        let vm = TestVM::default();
+        vm.set_sender(ALICE);
+        let mut contract = Pausable::from(&vm);
 
-        let result = contract.sender(alice).when_paused();
+        contract.paused.set(false);
+        assert!(!contract.paused());
+
+        let result = contract.when_paused();
         assert!(matches!(result, Err(Error::ExpectedPause(_))));
     }
 
-    #[motsu::test]
-    fn pause_works(contract: Contract<Pausable>, alice: Address) {
-        contract.sender(alice).paused.set(false);
-        assert!(!contract.sender(alice).paused());
+    #[test]
+    fn pause_works() {
+        let vm = TestVM::default();
+        vm.set_sender(ALICE);
+        let mut contract = Pausable::from(&vm);
+
+        contract.paused.set(false);
+        assert!(!contract.paused());
 
         // Pause the contract
-        let res = contract.sender(alice).pause();
+        let res = contract.pause();
         assert!(res.is_ok());
-        assert!(contract.sender(alice).paused());
+        assert!(contract.paused());
+
+        let logs = vm.get_emitted_logs();
+        assert_eq!(logs.len(), 1);
+        let expected = Paused { account: ALICE }.encode_log_data();
+        assert_eq!(logs[0].0, expected.topics());
+        assert_eq!(logs[0].1, expected.data);
     }
 
-    #[motsu::test]
-    fn pause_errors_when_already_paused(
-        contract: Contract<Pausable>,
-        alice: Address,
-    ) {
-        contract.sender(alice).paused.set(true);
-        assert!(contract.sender(alice).paused());
+    #[test]
+    fn pause_errors_when_already_paused() {
+        let vm = TestVM::default();
+        vm.set_sender(ALICE);
+        let mut contract = Pausable::from(&vm);
 
-        let result = contract.sender(alice).pause();
+        contract.paused.set(true);
+        assert!(contract.paused());
+
+        let result = contract.pause();
         assert!(matches!(result, Err(Error::EnforcedPause(_))));
-        assert!(contract.sender(alice).paused());
+        assert!(contract.paused());
     }
 
-    #[motsu::test]
-    fn unpause_works(contract: Contract<Pausable>, alice: Address) {
-        contract.sender(alice).paused.set(true);
-        assert!(contract.sender(alice).paused());
+    #[test]
+    fn unpause_works() {
+        let vm = TestVM::default();
+        vm.set_sender(ALICE);
+        let mut contract = Pausable::from(&vm);
+
+        contract.paused.set(true);
+        assert!(contract.paused());
 
         // Unpause the paused contract
-        let res = contract.sender(alice).unpause();
+        let res = contract.unpause();
         assert!(res.is_ok());
-        assert!(!contract.sender(alice).paused());
+        assert!(!contract.paused());
+
+        let logs = vm.get_emitted_logs();
+        assert_eq!(logs.len(), 1);
+        let expected = Unpaused { account: ALICE }.encode_log_data();
+        assert_eq!(logs[0].0, expected.topics());
+        assert_eq!(logs[0].1, expected.data);
     }
 
-    #[motsu::test]
-    fn unpause_errors_when_already_unpaused(
-        contract: Contract<Pausable>,
-        alice: Address,
-    ) {
-        contract.sender(alice).paused.set(false);
-        assert!(!contract.sender(alice).paused());
+    #[test]
+    fn unpause_errors_when_already_unpaused() {
+        let vm = TestVM::default();
+        vm.set_sender(ALICE);
+        let mut contract = Pausable::from(&vm);
+
+        contract.paused.set(false);
+        assert!(!contract.paused());
 
         // Unpause the unpaused contract
-        let result = contract.sender(alice).unpause();
+        let result = contract.unpause();
         assert!(matches!(result, Err(Error::ExpectedPause(_))));
-        assert!(!contract.sender(alice).paused());
+        assert!(!contract.paused());
     }
 }

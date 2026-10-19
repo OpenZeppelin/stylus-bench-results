@@ -11,12 +11,10 @@
 //! [`eth_signTypedDataV4`]: https://docs.metamask.io/guide/signing-data.html
 
 use alloc::{borrow::ToOwned, string::String, vec::Vec};
-use stylus_sdk::prelude::HostAccess;
-use stylus_sdk::prelude::public;
 
 use alloy_primitives::{keccak256, Address, B256, U256};
 use alloy_sol_types::{sol, SolType};
-
+use stylus_sdk::prelude::{AccountAccess, ChainAccess, HostAccess};
 
 /// Keccak-256 hash of the EIP-712 domain separator type string.
 const TYPE_HASH: [u8; 32] =
@@ -60,6 +58,10 @@ pub fn to_typed_data_hash(
 }
 
 /// EIP-712 Contract interface.
+///
+/// The chain id and the contract's address are read from the host, so
+/// implementors must give access to it through [`HostAccess`] (which every
+/// `#[storage]` type already does).
 pub trait IEip712: HostAccess {
     /// Immutable name of EIP-712 instance.
     const NAME: &'static str;
@@ -75,12 +77,20 @@ pub trait IEip712: HostAccess {
         .finalize();
 
     /// Returns chain id.
+    ///
+    /// # Arguments
+    ///
+    /// * `&self` - Read access to the contract's state.
     #[must_use]
     fn chain_id(&self) -> U256 {
         U256::from(self.vm().chain_id())
     }
 
     /// Returns the contract's address.
+    ///
+    /// # Arguments
+    ///
+    /// * `&self` - Read access to the contract's state.
     #[must_use]
     fn contract_address(&self) -> Address {
         self.vm().contract_address()
@@ -139,39 +149,36 @@ pub trait IEip712: HostAccess {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{address, b256, uint, Address, U256};
+    use alloy_primitives::{address, b256, Address, U256};
+    use stylus_sdk::{prelude::*, testing::TestVM};
 
     use super::{to_typed_data_hash, IEip712, FIELDS, SALT};
 
-    const CHAIN_ID: U256 = uint!(42161_U256);
+    const CHAIN_ID: u64 = 42161;
 
     const CONTRACT_ADDRESS: Address =
         address!("000000000000000000000000000000000000dEaD");
 
-    #[derive(Default)]
+    #[storage]
     struct TestEIP712;
 
     impl IEip712 for TestEIP712 {
         const NAME: &'static str = "A Name";
         const VERSION: &'static str = "1";
-
-        fn chain_id() -> U256 {
-            CHAIN_ID
-        }
-
-        fn contract_address() -> Address {
-            CONTRACT_ADDRESS
-        }
     }
 
     #[test]
     fn domain_test() {
-        let contract = TestEIP712;
+        let vm = TestVM::default();
+        vm.set_chain_id(CHAIN_ID);
+        vm.set_contract_address(CONTRACT_ADDRESS);
+        let contract = TestEIP712::from(&vm);
+
         let domain = contract.eip712_domain();
         assert_eq!(FIELDS, domain.0);
         assert_eq!(TestEIP712::NAME, domain.1);
         assert_eq!(TestEIP712::VERSION, domain.2);
-        assert_eq!(CHAIN_ID, domain.3);
+        assert_eq!(U256::from(CHAIN_ID), domain.3);
         assert_eq!(CONTRACT_ADDRESS, domain.4);
         assert_eq!(SALT, domain.5);
         assert_eq!(Vec::<U256>::new(), domain.6);

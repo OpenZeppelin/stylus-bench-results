@@ -3,11 +3,12 @@
 //! These functions can be used to verify that a message was signed
 //! by the holder of the private keys of a given address.
 use alloc::vec::Vec;
-use stylus_sdk::stylus_core::calls::errors::MethodError;
 
 use alloy_primitives::{address, uint, Address, B256, U256};
 use alloy_sol_types::SolType;
-use stylus_sdk::{call, prelude::*};
+use stylus_sdk::{
+    call, host::VM, prelude::*, stylus_core::calls::errors::MethodError,
+};
 
 /// Address of the `ecRecover` EVM precompile.
 pub const ECRECOVER_ADDR: Address =
@@ -59,7 +60,8 @@ pub enum Error {
     /// The signature derives the [`Address::ZERO`].
     InvalidSignature(ECDSAInvalidSignature),
     /// The signature has an `S` value that is in the upper half order.
-    InvalidSignatureS(ECDSAInvalidSignatureS)}
+    InvalidSignatureS(ECDSAInvalidSignatureS),
+}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -71,7 +73,8 @@ impl MethodError for Error {
 ///
 /// # Arguments
 ///
-/// * `context` - Execution context for making static calls.
+/// * `context` - Read access to the contract's host, used to make the static
+///   call to the `ecRecover` precompile.
 /// * `hash` - Hash of the message.
 /// * `v` - `v` value from the signature.
 /// * `r` - `r` value from the signature.
@@ -88,7 +91,7 @@ impl MethodError for Error {
 ///
 /// * If the `ecRecover` precompile fails to execute.
 pub fn recover(
-    context: impl StaticCallContext,
+    context: &impl HostAccess<Host = VM>,
     hash: B256,
     v: u8,
     r: B256,
@@ -107,7 +110,8 @@ pub fn recover(
 ///
 /// # Arguments
 ///
-/// * `context` - Execution context for making static calls.
+/// * `context` - Read access to the contract's host, used to make the static
+///   call to the `ecRecover` precompile.
 /// * `hash` - Hash of the message.
 /// * `v` - `v` value from the signature.
 /// * `r` - `r` value from the signature.
@@ -122,7 +126,7 @@ pub fn recover(
 ///
 /// * If the `ecRecover` precompile fails to execute.
 fn _recover(
-    context: impl StaticCallContext,
+    context: &impl HostAccess<Host = VM>,
     hash: B256,
     v: u8,
     r: B256,
@@ -137,8 +141,9 @@ fn _recover(
         return Err(ECDSAInvalidSignature {}.into());
     }
 
-    let recovered = call::static_call(context, ECRECOVER_ADDR, &calldata)
-        .expect("should call `ecRecover` precompile");
+    let recovered =
+        call::static_call(context.vm(), Call::new(), ECRECOVER_ADDR, &calldata)
+            .expect("should call `ecRecover` precompile");
 
     let recovered = Address::from_slice(&recovered[12..]);
 
@@ -202,8 +207,10 @@ fn check_if_malleable(s: &B256) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{b256, B256};
+    use stylus_sdk::testing::TestVM;
 
     use super::*;
+    use crate::test_utils::ALICE;
 
     const MSG_HASH: B256 = b256!(
         "a1de988600a42c4b4ab089b619297c17d53cffae5d5120d82d8a92d0bb3b78f2"
@@ -215,6 +222,9 @@ mod tests {
     const S: B256 = b256!(
         "3eb5a6982b540f185703492dab77b863a88ce01f27e21ade8b2879c10fc9e653"
     );
+
+    #[storage]
+    struct TestContract;
 
     #[test]
     fn prepares_calldata() {
@@ -243,5 +253,67 @@ mod tests {
         let invalid_s = B256::from_slice(&valid_s.to_be_bytes_vec());
         let result = check_if_malleable(&invalid_s);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn recovers_signer() {
+        let vm = TestVM::default();
+        let contract = TestContract::from(&vm);
+        // `TestVM` doesn't run precompiles, so mock the `ecRecover` answer.
+        vm.mock_static_call(
+            ECRECOVER_ADDR,
+            encode_calldata(MSG_HASH, V, R, S),
+            Ok(ALICE.into_word().to_vec()),
+        );
+
+        let signer = recover(&contract, MSG_HASH, V, R, S);
+
+        assert_eq!(signer.unwrap(), ALICE);
+    }
+
+    #[test]
+    fn rejects_zero_address_signer() {
+        let vm = TestVM::default();
+        let contract = TestContract::from(&vm);
+        vm.mock_static_call(
+            ECRECOVER_ADDR,
+            encode_calldata(MSG_HASH, V, R, S),
+            Ok(Address::ZERO.into_word().to_vec()),
+        );
+
+        let err = recover(&contract, MSG_HASH, V, R, S)
+            .expect_err("should return ECDSAInvalidSignature");
+
+        assert!(matches!(err, Error::InvalidSignature(_)));
+    }
+
+    #[test]
+    fn rejects_v_of_zero_and_one_without_calling_precompile() {
+        let vm = TestVM::default();
+        let contract = TestContract::from(&vm);
+
+        for v in [0, 1] {
+            let err = recover(&contract, MSG_HASH, v, R, S)
+                .expect_err("should return ECDSAInvalidSignature");
+
+            assert!(matches!(err, Error::InvalidSignature(_)));
+        }
+    }
+
+    #[test]
+    fn recover_rejects_invalid_s() {
+        let vm = TestVM::default();
+        let contract = TestContract::from(&vm);
+        let invalid_s = SIGNATURE_S_UPPER_BOUND + uint!(1_U256);
+        let invalid_s = B256::from_slice(&invalid_s.to_be_bytes_vec());
+
+        let err = recover(&contract, MSG_HASH, V, R, invalid_s)
+            .expect_err("should return ECDSAInvalidSignatureS");
+
+        assert!(matches!(
+            err,
+            Error::InvalidSignatureS(ECDSAInvalidSignatureS { s })
+                if s == invalid_s
+        ));
     }
 }

@@ -3,8 +3,8 @@
 //! [ERC]: https://eips.ethereum.org/EIPS/eip-165
 
 use alloy_primitives::aliases::B32;
-use stylus_sdk::prelude::public;
 use openzeppelin_stylus_proc::interface_id;
+use stylus_sdk::prelude::public;
 
 /// Interface of the ERC-165 standard, as defined in the [ERC].
 ///
@@ -14,6 +14,7 @@ use openzeppelin_stylus_proc::interface_id;
 /// # Example
 ///
 /// ```rust,ignore
+/// #[public]
 /// impl IErc165 for Erc20 {
 ///     fn supports_interface(&self, interface_id: B32) -> bool {
 ///         <Self as IErc20>::interface_id() == interface_id
@@ -25,6 +26,8 @@ use openzeppelin_stylus_proc::interface_id;
 /// [ERC]: https://eips.ethereum.org/EIPS/eip-165
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait IErc165 {
     /// Returns true if this contract implements the interface defined by
     /// `interface_id`. See the corresponding [ERC] to learn more about how

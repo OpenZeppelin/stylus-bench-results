@@ -2,7 +2,7 @@
 
 use alloy_primitives::{Address, B256};
 use primitives::ecrecover::Error;
-use stylus_sdk::prelude::*;
+use stylus_sdk::{host::VM, prelude::*};
 
 use crate::utils::cryptography::ecdsa::recover;
 
@@ -24,7 +24,8 @@ pub mod primitives {
     pub mod ecrecover {
         pub use crate::utils::cryptography::ecdsa::{
             ECDSAInvalidSignature, ECDSAInvalidSignatureS, EcRecoverData,
-            Error, ECRECOVER_ADDR, SIGNATURE_S_UPPER_BOUND};
+            Error, ECRECOVER_ADDR, SIGNATURE_S_UPPER_BOUND,
+        };
     }
 }
 
@@ -47,7 +48,7 @@ pub mod primitives {
 /// precompile functionality:
 ///
 /// ```rust,ignore
-/// use openzeppelin_stylus::utils::cryptography::Precompiles;
+/// use openzeppelin_stylus::utils::precompiles::Precompiles;
 ///
 /// #[storage]
 /// #[entrypoint]
@@ -57,7 +58,9 @@ pub mod primitives {
 ///
 /// // The `Precompiles` trait is automatically implemented for all
 /// // contracts annotated with `#[entrypoint]` or that implement
-/// // `stylus_sdk::prelude::TopLevelStorage`.
+/// // `stylus_sdk::prelude::TopLevelStorage`, as long as they give access to
+/// // the host through `stylus_sdk::prelude::HostAccess` (which `#[storage]`
+/// // already provides).
 ///
 /// #[public]
 /// impl MyContract {
@@ -73,7 +76,7 @@ pub mod primitives {
 /// Precompile methods return `Result` types to handle both invalid inputs and
 /// precompile execution failures. Always handle these errors appropriately
 /// in your contract logic.
-pub trait Precompiles: TopLevelStorage {
+pub trait Precompiles: TopLevelStorage + HostAccess<Host = VM> {
     /// Recovers the address that signed a hashed message (`hash`) using an
     /// ECDSA signature (v, r, s).
     ///
@@ -129,7 +132,7 @@ pub trait Precompiles: TopLevelStorage {
     ) -> bool;
 }
 
-impl<T: TopLevelStorage> Precompiles for T {
+impl<T: TopLevelStorage + HostAccess<Host = VM>> Precompiles for T {
     fn ec_recover(
         &self,
         hash: B256,
