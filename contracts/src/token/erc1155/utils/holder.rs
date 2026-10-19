@@ -7,8 +7,10 @@ use stylus_sdk::{abi::Bytes, function_selector, prelude::*};
 use crate::{
     token::erc1155::receiver::{
         IErc1155Receiver, BATCH_TRANSFER_FN_SELECTOR,
-        SINGLE_TRANSFER_FN_SELECTOR},
-    utils::introspection::erc165::IErc165};
+        SINGLE_TRANSFER_FN_SELECTOR,
+    },
+    utils::introspection::erc165::IErc165,
+};
 
 /// Simple implementation of [`IErc1155Receiver`] that will allow a contract to
 /// hold ERC-1155 tokens.
@@ -56,33 +58,25 @@ impl IErc165 for Erc1155Holder {
 
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::Contract;
+    use stylus_sdk::testing::TestVM;
 
     use super::*;
+    use crate::test_utils::ALICE;
 
-    unsafe impl TopLevelStorage for Erc1155Holder {}
-
-    #[motsu::test]
-    fn holder_returns_proper_selectors(
-        contract: Contract<Erc1155Holder>,
-        alice: Address,
-    ) {
+    #[test]
+    fn holder_returns_proper_selectors() {
+        let vm = TestVM::default();
+        let mut contract = Erc1155Holder::from(&vm);
         let one = U256::from(1);
         assert_eq!(
-            contract.sender(alice).on_erc1155_received(
-                alice,
-                alice,
-                one,
-                one,
-                vec![].into()
-            ),
+            contract.on_erc1155_received(ALICE, ALICE, one, one, vec![].into()),
             Ok(SINGLE_TRANSFER_FN_SELECTOR)
         );
 
         assert_eq!(
-            contract.sender(alice).on_erc1155_batch_received(
-                alice,
-                alice,
+            contract.on_erc1155_batch_received(
+                ALICE,
+                ALICE,
                 vec![one],
                 vec![one],
                 vec![].into()
@@ -91,16 +85,17 @@ mod tests {
         );
     }
 
-    #[motsu::test]
-    fn supports_interface(contract: Contract<Erc1155Holder>, alice: Address) {
-        assert!(contract.sender(alice).supports_interface(
+    #[test]
+    fn supports_interface() {
+        let vm = TestVM::default();
+        let contract = Erc1155Holder::from(&vm);
+        assert!(contract.supports_interface(
             <Erc1155Holder as IErc1155Receiver>::interface_id()
         ));
         assert!(contract
-            .sender(alice)
             .supports_interface(<Erc1155Holder as IErc165>::interface_id()));
 
         let fake_interface_id: B32 = 0x12345678_u32.into();
-        assert!(!contract.sender(alice).supports_interface(fake_interface_id));
+        assert!(!contract.supports_interface(fake_interface_id));
     }
 }
