@@ -25,12 +25,14 @@ use stylus_sdk::{abi::Bytes, prelude::*, storage::StorageAddress};
 use crate::proxy::{
     beacon::IBeaconInterface,
     erc1967::{Erc1967Utils, Error},
-    IProxy};
+    IProxy,
+};
 
 /// State of an [`BeaconProxy`] contract.
 #[storage]
 pub struct BeaconProxy {
-    beacon: StorageAddress}
+    beacon: StorageAddress,
+}
 
 /// NOTE: Implementation of [`TopLevelStorage`] to be able use `&mut self` when
 /// calling other contracts and not `&mut (impl TopLevelStorage +
@@ -56,9 +58,8 @@ impl BeaconProxy {
     /// * [`Error::InvalidBeacon`] - If the beacon is not a contract with the
     ///   interface [`IBeacon`][IBeacon].
     /// * [`Error::NonPayable`] - If the data is empty and
-    ///   [`msg::value`][msg_value] is not [`U256::ZERO`][U256].
+    ///   `self.vm().msg_value()` is not [`U256::ZERO`][U256].
     ///
-    /// [msg_value]: stylus_sdk::msg::value
     /// [IBeacon]: super::IBeacon
     /// [U256]: alloy_primitives::U256
     pub fn constructor(
@@ -84,7 +85,8 @@ impl BeaconProxy {
 
 unsafe impl IProxy for BeaconProxy {
     fn implementation(&self) -> Result<Address, Vec<u8>> {
-        Ok(IBeaconInterface::new(self.get_beacon()).implementation(self)?)
+        Ok(IBeaconInterface::new(self.get_beacon())
+            .implementation(self.vm(), Call::new())?)
     }
 }
 

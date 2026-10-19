@@ -2,10 +2,10 @@
 //! [ERC-1822]: <https://eips.ethereum.org/EIPS/eip-1822>.
 
 use alloc::vec::Vec;
-use stylus_sdk::prelude::public;
 
 use alloy_primitives::aliases::B256;
 use openzeppelin_stylus_proc::interface_id;
+use stylus_sdk::prelude::public;
 
 /// Public interface for Universal Upgradeable Proxy Standard (UUPS).
 ///
@@ -13,6 +13,8 @@ use openzeppelin_stylus_proc::interface_id;
 /// proxy whose upgrades are fully controlled by the current implementation.
 #[interface_id]
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait IErc1822Proxiable {
     /// Returns the storage slot that the proxiable contract assumes is being
     /// used to store the implementation address.

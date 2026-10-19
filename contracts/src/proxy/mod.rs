@@ -3,17 +3,16 @@
 use alloc::vec::Vec;
 
 use alloy_primitives::Address;
-use stylus_sdk::{call::{self}, prelude::*, stylus_core::calls::errors::Error};
+use stylus_sdk::{call, prelude::*, stylus_core::calls::errors::Error};
 
 pub mod beacon;
 pub mod erc1967;
 pub mod utils;
 
 /// This trait provides a fallback function that delegates all calls to another
-/// contract using the Stylus [`delegate_call`][delegate_call] function. We
-/// refer to the second contract as the _implementation_ behind the proxy, and
-/// it has to be specified by overriding the virtual [`IProxy::implementation`]
-/// function.
+/// contract using the Stylus [`delegate_call`] function. We refer to the second
+/// contract as the _implementation_ behind the proxy, and it has to be
+/// specified by overriding the virtual [`IProxy::implementation`] function.
 ///
 /// Additionally, delegation to the implementation can be triggered manually
 /// through the [`IProxy::do_fallback`] function, or to a different contract
@@ -22,18 +21,19 @@ pub mod utils;
 /// The success and return data of the delegated call will be returned back
 /// to the caller of the proxy.
 ///
+/// The proxy reaches the host environment through [`HostAccess::vm`], which is
+/// why implementors have to be [`HostAccess`] (every `#[storage]` type is).
+///
 /// # Safety
 ///
 /// This trait is unsafe to implement because it uses the `unsafe`
-/// [`delegate_call`][delegate_call] function.
+/// [`delegate_call`] function.
 ///
 /// The caller must ensure that `self` is a valid contract storage context.
 ///
 /// The caller must ensure that the implementation contract is a valid contract
 /// address.
-///
-/// [delegate_call]: stylus_sdk::call::delegate_call
-pub unsafe trait IProxy: TopLevelStorage + Sized {
+pub unsafe trait IProxy: TopLevelStorage + HostAccess + Sized {
     /// Delegates the current call to [`IProxy::implementation`].
     ///
     /// This function does not return to its internal call site, it will
@@ -47,8 +47,8 @@ pub unsafe trait IProxy: TopLevelStorage + Sized {
     ///
     /// # Errors
     ///
-    /// Returns a [`stylus_sdk::stylus_core::calls::errors::Error`] if the delegate call fails. This
-    /// error may represent:
+    /// Returns a [`stylus_sdk::stylus_core::calls::errors::Error`] if the
+    /// delegate call fails. This error may represent:
     /// * A revert from the implementation contract, containing the revert data.
     /// * Failure to decode the return data from the implementation contract.
     /// * Other low-level call failures as defined by the Stylus SDK.
@@ -58,7 +58,11 @@ pub unsafe trait IProxy: TopLevelStorage + Sized {
         implementation: Address,
         calldata: &[u8],
     ) -> Result<Vec<u8>, Error> {
-        call::delegate_call(Call::new_in(self), implementation, calldata)
+        // `Call::new_mutating` only needs `self` to prove exclusive access to
+        // the top-level storage. Its borrow ends right away, which lets
+        // `self.vm()` be borrowed for the call itself.
+        let call = Call::new_mutating(self);
+        call::delegate_call(self.vm(), call, implementation, calldata)
     }
 
     /// This is a virtual function that should be overridden so it

@@ -67,13 +67,12 @@ impl Erc1967Proxy {
     ///
     /// * [`Error::InvalidImplementation`] - If the implementation is not a
     ///   valid implementation.
-    /// * [`Error::NonPayable`] - If `data` is empty and
-    ///   [`msg::value`][msg_value] is not [`U256::ZERO`][U256].
+    /// * [`Error::NonPayable`] - If `data` is empty and `self.vm().msg_value()`
+    ///   is not [`U256::ZERO`][U256].
     /// * [`Error::FailedCall`] - If the call to the implementation fails.
     /// * [`Error::FailedCallWithReason`] - If the call to the implementation
     ///   fails with a revert reason.
     ///
-    /// [msg_value]: stylus_sdk::msg::value
     /// [U256]: alloy_primitives::U256
     pub fn constructor(
         &mut self,
@@ -86,7 +85,7 @@ impl Erc1967Proxy {
 
 unsafe impl IProxy for Erc1967Proxy {
     fn implementation(&self) -> Result<Address, Vec<u8>> {
-        Ok(Erc1967Utils::get_implementation())
+        Ok(Erc1967Utils::get_implementation(self))
     }
 }
 

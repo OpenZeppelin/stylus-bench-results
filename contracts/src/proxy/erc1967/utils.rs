@@ -4,15 +4,19 @@
 //! [ERC-1967]: https://eips.ethereum.org/EIPS/eip-1967
 
 use alloy_primitives::{aliases::B256, uint, Address, U256};
-use stylus_sdk::host::VM;
 pub use sol::*;
-use stylus_sdk::{abi::Bytes, stylus_core::calls::errors::MethodError, prelude::*, storage::StorageAddress};
+use stylus_sdk::{
+    abi::Bytes, host::VM, prelude::*, storage::StorageAddress,
+    stylus_core::calls::errors::MethodError,
+};
 
 use crate::{
     proxy::{beacon::IBeaconInterface, erc1967},
     utils::{
         address::{self, AddressUtils},
-        storage_slot::StorageSlot}};
+        storage_slot::StorageSlot,
+    },
+};
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -43,8 +47,9 @@ mod sol {
         #[allow(missing_docs)]
         error ERC1967InvalidBeacon(address beacon);
 
-        /// Indicates an error relatoed to the fact that an upgrade function
-        /// sees [`stylus_sdk::self.vm().msg_value()`] > [`U256::ZERO`] that may be lost.
+        /// Indicates an error related to the fact that an upgrade function
+        /// sees `self.vm().msg_value()` > [`alloy_primitives::U256::ZERO`]
+        /// that may be lost.
         #[derive(Debug)]
         #[allow(missing_docs)]
         error ERC1967NonPayable();
@@ -63,8 +68,8 @@ pub enum Error {
     /// Indicates an error related to the fact that the `beacon`
     /// of the proxy is invalid.
     InvalidBeacon(ERC1967InvalidBeacon),
-    /// Indicates an error relatoed to the fact that an upgrade function
-    /// sees [`stylus_sdk::self.vm().msg_value()`] > [`alloy_primitives::U256::ZERO`]
+    /// Indicates an error related to the fact that an upgrade function
+    /// sees `self.vm().msg_value()` > [`alloy_primitives::U256::ZERO`]
     /// that may be lost.
     NonPayable(ERC1967NonPayable),
     /// There's no code at `target` (it is not a contract).
@@ -73,7 +78,8 @@ pub enum Error {
     FailedCall(address::FailedCall),
     /// Indicates an error related to the fact that the delegate call
     /// failed.
-    FailedCallWithReason(address::FailedCallWithReason)}
+    FailedCallWithReason(address::FailedCallWithReason),
+}
 
 impl From<address::Error> for Error {
     fn from(e: address::Error) -> Self {
@@ -133,15 +139,20 @@ pub struct Erc1967Utils;
 /// Implementation of the [`Erc1967Utils`] library.
 impl Erc1967Utils {
     /// Returns the current implementation address.
+    ///
+    /// # Arguments
+    ///
+    /// * `context` - Read access to the contract's state.
     #[must_use]
     pub fn get_implementation(context: &impl HostAccess<Host = VM>) -> Address {
-        StorageSlot::get_slot::<StorageAddress>(context, IMPLEMENTATION_SLOT).get()
+        StorageSlot::get_slot::<StorageAddress>(context, IMPLEMENTATION_SLOT)
+            .get()
     }
 
     /// Performs implementation upgrade with additional setup call if
     /// data is nonempty. This function is payable only if the setup call
-    /// is performed, otherwise [`self.vm().msg_value()`] is rejected to avoid stuck
-    /// value in the contract.
+    /// is performed, otherwise `context.vm().msg_value()` is rejected to avoid
+    /// stuck value in the contract.
     ///
     /// # Arguments
     ///
@@ -153,8 +164,8 @@ impl Erc1967Utils {
     ///
     /// * [`Error::InvalidImplementation`] - If the `new_implementation` address
     ///   is not a valid implementation.
-    /// * [`Error::NonPayable`] - If `data` is empty and [`msg::value`] is not
-    ///   [`U256::ZERO`].
+    /// * [`Error::NonPayable`] - If `data` is empty and
+    ///   `context.vm().msg_value()` is not [`U256::ZERO`].
     /// * [`Error::FailedCall`] - If the call to the implementation contract
     ///   fails.
     /// * [`Error::FailedCallWithReason`] - If the call to the implementation
@@ -166,7 +177,9 @@ impl Erc1967Utils {
     ) -> Result<(), Error> {
         Erc1967Utils::set_implementation(context, new_implementation)?;
 
-        context.vm().log(erc1967::Upgraded { implementation: new_implementation });
+        context
+            .vm()
+            .log(erc1967::Upgraded { implementation: new_implementation });
 
         if data.is_empty() {
             Erc1967Utils::check_non_payable(context)?;
@@ -182,6 +195,10 @@ impl Erc1967Utils {
     }
 
     /// Returns the current admin.
+    ///
+    /// # Arguments
+    ///
+    /// * `context` - Read access to the contract's state.
     #[must_use]
     pub fn get_admin(context: &impl HostAccess<Host = VM>) -> Address {
         StorageSlot::get_slot::<StorageAddress>(context, ADMIN_SLOT).get()
@@ -191,6 +208,7 @@ impl Erc1967Utils {
     ///
     /// # Arguments
     ///
+    /// * `context` - Write access to the contract's state.
     /// * `new_admin` - The new admin address.
     ///
     /// # Errors
@@ -210,6 +228,10 @@ impl Erc1967Utils {
     }
 
     /// Returns the current beacon.
+    ///
+    /// # Arguments
+    ///
+    /// * `context` - Read access to the contract's state.
     #[must_use]
     pub fn get_beacon(context: &impl HostAccess<Host = VM>) -> Address {
         StorageSlot::get_slot::<StorageAddress>(context, BEACON_SLOT).get()
@@ -217,8 +239,8 @@ impl Erc1967Utils {
 
     /// Change the beacon and trigger a setup call if data is nonempty.
     /// This function is payable only if the setup call is performed,
-    /// otherwise [`self.vm().msg_value()`] is rejected to avoid stuck value in the
-    /// contract.
+    /// otherwise `context.vm().msg_value()` is rejected to avoid stuck value
+    /// in the contract.
     ///
     /// # Arguments
     ///
@@ -232,13 +254,15 @@ impl Erc1967Utils {
     ///   beacon.
     /// * [`Error::InvalidImplementation`] - If the beacon implementation is not
     ///   a valid implementation.
-    /// * [`Error::NonPayable`] - If `data` is empty and [`msg::value`] is not
-    ///   [`U256::ZERO`].
+    /// * [`Error::NonPayable`] - If `data` is empty and
+    ///   `context.vm().msg_value()` is not [`U256::ZERO`].
     /// * [`Error::FailedCall`] - If the call to the beacon implementation
     ///   fails.
     /// * [`Error::FailedCallWithReason`] - If the call to the beacon
     ///   implementation fails with a revert reason.
-    pub fn upgrade_beacon_to_and_call<T: TopLevelStorage + HostAccess<Host = VM>>(
+    pub fn upgrade_beacon_to_and_call<
+        T: TopLevelStorage + HostAccess<Host = VM>,
+    >(
         context: &mut T,
         new_beacon: Address,
         data: &Bytes,
@@ -264,15 +288,22 @@ impl Erc1967Utils {
 }
 
 impl Erc1967Utils {
-    /// Reverts if [`self.vm().msg_value()`] is not [`alloy_primitives::U256::ZERO`]. It
-    /// can be used to avoid [`self.vm().msg_value()`] stuck in the contract if an
-    /// upgrade does not perform an initialization call.
+    /// Reverts if `context.vm().msg_value()` is not
+    /// [`alloy_primitives::U256::ZERO`]. It can be used to avoid
+    /// `context.vm().msg_value()` stuck in the contract if an upgrade does not
+    /// perform an initialization call.
+    ///
+    /// # Arguments
+    ///
+    /// * `context` - Read access to the contract's state.
     ///
     /// # Errors
     ///
-    /// * [`Error::NonPayable`] - If [`self.vm().msg_value()`] is not
+    /// * [`Error::NonPayable`] - If `context.vm().msg_value()` is not
     ///   [`alloy_primitives::U256::ZERO`].
-    fn check_non_payable(context: &impl HostAccess<Host = VM>) -> Result<(), Error> {
+    fn check_non_payable(
+        context: &impl HostAccess<Host = VM>,
+    ) -> Result<(), Error> {
         if context.vm().msg_value().is_zero() {
             Ok(())
         } else {
@@ -284,6 +315,7 @@ impl Erc1967Utils {
     ///
     /// # Arguments
     ///
+    /// * `context` - Write access to the contract's state.
     /// * `new_implementation` - The new implementation address.
     ///
     /// # Errors
@@ -296,7 +328,8 @@ impl Erc1967Utils {
     ) -> Result<(), Error> {
         if !AddressUtils::has_code(context, new_implementation) {
             return Err(ERC1967InvalidImplementation {
-                implementation: new_implementation}
+                implementation: new_implementation,
+            }
             .into());
         }
 
@@ -310,6 +343,7 @@ impl Erc1967Utils {
     ///
     /// # Arguments
     ///
+    /// * `context` - Write access to the contract's state.
     /// * `new_admin` - The new admin address.
     ///
     /// # Errors
@@ -324,7 +358,8 @@ impl Erc1967Utils {
             return Err(ERC1967InvalidAdmin { admin: new_admin }.into());
         }
 
-        StorageSlot::get_slot::<StorageAddress>(context, ADMIN_SLOT).set(new_admin);
+        StorageSlot::get_slot::<StorageAddress>(context, ADMIN_SLOT)
+            .set(new_admin);
 
         Ok(())
     }
@@ -354,14 +389,16 @@ impl Erc1967Utils {
             return Err(ERC1967InvalidBeacon { beacon: new_beacon }.into());
         }
 
-        StorageSlot::get_slot::<StorageAddress>(context, BEACON_SLOT).set(new_beacon);
+        StorageSlot::get_slot::<StorageAddress>(context, BEACON_SLOT)
+            .set(new_beacon);
 
         let beacon_implementation =
             Erc1967Utils::get_beacon_implementation(context, new_beacon)?;
 
         if !AddressUtils::has_code(context, beacon_implementation) {
             return Err(ERC1967InvalidImplementation {
-                implementation: beacon_implementation}
+                implementation: beacon_implementation,
+            }
             .into());
         }
 
@@ -384,14 +421,15 @@ impl Erc1967Utils {
     /// * [`Error::FailedCallWithReason`] - If the call to the beacon
     ///   implementation fails with a revert reason.
     /// * [`Error::EmptyCode`] - If the beacon implementation has no code.
-    fn get_beacon_implementation<T: TopLevelStorage + HostAccess<Host = VM>>(
-        context: &T,
+    fn get_beacon_implementation(
+        context: &impl HostAccess<Host = VM>,
         beacon: Address,
     ) -> Result<Address, Error> {
         Ok(AddressUtils::verify_call_result_from_target(
             context,
             beacon,
-            IBeaconInterface::new(beacon).implementation(context.vm(), Call::new()),
+            IBeaconInterface::new(beacon)
+                .implementation(context.vm(), Call::new()),
         )?)
     }
 }

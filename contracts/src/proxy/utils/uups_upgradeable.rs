@@ -20,10 +20,14 @@
 pub use alloc::{string::String, vec, vec::Vec};
 
 use alloy_primitives::{aliases::B256, uint, Address, U256, U32};
-use stylus_sdk::stylus_core::calls::errors::MethodError;
 use alloy_sol_types::SolCall;
 pub use sol::*;
-use stylus_sdk::{abi::Bytes, prelude::*, storage::{StorageBool, StorageU32}};
+use stylus_sdk::{
+    abi::Bytes,
+    prelude::*,
+    storage::{StorageBool, StorageU32},
+    stylus_core::calls::errors::MethodError,
+};
 
 use crate::{
     proxy::{
@@ -32,11 +36,16 @@ use crate::{
             utils::{
                 ERC1967InvalidAdmin, ERC1967InvalidBeacon,
                 ERC1967InvalidImplementation, ERC1967NonPayable, Erc1967Utils,
-                IMPLEMENTATION_SLOT}},
-        utils::erc1822::{Erc1822ProxiableInterface, IErc1822Proxiable}},
+                IMPLEMENTATION_SLOT,
+            },
+        },
+        utils::erc1822::{Erc1822ProxiableInterface, IErc1822Proxiable},
+    },
     utils::{
         address::{self, AddressUtils},
-        storage_slot::StorageSlot}};
+        storage_slot::StorageSlot,
+    },
+};
 
 /// The version of the upgrade interface of the contract.
 pub const UPGRADE_INTERFACE_VERSION: &str = "5.0.0";
@@ -45,7 +54,7 @@ pub const UPGRADE_INTERFACE_VERSION: &str = "5.0.0";
 pub const VERSION_NUMBER: U32 = uint!(1_U32);
 
 /// A sentinel storage slot used by the implementation to distinguish
-/// implementation vs. proxy ([`delegate_call`][delegate_call]) execution
+/// implementation vs. proxy ([`delegate_call`]) execution
 /// contexts.
 ///
 /// The slot key is derived from `keccak256("Stylus.uups.logic.flag") - 1`,
@@ -53,14 +62,11 @@ pub const VERSION_NUMBER: U32 = uint!(1_U32);
 ///
 /// Behavior:
 /// - When called directly on the implementation, `logic_flag == true`.
-/// - When called via a proxy ([`delegate_call`][delegate_call]), `logic_flag ==
-///   false` (i.e., the proxy’s storage does not contain this
-///   implementation-only flag).
+/// - When called via a proxy ([`delegate_call`]), `logic_flag == false` (i.e.,
+///   the proxy’s storage does not contain this implementation-only flag).
 ///
 /// Security notes:
 /// - This boolean flag replaces Solidity’s `immutable __self` pattern.
-///
-/// [delegate_call]: stylus_sdk::call::delegate_call
 pub const LOGIC_FLAG_SLOT: B256 = {
     const HASH: [u8; 32] = keccak_const::Keccak256::new()
         .update(b"Stylus.uups.logic.flag")
@@ -124,8 +130,8 @@ pub enum Error {
     /// of the proxy is invalid.
     InvalidBeacon(ERC1967InvalidBeacon),
     /// Indicates an error related to the fact that an upgrade function
-    /// sees [`stylus_sdk::self.vm().msg_value()`] > [`alloy_primitives::U256::ZERO`]
-    /// that may be lost.
+    /// sees `self.vm().msg_value()` > [`alloy_primitives::U256::ZERO`] that
+    /// may be lost.
     NonPayable(ERC1967NonPayable),
     /// There's no code at `target` (it is not a contract).
     EmptyCode(address::AddressEmptyCode),
@@ -139,7 +145,8 @@ pub enum Error {
     InvalidInitialization(InvalidInitialization),
     /// Indicates an error related to the fact that the version is not greater
     /// than the current version.
-    InvalidVersion(InvalidVersion)}
+    InvalidVersion(InvalidVersion),
+}
 
 impl From<erc1967::utils::Error> for Error {
     fn from(e: erc1967::utils::Error) -> Self {
@@ -173,6 +180,8 @@ unsafe impl TopLevelStorage for UUPSUpgradeable {}
 /// Interface for a UUPS (Universal Upgradeable Proxy Standard) upgradeable
 /// contract.
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait IUUPSUpgradeable: IErc1822Proxiable {
     /// Returns the version of the upgrade interface of the contract.
     ///
@@ -334,7 +343,8 @@ pub trait IUUPSUpgradeable: IErc1822Proxiable {
 #[storage]
 pub struct UUPSUpgradeable {
     /// Logic version number stored in the proxy contract.
-    pub version: StorageU32}
+    pub version: StorageU32,
+}
 
 #[public]
 #[implements(IUUPSUpgradeable, IErc1822Proxiable)]
@@ -378,7 +388,8 @@ impl UUPSUpgradeable {
         }
         if self.version.get() > VERSION_NUMBER {
             return Err(Error::InvalidVersion(InvalidVersion {
-                current_version: self.version.get().to()}));
+                current_version: self.version.get().to(),
+            }));
         }
 
         self.version.set(VERSION_NUMBER);
@@ -431,7 +442,7 @@ impl UUPSUpgradeable {
     /// * `&self` - Read access to the contract's state.
     #[must_use]
     pub fn logic_flag(&self) -> StorageBool {
-        StorageSlot::get_slot::<StorageBool>(LOGIC_FLAG_SLOT)
+        StorageSlot::get_slot::<StorageBool>(self, LOGIC_FLAG_SLOT)
     }
 
     /// Return the value stored in the logic flag slot.
@@ -447,8 +458,8 @@ impl UUPSUpgradeable {
     /// Ensures the call is being made through a valid [ERC-1967] proxy.
     ///
     /// Checks:
-    /// 1. Execution is happening via [`delegate_call`][delegate_call] (checked
-    ///    via `!self.is_logic()`).
+    /// 1. Execution is happening via [`delegate_call`] (checked via
+    ///    `!self.is_logic()`).
     /// 2. The caller is a valid [ERC-1967] proxy (implementation slot is
     ///    non-zero).
     /// 3. The proxy state is consistent for this logic (the proxy-stored
@@ -480,10 +491,9 @@ impl UUPSUpgradeable {
     ///
     /// [ERC-1967]: https://eips.ethereum.org/EIPS/eip-1967
     /// [ERC-1167]: https://eips.ethereum.org/EIPS/eip-1167
-    /// [delegate_call]: stylus_sdk::call::delegate_call
     pub fn only_proxy(&self) -> Result<(), Error> {
         if self.is_logic()
-            || Erc1967Utils::get_implementation() == Address::ZERO
+            || Erc1967Utils::get_implementation(self) == Address::ZERO
             || U32::from(self.get_version()) != self.version.get()
         {
             Err(Error::UnauthorizedCallContext(UUPSUnauthorizedCallContext {}))
@@ -549,27 +559,26 @@ impl UUPSUpgradeable {
     ///   not designed to handle it.
     /// * [`Error::EmptyCode`] - If there's no code at the new implementation
     ///   address.
-    /// * [`Error::FailedCall`] - If the [`delegate_call`][delegate_call] to the
-    ///   new implementation fails.
+    /// * [`Error::FailedCall`] - If the [`delegate_call`] to the new
+    ///   implementation fails.
     /// * [`Error::FailedCallWithReason`] - If the
     ///   [`stylus_sdk::call::delegate_call`] fails with a specific reason.
     ///
     /// # Events
     ///
-    /// * [`crate::proxy::erc1967::Erc1967Proxy::Upgraded`]: Emitted when the
-    ///   implementation is upgraded.
-    ///
-    /// [delegate_call]: stylus_sdk::call::delegate_call
+    /// * [`crate::proxy::erc1967::Upgraded`]: Emitted when the implementation
+    ///   is upgraded.
     fn _upgrade_to_and_call_uups(
         &mut self,
         new_implementation: Address,
         data: &Bytes,
     ) -> Result<(), Error> {
         let slot = Erc1822ProxiableInterface::new(new_implementation)
-            .proxiable_uuid(Call::new_in(self))
+            .proxiable_uuid(self.vm(), Call::new())
             .map_err(|_e| {
                 Error::InvalidImplementation(ERC1967InvalidImplementation {
-                    implementation: new_implementation})
+                    implementation: new_implementation,
+                })
             })?;
 
         if slot == IMPLEMENTATION_SLOT {
@@ -577,7 +586,8 @@ impl UUPSUpgradeable {
                 .map_err(Error::from)
         } else {
             Err(Error::UnsupportedProxiableUUID(UUPSUnsupportedProxiableUUID {
-                slot}))
+                slot,
+            }))
         }
     }
 }
