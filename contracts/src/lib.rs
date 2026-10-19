@@ -23,12 +23,16 @@ importing them:
 
 ```ignore
 use openzeppelin_stylus::token::erc20::{self, Erc20, IErc20};
-use stylus_sdk::{alloy_primitives::{Address, U256}, prelude::*};
+use stylus_sdk::{
+    alloy_primitives::{Address, U256},
+    prelude::*,
+};
 
 #[entrypoint]
 #[storage]
 struct MyContract {
-    pub erc20: Erc20}
+    pub erc20: Erc20,
+}
 
 #[public]
 #[implements(IErc20<Error = erc20::Error>)]
@@ -50,7 +54,7 @@ impl IErc20 for MyContract {
         &mut self,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer(to, value)
     }
 
@@ -62,7 +66,7 @@ impl IErc20 for MyContract {
         &mut self,
         spender: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.approve(spender, value)
     }
 
@@ -71,7 +75,7 @@ impl IErc20 for MyContract {
         from: Address,
         to: Address,
         value: U256,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, erc20::Error> {
         self.erc20.transfer_from(from, to, value)
     }
 }
@@ -84,6 +88,8 @@ impl IErc20 for MyContract {
     clippy::unreadable_literal,
     deprecated
 )]
+// The items that `#[public]` generates to export the ABI are undocumented.
+#![cfg_attr(feature = "export-abi", allow(missing_docs))]
 #![cfg_attr(not(any(test, feature = "export-abi")), no_std, no_main)]
 #![cfg_attr(coverage_nightly, feature(coverage_attribute))]
 #![deny(rustdoc::broken_intra_doc_links)]

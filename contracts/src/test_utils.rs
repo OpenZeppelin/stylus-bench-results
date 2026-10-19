@@ -1,8 +1,8 @@
 //! Fixtures shared by the unit tests.
 //!
-//! The Stylus testing framework ([`TestVM`](stylus_sdk::testing::TestVM)) is
-//! given explicit addresses, so tests use these constants where motsu used to
-//! inject random accounts.
+//! The Stylus testing framework ([`TestVM`](stylus_sdk::testing::TestVM))
+//! doesn't provide accounts, so the tests use these fixed addresses as
+//! senders, owners, spenders, recipients, etc.
 
 use alloy_primitives::{address, Address};
 
