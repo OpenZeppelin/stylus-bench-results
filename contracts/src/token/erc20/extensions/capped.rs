@@ -100,29 +100,26 @@ impl ICapped for Capped {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{uint, Address};
-    use motsu::prelude::Contract;
-    use stylus_sdk::prelude::*;
+    use alloy_primitives::uint;
+    use stylus_sdk::testing::TestVM;
 
     use super::*;
 
-    unsafe impl TopLevelStorage for Capped {}
+    #[test]
+    fn cap_works() {
+        let vm = TestVM::default();
+        let mut contract = Capped::from(&vm);
 
-    #[motsu::test]
-    fn cap_works(contract: Contract<Capped>, alice: Address) {
         let value = uint!(2024_U256);
-        contract.sender(alice).constructor(value).expect("should set cap");
-        assert_eq!(contract.sender(alice).cap(), value);
+        contract.constructor(value).expect("should set cap");
+        assert_eq!(contract.cap(), value);
 
         let value = uint!(1_U256);
-        contract.sender(alice).constructor(value).expect("should set cap");
-        assert_eq!(contract.sender(alice).cap(), value);
+        contract.constructor(value).expect("should set cap");
+        assert_eq!(contract.cap(), value);
 
         let value = uint!(0_U256);
-        let err = contract
-            .sender(alice)
-            .constructor(value)
-            .expect_err("should return error");
+        let err = contract.constructor(value).expect_err("should return error");
         assert!(matches!(
             err,
             Error::InvalidCap(ERC20InvalidCap { cap }) if cap == value

@@ -1150,15 +1150,16 @@ impl Erc4626 {
 //     }
 // }
 
-// TODO: Add missing tests once `motsu` supports calling external contracts.
+// TODO: Add missing tests for the flows that call the asset contract
+// (`total_assets`, `deposit`, `mint`, `withdraw` and `redeem`).
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{address, aliases::B32, Address, U256, U8};
-    use motsu::prelude::*;
-    use stylus_sdk::prelude::*;
+    use stylus_sdk::{prelude::*, testing::TestVM};
 
     use super::*;
     use crate::{
+        test_utils::ALICE,
         token::erc20::{
             extensions::{Erc20Metadata, IErc20Metadata},
             Erc20,
@@ -1185,15 +1186,15 @@ mod tests {
             self.erc4626.asset()
         }
 
-        fn total_assets(&self) -> Result<U256, Self::Error> {
+        fn total_assets(&self) -> Result<U256, Error> {
             self.erc4626.total_assets()
         }
 
-        fn convert_to_shares(&self, assets: U256) -> Result<U256, Self::Error> {
+        fn convert_to_shares(&self, assets: U256) -> Result<U256, Error> {
             self.erc4626.convert_to_shares(assets, &self.erc20)
         }
 
-        fn convert_to_assets(&self, shares: U256) -> Result<U256, Self::Error> {
+        fn convert_to_assets(&self, shares: U256) -> Result<U256, Error> {
             self.erc4626.convert_to_assets(shares, &self.erc20)
         }
 
@@ -1201,7 +1202,7 @@ mod tests {
             self.erc4626.max_deposit(receiver)
         }
 
-        fn preview_deposit(&self, assets: U256) -> Result<U256, Self::Error> {
+        fn preview_deposit(&self, assets: U256) -> Result<U256, Error> {
             self.erc4626.preview_deposit(assets, &self.erc20)
         }
 
@@ -1209,7 +1210,7 @@ mod tests {
             &mut self,
             assets: U256,
             receiver: Address,
-        ) -> Result<U256, Self::Error> {
+        ) -> Result<U256, Error> {
             self.erc4626.deposit(assets, receiver, &mut self.erc20)
         }
 
@@ -1217,7 +1218,7 @@ mod tests {
             self.erc4626.max_mint(receiver)
         }
 
-        fn preview_mint(&self, shares: U256) -> Result<U256, Self::Error> {
+        fn preview_mint(&self, shares: U256) -> Result<U256, Error> {
             self.erc4626.preview_mint(shares, &self.erc20)
         }
 
@@ -1225,15 +1226,15 @@ mod tests {
             &mut self,
             shares: U256,
             receiver: Address,
-        ) -> Result<U256, Self::Error> {
+        ) -> Result<U256, Error> {
             self.erc4626.mint(shares, receiver, &mut self.erc20)
         }
 
-        fn max_withdraw(&self, owner: Address) -> Result<U256, Self::Error> {
+        fn max_withdraw(&self, owner: Address) -> Result<U256, Error> {
             self.erc4626.max_withdraw(owner, &self.erc20)
         }
 
-        fn preview_withdraw(&self, assets: U256) -> Result<U256, Self::Error> {
+        fn preview_withdraw(&self, assets: U256) -> Result<U256, Error> {
             self.erc4626.preview_withdraw(assets, &self.erc20)
         }
 
@@ -1242,7 +1243,7 @@ mod tests {
             assets: U256,
             receiver: Address,
             owner: Address,
-        ) -> Result<U256, Self::Error> {
+        ) -> Result<U256, Error> {
             self.erc4626.withdraw(assets, receiver, owner, &mut self.erc20)
         }
 
@@ -1250,7 +1251,7 @@ mod tests {
             self.erc4626.max_redeem(owner, &self.erc20)
         }
 
-        fn preview_redeem(&self, shares: U256) -> Result<U256, Self::Error> {
+        fn preview_redeem(&self, shares: U256) -> Result<U256, Error> {
             self.erc4626.preview_redeem(shares, &self.erc20)
         }
 
@@ -1259,7 +1260,7 @@ mod tests {
             shares: U256,
             receiver: Address,
             owner: Address,
-        ) -> Result<U256, Self::Error> {
+        ) -> Result<U256, Error> {
             self.erc4626.redeem(shares, receiver, owner, &mut self.erc20)
         }
     }
@@ -1288,73 +1289,78 @@ mod tests {
         }
     }
 
-    unsafe impl TopLevelStorage for Erc4626TestExample {}
+    #[test]
+    fn asset_works() {
+        let vm = TestVM::default();
+        let mut contract = Erc4626TestExample::from(&vm);
 
-    #[motsu::test]
-    fn asset_works(contract: Contract<Erc4626TestExample>, alice: Address) {
         let asset = address!("DeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF");
-        contract.sender(alice).erc4626.asset.set(asset);
-        assert_eq!(contract.sender(alice).erc4626.asset(), asset);
+        contract.erc4626.asset.set(asset);
+        assert_eq!(contract.erc4626.asset(), asset);
     }
 
-    #[motsu::test]
-    fn max_deposit(contract: Contract<Erc4626TestExample>, alice: Address) {
-        let max_deposit = contract.sender(alice).max_deposit(alice);
+    #[test]
+    fn max_deposit() {
+        let vm = TestVM::default();
+        let contract = Erc4626TestExample::from(&vm);
+
+        let max_deposit = contract.max_deposit(ALICE);
         assert_eq!(max_deposit, U256::MAX);
     }
 
-    #[motsu::test]
-    fn max_mint(contract: Contract<Erc4626TestExample>, alice: Address) {
-        let max_mint = contract.sender(alice).max_mint(alice);
+    #[test]
+    fn max_mint() {
+        let vm = TestVM::default();
+        let contract = Erc4626TestExample::from(&vm);
+
+        let max_mint = contract.max_mint(ALICE);
         assert_eq!(max_mint, U256::MAX);
     }
 
-    #[motsu::test]
-    fn max_redeem_works(
-        contract: Contract<Erc4626TestExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn max_redeem_works() {
+        let vm = TestVM::default();
+        let mut contract = Erc4626TestExample::from(&vm);
+
         let assets = U256::from(1000);
-        contract
-            .sender(alice)
-            .erc20
-            ._mint(alice, assets)
-            .motsu_expect("should mint assets");
-        let max_redeem = contract.sender(alice).max_redeem(alice);
+        contract.erc20._mint(ALICE, assets).expect("should mint assets");
+        let max_redeem = contract.max_redeem(ALICE);
         assert_eq!(assets, max_redeem);
     }
 
-    #[motsu::test]
-    fn decimals_offset(contract: Contract<Erc4626TestExample>, alice: Address) {
-        let decimals_offset = contract.sender(alice).erc4626._decimals_offset();
+    #[test]
+    fn decimals_offset() {
+        let vm = TestVM::default();
+        let mut contract = Erc4626TestExample::from(&vm);
+
+        let decimals_offset = contract.erc4626._decimals_offset();
         assert_eq!(decimals_offset, U8::ZERO);
 
         let new_decimal_offset = U8::from(10);
-        contract.sender(alice).erc4626.decimals_offset.set(new_decimal_offset);
+        contract.erc4626.decimals_offset.set(new_decimal_offset);
 
-        let decimals_offset = contract.sender(alice).erc4626._decimals_offset();
+        let decimals_offset = contract.erc4626._decimals_offset();
         assert_eq!(decimals_offset, new_decimal_offset);
     }
 
-    #[motsu::test]
-    fn decimals(contract: Contract<Erc4626TestExample>, alice: Address) {
+    #[test]
+    fn decimals() {
+        let vm = TestVM::default();
+        let mut contract = Erc4626TestExample::from(&vm);
+
         let underlying_decimals = U8::from(17);
-        contract
-            .sender(alice)
-            .erc4626
-            .underlying_decimals
-            .set(underlying_decimals);
-        let decimals = contract.sender(alice).erc4626.decimals();
+        contract.erc4626.underlying_decimals.set(underlying_decimals);
+        let decimals = contract.erc4626.decimals();
         assert_eq!(decimals, underlying_decimals);
 
         let new_decimal_offset = U8::from(10);
-        contract.sender(alice).erc4626.decimals_offset.set(new_decimal_offset);
+        contract.erc4626.decimals_offset.set(new_decimal_offset);
 
-        let decimals = contract.sender(alice).erc4626.decimals();
+        let decimals = contract.erc4626.decimals();
         assert_eq!(decimals, underlying_decimals + new_decimal_offset);
     }
 
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual = <Erc4626TestExample as IErc4626>::interface_id();
         let expected: B32 = 0x87dfe5a0_u32.into();

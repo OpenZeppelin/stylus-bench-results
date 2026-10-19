@@ -379,14 +379,15 @@ impl Erc20FlashMint {
 
 #[cfg(test)]
 mod tests {
-    use motsu::prelude::*;
     use stylus_sdk::{
         abi::Bytes,
         alloy_primitives::{aliases::B32, uint, Address, U256},
         prelude::*,
+        testing::TestVM,
     };
 
     use super::*;
+    use crate::test_utils::ALICE;
 
     #[storage]
     struct Erc20FlashMintTestExample {
@@ -410,7 +411,7 @@ mod tests {
             &self,
             token: Address,
             value: U256,
-        ) -> Result<U256, Self::Error> {
+        ) -> Result<U256, Error> {
             self.erc20_flash_mint.flash_fee(token, value)
         }
 
@@ -420,7 +421,7 @@ mod tests {
             token: Address,
             value: U256,
             data: Bytes,
-        ) -> Result<bool, Self::Error> {
+        ) -> Result<bool, Error> {
             self.erc20_flash_mint.flash_loan(
                 receiver,
                 token,
@@ -431,77 +432,66 @@ mod tests {
         }
     }
 
-    unsafe impl TopLevelStorage for Erc20FlashMintTestExample {}
+    #[test]
+    fn max_flash_loan_token_match() {
+        let vm = TestVM::default();
+        let contract = Erc20FlashMintTestExample::from(&vm);
 
-    #[motsu::test]
-    fn max_flash_loan_token_match(
-        contract: Contract<Erc20FlashMintTestExample>,
-        alice: Address,
-    ) {
-        let max_flash_loan =
-            contract.sender(alice).max_flash_loan(contract.address());
+        let max_flash_loan = contract.max_flash_loan(vm.contract_address());
         assert_eq!(max_flash_loan, U256::MAX);
     }
 
-    #[motsu::test]
-    fn max_flash_loan_token_mismatch(
-        contract: Contract<Erc20FlashMintTestExample>,
-        alice: Address,
-    ) {
-        let max_flash_loan = contract.sender(alice).max_flash_loan(alice);
+    #[test]
+    fn max_flash_loan_token_mismatch() {
+        let vm = TestVM::default();
+        let contract = Erc20FlashMintTestExample::from(&vm);
+
+        let max_flash_loan = contract.max_flash_loan(ALICE);
         assert_eq!(max_flash_loan, U256::MIN);
     }
 
-    #[motsu::test]
-    fn max_flash_loan_when_token_minted(
-        contract: Contract<Erc20FlashMintTestExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn max_flash_loan_when_token_minted() {
+        let vm = TestVM::default();
+        let mut contract = Erc20FlashMintTestExample::from(&vm);
+
         let initial_supply = uint!(10000_U256);
 
         contract
-            .sender(alice)
             .erc20
-            ._mint(alice, initial_supply)
-            .motsu_expect("should mint initial supply tokens");
+            ._mint(ALICE, initial_supply)
+            .expect("should mint initial supply tokens");
 
-        let max_flash_loan =
-            contract.sender(alice).max_flash_loan(contract.address());
+        let max_flash_loan = contract.max_flash_loan(vm.contract_address());
 
         assert_eq!(max_flash_loan, U256::MAX - initial_supply);
     }
 
-    #[motsu::test]
-    fn flash_fee(
-        contract: Contract<Erc20FlashMintTestExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn flash_fee() {
+        let vm = TestVM::default();
+        let mut contract = Erc20FlashMintTestExample::from(&vm);
+
         let flash_fee_value = uint!(69_U256);
-        contract
-            .sender(alice)
-            .erc20_flash_mint
-            .flash_fee_value
-            .set(flash_fee_value);
+        contract.erc20_flash_mint.flash_fee_value.set(flash_fee_value);
 
         let flash_fee = contract
-            .sender(alice)
-            .flash_fee(contract.address(), uint!(1000_U256))
-            .motsu_expect("should return flash fee value");
+            .flash_fee(vm.contract_address(), uint!(1000_U256))
+            .expect("should return flash fee value");
 
         assert_eq!(flash_fee, flash_fee_value);
     }
 
-    #[motsu::test]
-    fn flash_fee_reverts_when_invalid_token(
-        contract: Contract<Erc20FlashMintTestExample>,
-        alice: Address,
-    ) {
-        let invalid_token = alice;
+    #[test]
+    fn flash_fee_reverts_when_invalid_token() {
+        let vm = TestVM::default();
+        let contract = Erc20FlashMintTestExample::from(&vm);
+
+        let invalid_token = ALICE;
 
         let err = contract
-            .sender(alice)
             .flash_fee(invalid_token, uint!(1000_U256))
-            .motsu_expect_err("should return Error::UnsupportedToken");
+            .expect_err("should return Error::UnsupportedToken");
 
         assert!(matches!(
             err,
@@ -510,23 +500,27 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn flash_loan_reverts_when_exceeded_max_loan(
-        contract: Contract<Erc20FlashMintTestExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn flash_loan_reverts_when_exceeded_max_loan() {
+        let vm = TestVM::default();
+        let mut contract = Erc20FlashMintTestExample::from(&vm);
+
         let initial_supply = uint!(10000_U256);
 
         contract
-            .sender(alice)
             .erc20
-            ._mint(alice, initial_supply)
-            .motsu_expect("should mint initial supply tokens");
+            ._mint(ALICE, initial_supply)
+            .expect("should mint initial supply tokens");
 
+        vm.set_sender(ALICE);
         let err = contract
-            .sender(alice)
-            .flash_loan(alice, contract.address(), U256::MAX, vec![0, 1].into())
-            .motsu_expect_err("should return Error::ExceededMaxLoan");
+            .flash_loan(
+                ALICE,
+                vm.contract_address(),
+                U256::MAX,
+                vec![0, 1].into(),
+            )
+            .expect_err("should return Error::ExceededMaxLoan");
 
         assert!(matches!(
             err,
@@ -535,21 +529,21 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn flash_loan_reverts_when_receiver_is_zero_address(
-        contract: Contract<Erc20FlashMintTestExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn flash_loan_reverts_when_receiver_is_zero_address() {
+        let vm = TestVM::default();
+        let mut contract = Erc20FlashMintTestExample::from(&vm);
+
         let invalid_reciver = Address::ZERO;
+        vm.set_sender(ALICE);
         let err = contract
-            .sender(alice)
             .flash_loan(
                 invalid_reciver,
-                contract.address(),
+                vm.contract_address(),
                 uint!(1000_U256),
                 vec![0, 1].into(),
             )
-            .motsu_expect_err("should return Error::InvalidReceiver");
+            .expect_err("should return Error::InvalidReceiver");
 
         assert!(matches!(
             err,
@@ -557,22 +551,22 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn flash_loan_reverts_when_invalid_receiver(
-        contract: Contract<Erc20FlashMintTestExample>,
-        alice: Address,
-    ) {
-        let invalid_receiver = alice;
+    #[test]
+    fn flash_loan_reverts_when_invalid_receiver() {
+        let vm = TestVM::default();
+        let mut contract = Erc20FlashMintTestExample::from(&vm);
 
+        let invalid_receiver = ALICE;
+
+        vm.set_sender(ALICE);
         let err = contract
-            .sender(alice)
             .flash_loan(
                 invalid_receiver,
-                contract.address(),
+                vm.contract_address(),
                 uint!(1000_U256),
                 vec![0, 1].into(),
             )
-            .motsu_expect_err("should return Error::InvalidReceiver");
+            .expect_err("should return Error::InvalidReceiver");
 
         assert!(matches!(
             err,
@@ -581,7 +575,7 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual =
             <Erc20FlashMintTestExample as IErc3156FlashLender>::interface_id();
