@@ -3,11 +3,12 @@
 //! These functions can be used to verify that a message was signed
 //! by the holder of the private keys of a given address.
 use alloc::vec::Vec;
-use stylus_sdk::stylus_core::calls::errors::MethodError;
 
 use alloy_primitives::{address, uint, Address, B256, U256};
 use alloy_sol_types::SolType;
-use stylus_sdk::{call, prelude::*};
+use stylus_sdk::{
+    call, host::VM, prelude::*, stylus_core::calls::errors::MethodError,
+};
 
 /// Address of the `ecRecover` EVM precompile.
 pub const ECRECOVER_ADDR: Address =
@@ -59,7 +60,8 @@ pub enum Error {
     /// The signature derives the [`Address::ZERO`].
     InvalidSignature(ECDSAInvalidSignature),
     /// The signature has an `S` value that is in the upper half order.
-    InvalidSignatureS(ECDSAInvalidSignatureS)}
+    InvalidSignatureS(ECDSAInvalidSignatureS),
+}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -71,7 +73,8 @@ impl MethodError for Error {
 ///
 /// # Arguments
 ///
-/// * `context` - Execution context for making static calls.
+/// * `context` - Read access to the contract's host, used to make the static
+///   call to the `ecRecover` precompile.
 /// * `hash` - Hash of the message.
 /// * `v` - `v` value from the signature.
 /// * `r` - `r` value from the signature.
@@ -88,7 +91,7 @@ impl MethodError for Error {
 ///
 /// * If the `ecRecover` precompile fails to execute.
 pub fn recover(
-    context: impl StaticCallContext,
+    context: &impl HostAccess<Host = VM>,
     hash: B256,
     v: u8,
     r: B256,
@@ -107,7 +110,8 @@ pub fn recover(
 ///
 /// # Arguments
 ///
-/// * `context` - Execution context for making static calls.
+/// * `context` - Read access to the contract's host, used to make the static
+///   call to the `ecRecover` precompile.
 /// * `hash` - Hash of the message.
 /// * `v` - `v` value from the signature.
 /// * `r` - `r` value from the signature.
@@ -122,7 +126,7 @@ pub fn recover(
 ///
 /// * If the `ecRecover` precompile fails to execute.
 fn _recover(
-    context: impl StaticCallContext,
+    context: &impl HostAccess<Host = VM>,
     hash: B256,
     v: u8,
     r: B256,
@@ -137,8 +141,9 @@ fn _recover(
         return Err(ECDSAInvalidSignature {}.into());
     }
 
-    let recovered = call::static_call(context, ECRECOVER_ADDR, &calldata)
-        .expect("should call `ecRecover` precompile");
+    let recovered =
+        call::static_call(context.vm(), Call::new(), ECRECOVER_ADDR, &calldata)
+            .expect("should call `ecRecover` precompile");
 
     let recovered = Address::from_slice(&recovered[12..]);
 
