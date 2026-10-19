@@ -1,0 +1,1 @@
+Background tasks still running 10m after the last turn (subagent "Research Stylus SDK 0.10.10 API and changes", subagent "Inventory v0.3.0 contracts, tests and docs", subagent "Measure v0.3.0 baseline tests, coverage, ABI, size, gas"); stopping them. Set CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 to wait indefinitely.

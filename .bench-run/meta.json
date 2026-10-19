@@ -1,0 +1,1 @@
+{"run":"void-1","provider":"claude","model":"claude-haiku-5-5","effort":"max","result":"void: driver fault, claude -p stopped background sub-agents after 10 min idle (CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS default)","seconds":2036,"counted":false}
