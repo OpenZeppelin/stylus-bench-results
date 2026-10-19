@@ -264,3 +264,170 @@ impl<T: IEip712 + StorageType> Erc20Permit<T> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use alloy_primitives::{b256, uint};
+    use stylus_sdk::testing::TestVM;
+
+    use super::*;
+    use crate::{
+        test_utils::{ALICE, BOB},
+        token::erc20::{tests::assert_emitted, IErc20},
+        utils::precompiles::primitives::ecrecover::{
+            EcRecoverData, ECRECOVER_ADDR,
+        },
+    };
+
+    const V: u8 = 28;
+    const R: B256 = b256!(
+        "65e72b1cf8e189569963750e10ccb88fe89389daeeb8b735277d59cd6885ee82"
+    );
+    const S: B256 = b256!(
+        "3eb5a6982b540f185703492dab77b863a88ce01f27e21ade8b2879c10fc9e653"
+    );
+
+    #[storage]
+    struct Eip712;
+
+    impl IEip712 for Eip712 {
+        const NAME: &'static str = "ERC-20 Permit Test";
+        const VERSION: &'static str = "1";
+    }
+
+    #[storage]
+    struct Erc20PermitTestExample {
+        erc20: Erc20,
+        nonces: Nonces,
+        erc20_permit: Erc20Permit<Eip712>,
+    }
+
+    /// Mocks `ecRecover` to recover `signer` from the signature [`V`], [`R`]
+    /// and [`S`] of the permit of `value` from [`ALICE`] to [`BOB`] with
+    /// `deadline`, as the first permit of [`ALICE`].
+    ///
+    /// `TestVM` doesn't run precompiles.
+    fn mock_ec_recover(
+        vm: &TestVM,
+        contract: &Erc20PermitTestExample,
+        value: U256,
+        deadline: U256,
+        signer: Address,
+    ) {
+        let struct_hash = keccak256(StructHashTuple::abi_encode(&(
+            PERMIT_TYPEHASH,
+            ALICE,
+            BOB,
+            value,
+            U256::ZERO,
+            deadline,
+        )));
+        let hash = contract.erc20_permit.eip712.hash_typed_data_v4(struct_hash);
+        vm.mock_static_call(
+            ECRECOVER_ADDR,
+            EcRecoverData::abi_encode(&EcRecoverData {
+                hash,
+                v: V,
+                r: R,
+                s: S,
+            }),
+            Ok(signer.into_word().to_vec()),
+        );
+    }
+
+    #[test]
+    fn permit_works() {
+        let vm = TestVM::default();
+        let mut contract = Erc20PermitTestExample::from(&vm);
+
+        let value = uint!(1000_U256);
+        let deadline = uint!(2000_U256);
+        vm.set_block_timestamp(1000);
+        mock_ec_recover(&vm, &contract, value, deadline, ALICE);
+
+        contract
+            .erc20_permit
+            .permit(
+                ALICE,
+                BOB,
+                value,
+                deadline,
+                V,
+                R,
+                S,
+                &mut contract.erc20,
+                &mut contract.nonces,
+            )
+            .expect("should permit");
+
+        assert_eq!(contract.erc20.allowance(ALICE, BOB), value);
+        assert_eq!(contract.nonces.nonces(ALICE), uint!(1_U256));
+        assert_emitted(
+            &vm,
+            &erc20::Approval { owner: ALICE, spender: BOB, value },
+        );
+    }
+
+    #[test]
+    fn permit_reverts_when_deadline_expired() {
+        let vm = TestVM::default();
+        let mut contract = Erc20PermitTestExample::from(&vm);
+
+        let deadline = uint!(1000_U256);
+        vm.set_block_timestamp(1001);
+
+        let err = contract
+            .erc20_permit
+            .permit(
+                ALICE,
+                BOB,
+                uint!(1000_U256),
+                deadline,
+                V,
+                R,
+                S,
+                &mut contract.erc20,
+                &mut contract.nonces,
+            )
+            .expect_err("should return Error::ExpiredSignature");
+
+        assert!(matches!(
+            err,
+            Error::ExpiredSignature(ERC2612ExpiredSignature { deadline: d })
+                if d == deadline
+        ));
+    }
+
+    #[test]
+    fn permit_reverts_when_signer_is_not_owner() {
+        let vm = TestVM::default();
+        let mut contract = Erc20PermitTestExample::from(&vm);
+
+        let value = uint!(1000_U256);
+        let deadline = uint!(2000_U256);
+        vm.set_block_timestamp(1000);
+        mock_ec_recover(&vm, &contract, value, deadline, BOB);
+
+        let err = contract
+            .erc20_permit
+            .permit(
+                ALICE,
+                BOB,
+                value,
+                deadline,
+                V,
+                R,
+                S,
+                &mut contract.erc20,
+                &mut contract.nonces,
+            )
+            .expect_err("should return Error::InvalidSigner");
+
+        assert!(matches!(
+            err,
+            Error::InvalidSigner(ERC2612InvalidSigner { signer, owner })
+                if signer == BOB && owner == ALICE
+        ));
+        assert_eq!(contract.erc20.allowance(ALICE, BOB), U256::ZERO);
+    }
+}

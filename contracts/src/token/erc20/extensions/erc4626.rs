@@ -1150,22 +1150,36 @@ impl Erc4626 {
 //     }
 // }
 
-// TODO: Add missing tests for the flows that call the asset contract
-// (`total_assets`, `deposit`, `mint`, `withdraw` and `redeem`).
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{address, aliases::B32, Address, U256, U8};
+    use alloy_primitives::{address, aliases::B32, uint, Address, U256, U8};
+    use alloy_sol_types::{sol, SolCall, SolValue};
     use stylus_sdk::{prelude::*, testing::TestVM};
 
     use super::*;
     use crate::{
-        test_utils::ALICE,
+        test_utils::{ALICE, BOB},
         token::erc20::{
             extensions::{Erc20Metadata, IErc20Metadata},
+            tests::assert_emitted,
             Erc20,
         },
         utils::introspection::erc165::IErc165,
     };
+
+    sol! {
+        /// The calls that the vault makes to its asset.
+        interface IERC20 {
+            function balanceOf(address account) external view returns (uint256);
+            function decimals() external view returns (uint8);
+            function transfer(address to, uint256 value) external returns (bool);
+            function transferFrom(address from, address to, uint256 value) external returns (bool);
+        }
+    }
+
+    /// Address of the asset of the vault.
+    const ASSET: Address =
+        address!("0x00000000000000000000000000000000000e2c20");
 
     #[storage]
     struct Erc4626TestExample {
@@ -1365,5 +1379,252 @@ mod tests {
         let actual = <Erc4626TestExample as IErc4626>::interface_id();
         let expected: B32 = 0x87dfe5a0_u32.into();
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn total_assets_works() {
+        let vm = TestVM::default();
+        let mut contract = Erc4626TestExample::from(&vm);
+        contract.erc4626.asset.set(ASSET);
+
+        let balance = uint!(777_U256);
+        vm.mock_static_call(
+            ASSET,
+            IERC20::balanceOfCall { account: vm.contract_address() }
+                .abi_encode(),
+            Ok(balance.abi_encode()),
+        );
+
+        let total_assets =
+            contract.total_assets().expect("should return the total assets");
+        assert_eq!(total_assets, balance);
+    }
+
+    #[test]
+    fn total_assets_reverts_when_invalid_asset() {
+        let vm = TestVM::default();
+        let mut contract = Erc4626TestExample::from(&vm);
+        contract.erc4626.asset.set(ASSET);
+
+        vm.mock_static_call(
+            ASSET,
+            IERC20::balanceOfCall { account: vm.contract_address() }
+                .abi_encode(),
+            Err(vec![]),
+        );
+
+        let err = contract
+            .total_assets()
+            .expect_err("should return Error::InvalidAsset");
+        assert!(matches!(
+            err,
+            Error::InvalidAsset(InvalidAsset { asset }) if asset == ASSET
+        ));
+    }
+
+    #[test]
+    fn constructor_reads_the_decimals_of_the_asset() {
+        let vm = TestVM::default();
+        let mut contract = Erc4626TestExample::from(&vm);
+
+        vm.mock_static_call(
+            ASSET,
+            IERC20::decimalsCall {}.abi_encode(),
+            Ok(IERC20::decimalsCall::abi_encode_returns(&6)),
+        );
+
+        contract.erc4626.constructor(ASSET, U8::from(3));
+
+        assert_eq!(contract.erc4626.asset(), ASSET);
+        assert_eq!(contract.erc4626.underlying_decimals.get(), U8::from(6));
+        assert_eq!(contract.erc4626.decimals(), U8::from(9));
+    }
+
+    #[test]
+    fn constructor_defaults_to_18_decimals_when_asset_reverts() {
+        let vm = TestVM::default();
+        let mut contract = Erc4626TestExample::from(&vm);
+
+        vm.mock_static_call(
+            ASSET,
+            IERC20::decimalsCall {}.abi_encode(),
+            Err(vec![]),
+        );
+
+        contract.erc4626.constructor(ASSET, U8::from(3));
+
+        assert_eq!(contract.erc4626.underlying_decimals.get(), U8::from(18));
+        assert_eq!(contract.erc4626.decimals(), U8::from(21));
+    }
+
+    // The flows below call the asset twice (`balanceOf` and a transfer), and
+    // the `TestVM` answers every call with the data of the last registered
+    // mock. A vault balance of one asset makes both answers the same word: the
+    // `true` of the transfer.
+
+    #[test]
+    fn deposit_works() {
+        let vm = TestVM::default();
+        let mut contract = Erc4626TestExample::from(&vm);
+        contract.erc4626.asset.set(ASSET);
+        vm.set_code(ASSET, vec![1]);
+
+        let assets = uint!(100_U256);
+        vm.mock_static_call(
+            ASSET,
+            IERC20::balanceOfCall { account: vm.contract_address() }
+                .abi_encode(),
+            Ok(uint!(1_U256).abi_encode()),
+        );
+        vm.mock_call(
+            ASSET,
+            IERC20::transferFromCall {
+                from: ALICE,
+                to: vm.contract_address(),
+                value: assets,
+            }
+            .abi_encode(),
+            U256::ZERO,
+            Ok(true.abi_encode()),
+        );
+
+        vm.set_sender(ALICE);
+        let shares =
+            contract.deposit(assets, BOB).expect("should deposit the assets");
+
+        // 100 * (0 + 1) / (1 + 1)
+        assert_eq!(shares, uint!(50_U256));
+        assert_eq!(contract.erc20.balance_of(BOB), shares);
+        assert_emitted(
+            &vm,
+            &Deposit { sender: ALICE, owner: BOB, assets, shares },
+        );
+    }
+
+    #[test]
+    fn mint_works() {
+        let vm = TestVM::default();
+        let mut contract = Erc4626TestExample::from(&vm);
+        contract.erc4626.asset.set(ASSET);
+        vm.set_code(ASSET, vec![1]);
+
+        let shares = uint!(50_U256);
+        let assets = uint!(100_U256);
+        vm.mock_static_call(
+            ASSET,
+            IERC20::balanceOfCall { account: vm.contract_address() }
+                .abi_encode(),
+            Ok(uint!(1_U256).abi_encode()),
+        );
+        vm.mock_call(
+            ASSET,
+            IERC20::transferFromCall {
+                from: ALICE,
+                to: vm.contract_address(),
+                value: assets,
+            }
+            .abi_encode(),
+            U256::ZERO,
+            Ok(true.abi_encode()),
+        );
+
+        vm.set_sender(ALICE);
+        let deposited =
+            contract.mint(shares, BOB).expect("should mint the shares");
+
+        // 50 * (1 + 1) / (0 + 1)
+        assert_eq!(deposited, assets);
+        assert_eq!(contract.erc20.balance_of(BOB), shares);
+        assert_emitted(
+            &vm,
+            &Deposit { sender: ALICE, owner: BOB, assets, shares },
+        );
+    }
+
+    #[test]
+    fn withdraw_works() {
+        let vm = TestVM::default();
+        let mut contract = Erc4626TestExample::from(&vm);
+        contract.erc4626.asset.set(ASSET);
+        vm.set_code(ASSET, vec![1]);
+
+        contract.erc20._mint(ALICE, uint!(50_U256)).expect("should mint");
+
+        let assets = uint!(1_U256);
+        vm.mock_static_call(
+            ASSET,
+            IERC20::balanceOfCall { account: vm.contract_address() }
+                .abi_encode(),
+            Ok(uint!(1_U256).abi_encode()),
+        );
+        vm.mock_call(
+            ASSET,
+            IERC20::transferCall { to: BOB, value: assets }.abi_encode(),
+            U256::ZERO,
+            Ok(true.abi_encode()),
+        );
+
+        vm.set_sender(ALICE);
+        let shares = contract
+            .withdraw(assets, BOB, ALICE)
+            .expect("should withdraw the assets");
+
+        // ceil(1 * (50 + 1) / (1 + 1))
+        assert_eq!(shares, uint!(26_U256));
+        assert_eq!(contract.erc20.balance_of(ALICE), uint!(24_U256));
+        assert_emitted(
+            &vm,
+            &Withdraw {
+                sender: ALICE,
+                receiver: BOB,
+                owner: ALICE,
+                assets,
+                shares,
+            },
+        );
+    }
+
+    #[test]
+    fn redeem_works() {
+        let vm = TestVM::default();
+        let mut contract = Erc4626TestExample::from(&vm);
+        contract.erc4626.asset.set(ASSET);
+        vm.set_code(ASSET, vec![1]);
+
+        let shares = uint!(50_U256);
+        contract.erc20._mint(ALICE, shares).expect("should mint");
+
+        let assets = uint!(1_U256);
+        vm.mock_static_call(
+            ASSET,
+            IERC20::balanceOfCall { account: vm.contract_address() }
+                .abi_encode(),
+            Ok(uint!(1_U256).abi_encode()),
+        );
+        vm.mock_call(
+            ASSET,
+            IERC20::transferCall { to: BOB, value: assets }.abi_encode(),
+            U256::ZERO,
+            Ok(true.abi_encode()),
+        );
+
+        vm.set_sender(ALICE);
+        let redeemed = contract
+            .redeem(shares, BOB, ALICE)
+            .expect("should redeem the shares");
+
+        // floor(50 * (1 + 1) / (50 + 1))
+        assert_eq!(redeemed, assets);
+        assert_eq!(contract.erc20.balance_of(ALICE), U256::ZERO);
+        assert_emitted(
+            &vm,
+            &Withdraw {
+                sender: ALICE,
+                receiver: BOB,
+                owner: ALICE,
+                assets,
+                shares,
+            },
+        );
     }
 }

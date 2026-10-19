@@ -379,15 +379,47 @@ impl Erc20FlashMint {
 
 #[cfg(test)]
 mod tests {
+    use alloy_sol_types::{sol, SolCall, SolValue};
     use stylus_sdk::{
         abi::Bytes,
-        alloy_primitives::{aliases::B32, uint, Address, U256},
+        alloy_primitives::{address, aliases::B32, uint, Address, B256, U256},
         prelude::*,
         testing::TestVM,
     };
 
     use super::*;
-    use crate::test_utils::ALICE;
+    use crate::test_utils::{ALICE, BOB};
+
+    sol! {
+        /// The call that the lender makes to the receiver of a flash loan.
+        function onFlashLoan(address initiator, address token, uint256 amount, uint256 fee, bytes calldata data) external returns (bytes32);
+    }
+
+    /// Address of the receiver of the flash loans.
+    const RECEIVER: Address =
+        address!("0x00000000000000000000000000000000000ec1e1");
+
+    /// Arbitrary data that the flash loans pass to the receiver.
+    const LOAN_DATA: [u8; 2] = [0, 1];
+
+    /// Makes [`RECEIVER`] a contract that answers the `onFlashLoan` call of
+    /// [`ALICE`] for a flash loan of `value` with `response`.
+    fn mock_receiver(
+        vm: &TestVM,
+        value: U256,
+        fee: U256,
+        response: Result<Vec<u8>, Vec<u8>>,
+    ) {
+        vm.set_code(RECEIVER, vec![1]);
+        let call = onFlashLoanCall {
+            initiator: ALICE,
+            token: vm.contract_address(),
+            amount: value,
+            fee,
+            data: LOAN_DATA.to_vec().into(),
+        };
+        vm.mock_call(RECEIVER, call.abi_encode(), U256::ZERO, response);
+    }
 
     #[storage]
     struct Erc20FlashMintTestExample {
@@ -581,5 +613,171 @@ mod tests {
             <Erc20FlashMintTestExample as IErc3156FlashLender>::interface_id();
         let expected: B32 = 0xe4143091_u32.into();
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn flash_loan_works() {
+        let vm = TestVM::default();
+        let mut contract = Erc20FlashMintTestExample::from(&vm);
+
+        let value = uint!(1000_U256);
+        let fee = uint!(10_U256);
+        contract.erc20_flash_mint.flash_fee_value.set(fee);
+        contract.erc20_flash_mint.flash_fee_receiver_address.set(BOB);
+
+        // The receiver holds the fee and lets the lender take back the loan
+        // together with the fee.
+        contract.erc20._mint(RECEIVER, fee).expect("should mint the fee");
+        vm.set_sender(RECEIVER);
+        contract
+            .erc20
+            .approve(vm.contract_address(), value + fee)
+            .expect("should approve the lender");
+
+        mock_receiver(
+            &vm,
+            value,
+            fee,
+            Ok(B256::from(BORROWER_CALLBACK_VALUE).abi_encode()),
+        );
+
+        vm.set_sender(ALICE);
+        let success = contract
+            .flash_loan(
+                RECEIVER,
+                vm.contract_address(),
+                value,
+                LOAN_DATA.to_vec().into(),
+            )
+            .expect("should lend");
+        assert!(success);
+
+        // The loan is burned, while the fee goes to the fee receiver.
+        assert_eq!(contract.erc20.balance_of(RECEIVER), U256::ZERO);
+        assert_eq!(contract.erc20.balance_of(BOB), fee);
+        assert_eq!(contract.erc20.total_supply(), fee);
+    }
+
+    #[test]
+    fn flash_loan_burns_the_fee_without_fee_receiver() {
+        let vm = TestVM::default();
+        let mut contract = Erc20FlashMintTestExample::from(&vm);
+
+        let value = uint!(1000_U256);
+        let fee = uint!(10_U256);
+        contract.erc20_flash_mint.flash_fee_value.set(fee);
+
+        contract.erc20._mint(RECEIVER, fee).expect("should mint the fee");
+        vm.set_sender(RECEIVER);
+        contract
+            .erc20
+            .approve(vm.contract_address(), value + fee)
+            .expect("should approve the lender");
+
+        mock_receiver(
+            &vm,
+            value,
+            fee,
+            Ok(B256::from(BORROWER_CALLBACK_VALUE).abi_encode()),
+        );
+
+        vm.set_sender(ALICE);
+        contract
+            .flash_loan(
+                RECEIVER,
+                vm.contract_address(),
+                value,
+                LOAN_DATA.to_vec().into(),
+            )
+            .expect("should lend");
+
+        assert_eq!(contract.erc20.balance_of(RECEIVER), U256::ZERO);
+        assert_eq!(contract.erc20.total_supply(), U256::ZERO);
+    }
+
+    #[test]
+    fn flash_loan_reverts_when_receiver_returns_unexpected_value() {
+        let vm = TestVM::default();
+        let mut contract = Erc20FlashMintTestExample::from(&vm);
+
+        let value = uint!(1000_U256);
+        mock_receiver(&vm, value, U256::ZERO, Ok(B256::ZERO.abi_encode()));
+
+        vm.set_sender(ALICE);
+        let err = contract
+            .flash_loan(
+                RECEIVER,
+                vm.contract_address(),
+                value,
+                LOAN_DATA.to_vec().into(),
+            )
+            .expect_err("should return Error::InvalidReceiver");
+
+        assert!(matches!(
+            err,
+            Error::ERC3156InvalidReceiver(ERC3156InvalidReceiver { receiver })
+                if receiver == RECEIVER
+        ));
+    }
+
+    #[test]
+    fn flash_loan_reverts_when_receiver_reverts() {
+        let vm = TestVM::default();
+        let mut contract = Erc20FlashMintTestExample::from(&vm);
+
+        let value = uint!(1000_U256);
+        mock_receiver(&vm, value, U256::ZERO, Err(vec![]));
+
+        vm.set_sender(ALICE);
+        let err = contract
+            .flash_loan(
+                RECEIVER,
+                vm.contract_address(),
+                value,
+                LOAN_DATA.to_vec().into(),
+            )
+            .expect_err("should return Error::InvalidReceiver");
+
+        assert!(matches!(
+            err,
+            Error::ERC3156InvalidReceiver(ERC3156InvalidReceiver { receiver })
+                if receiver == RECEIVER
+        ));
+    }
+
+    #[test]
+    fn flash_loan_reverts_when_insufficient_allowance() {
+        let vm = TestVM::default();
+        let mut contract = Erc20FlashMintTestExample::from(&vm);
+
+        let value = uint!(1000_U256);
+        mock_receiver(
+            &vm,
+            value,
+            U256::ZERO,
+            Ok(B256::from(BORROWER_CALLBACK_VALUE).abi_encode()),
+        );
+
+        // The receiver doesn't let the lender take back the loan.
+        vm.set_sender(ALICE);
+        let err = contract
+            .flash_loan(
+                RECEIVER,
+                vm.contract_address(),
+                value,
+                LOAN_DATA.to_vec().into(),
+            )
+            .expect_err("should return Error::InsufficientAllowance");
+
+        assert!(matches!(
+            err,
+            Error::InsufficientAllowance(erc20::ERC20InsufficientAllowance {
+                spender,
+                allowance,
+                needed
+            }) if spender == vm.contract_address()
+                && allowance == U256::ZERO
+                && needed == value
+        ));
     }
 }

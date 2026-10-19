@@ -533,6 +533,21 @@ mod tests {
     }
 
     #[test]
+    fn decimals_defaults_when_underlying_reverts() {
+        let vm = TestVM::default();
+        let mut contract = Erc20WrapperTestExample::from(&vm);
+
+        vm.mock_static_call(
+            UNDERLYING,
+            IERC20::decimalsCall {}.abi_encode(),
+            Err(vec![]),
+        );
+
+        contract.constructor(UNDERLYING).expect("should construct");
+        assert_eq!(contract.decimals(), U8::from(DEFAULT_DECIMALS));
+    }
+
+    #[test]
     fn underlying_works() {
         let vm = TestVM::default();
         let mut contract = Erc20WrapperTestExample::from(&vm);
