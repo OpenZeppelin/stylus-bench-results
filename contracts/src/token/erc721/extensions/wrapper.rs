@@ -399,19 +399,134 @@ impl Erc721Wrapper {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::uint;
-    use alloy_sol_types::SolError;
-    use motsu::prelude::*;
-    use stylus_sdk::abi::Bytes;
+    use alloy_primitives::{address, uint};
+    use alloy_sol_macro::sol;
+    use alloy_sol_types::{SolCall, SolError, SolEvent};
+    use stylus_sdk::{abi::Bytes, testing::TestVM};
 
     use super::*;
     use crate::{
+        test_utils::{ALICE, BOB},
         token::erc721::{self, IErc721},
         utils::introspection::erc165::IErc165,
     };
 
+    /// Address of the underlying token of the wrappers under test.
+    const UNDERLYING: Address =
+        address!("0x000000000000000000000000000000000000c0de");
+
+    sol! {
+        // The calls a wrapper makes to its underlying token.
+        function transferFrom(address from, address to, uint256 token_id) external;
+        function safeTransferFrom(address from, address to, uint256 token_id, bytes data) external;
+        function ownerOf(uint256 token_id) external view returns (address owner);
+    }
+
     pub(crate) fn random_token_ids(size: usize) -> Vec<U256> {
         (0..size).map(U256::from).collect()
+    }
+
+    /// Asserts that `event` is among the logs emitted in `vm`.
+    fn assert_emitted(vm: &TestVM, event: &impl SolEvent) {
+        let log = event.encode_log_data();
+        let emitted = (log.topics().to_vec(), log.data.to_vec());
+        assert!(
+            vm.get_emitted_logs().contains(&emitted),
+            "event should be emitted"
+        );
+    }
+
+    /// The underlying [`Erc721`] token of a wrapper.
+    ///
+    /// A [`TestVM`] doesn't run other contracts: the calls a wrapper makes to
+    /// its underlying token are answered with mocks. The answers come from a
+    /// real [`Erc721`], deployed at [`UNDERLYING`] in a VM of its own, which
+    /// runs the call on behalf of the wrapper when the mock is set. That way
+    /// the returned values and the revert data are the token's own, and the
+    /// state and the events of the token can be checked like those of any
+    /// other contract.
+    ///
+    /// NOTE: A [`TestVM`] doesn't record calls, and a call that matches no mock
+    /// succeeds as well. Therefore, a test can only check the arguments of a
+    /// call that reverts. All the mocks of a VM also share one return data
+    /// buffer, so the calls are mocked right before the wrapper call that makes
+    /// them.
+    struct UnderlyingToken {
+        vm: TestVM,
+        erc721: Erc721,
+    }
+
+    impl UnderlyingToken {
+        fn new() -> Self {
+            let vm = TestVM::default();
+            vm.set_contract_address(UNDERLYING);
+            let erc721 = Erc721::from(&vm);
+            Self { vm, erc721 }
+        }
+
+        /// Returns the token, to be called by `sender`.
+        fn sender(&mut self, sender: Address) -> &mut Erc721 {
+            self.vm.set_sender(sender);
+            &mut self.erc721
+        }
+
+        /// Asserts that the token has emitted `event`.
+        fn assert_emitted(&self, event: &impl SolEvent) {
+            assert_emitted(&self.vm, event);
+        }
+
+        /// Mocks the answer of the token to the wrapper deployed in
+        /// `wrapper_vm` calling `transferFrom(from, to, token_id)`.
+        fn mock_transfer_from(
+            &mut self,
+            wrapper_vm: &TestVM,
+            from: Address,
+            to: Address,
+            token_id: U256,
+        ) {
+            let wrapper = wrapper_vm.contract_address();
+            let answer = self
+                .sender(wrapper)
+                .transfer_from(from, to, token_id)
+                .map(|()| Vec::new())
+                .map_err(Vec::<u8>::from);
+            let calldata = transferFromCall { from, to, token_id }.abi_encode();
+            wrapper_vm.mock_call(UNDERLYING, calldata, U256::ZERO, answer);
+        }
+
+        /// Mocks the answer of the token to the wrapper deployed in
+        /// `wrapper_vm` calling `safeTransferFrom(from, to, token_id, "")`.
+        fn mock_safe_transfer_from(
+            &mut self,
+            wrapper_vm: &TestVM,
+            from: Address,
+            to: Address,
+            token_id: U256,
+        ) {
+            let wrapper = wrapper_vm.contract_address();
+            let answer = self
+                .sender(wrapper)
+                .safe_transfer_from_with_data(from, to, token_id, Bytes::new())
+                .map(|()| Vec::new())
+                .map_err(Vec::<u8>::from);
+            let calldata =
+                safeTransferFromCall { from, to, token_id, data: Bytes::new() }
+                    .abi_encode();
+            wrapper_vm.mock_call(UNDERLYING, calldata, U256::ZERO, answer);
+        }
+
+        /// Mocks the answer of the token to the wrapper deployed in
+        /// `wrapper_vm` calling `ownerOf(token_id)`.
+        fn mock_owner_of(&mut self, wrapper_vm: &TestVM, token_id: U256) {
+            let wrapper = wrapper_vm.contract_address();
+            let answer = self
+                .sender(wrapper)
+                .owner_of(token_id)
+                .map(|owner| ownerOfCall::abi_encode_returns(&owner))
+                .map_err(Vec::<u8>::from);
+            let calldata = ownerOfCall { token_id }.abi_encode();
+            wrapper_vm.mock_static_call(UNDERLYING, calldata, answer);
+        }
     }
 
     #[storage]
@@ -560,38 +675,33 @@ mod tests {
         }
     }
 
-    unsafe impl TopLevelStorage for Erc721WrapperTestExample {}
+    #[test]
+    fn underlying_works() {
+        let vm = TestVM::default();
+        let mut contract = Erc721WrapperTestExample::from(&vm);
+        vm.set_sender(ALICE);
 
-    #[motsu::test]
-    fn underlying_works(
-        contract: Contract<Erc721WrapperTestExample>,
-        erc721_contract: Contract<Erc721>,
-        alice: Address,
-    ) {
-        let erc721_address = erc721_contract.address();
+        contract.constructor(UNDERLYING);
 
-        contract.sender(alice).constructor(erc721_address);
-
-        assert_eq!(contract.sender(alice).underlying(), erc721_address);
+        assert_eq!(contract.underlying(), UNDERLYING);
     }
 
-    // TODO: motsu should revert on calling a function that doesn't exist at
-    // specified address.
-    #[motsu::test]
-    #[ignore = "impossible with current motsu limitations"]
-    fn deposit_for_reverts_when_unsupported_token(
-        contract: Contract<Erc721WrapperTestExample>,
-        alice: Address,
-    ) {
+    // `deposit_for` doesn't check that the underlying token is a contract:
+    // calling an address without code succeeds.
+    #[test]
+    #[ignore = "calling an address without code doesn't revert"]
+    fn deposit_for_reverts_when_unsupported_token() {
+        let vm = TestVM::default();
+        let mut contract = Erc721WrapperTestExample::from(&vm);
+        vm.set_sender(ALICE);
         let token_ids = random_token_ids(1);
 
-        let invalid_token = alice;
-        contract.sender(alice).constructor(invalid_token);
+        let invalid_token = ALICE;
+        contract.constructor(invalid_token);
 
         let err = contract
-            .sender(alice)
-            .deposit_for(alice, token_ids.clone())
-            .motsu_expect_err("should return Error::UnsupportedToken");
+            .deposit_for(ALICE, token_ids.clone())
+            .expect_err("should return Error::UnsupportedToken");
 
         assert!(matches!(
             err,
@@ -600,20 +710,21 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn deposit_for_reverts_when_nonexistent_token(
-        contract: Contract<Erc721WrapperTestExample>,
-        erc721_contract: Contract<Erc721>,
-        alice: Address,
-    ) {
+    #[test]
+    fn deposit_for_reverts_when_nonexistent_token() {
+        let vm = TestVM::default();
+        let mut contract = Erc721WrapperTestExample::from(&vm);
+        let mut underlying = UnderlyingToken::new();
+        let wrapper = vm.contract_address();
+        vm.set_sender(ALICE);
         let token_ids = random_token_ids(1);
 
-        contract.sender(alice).constructor(erc721_contract.address());
+        contract.constructor(UNDERLYING);
 
+        underlying.mock_transfer_from(&vm, ALICE, wrapper, token_ids[0]);
         let err = contract
-            .sender(alice)
-            .deposit_for(alice, token_ids.clone())
-            .motsu_expect_err("should return Error::InvalidReceiverWithReason");
+            .deposit_for(ALICE, token_ids.clone())
+            .expect_err("should return Error::InvalidReceiverWithReason");
 
         let expected_error: Vec<u8> =
             erc721::Error::NonexistentToken(erc721::ERC721NonexistentToken {
@@ -629,29 +740,30 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn deposit_for_reverts_when_missing_approval(
-        contract: Contract<Erc721WrapperTestExample>,
-        erc721_contract: Contract<Erc721>,
-        alice: Address,
-    ) {
+    #[test]
+    fn deposit_for_reverts_when_missing_approval() {
+        let vm = TestVM::default();
+        let mut contract = Erc721WrapperTestExample::from(&vm);
+        let mut underlying = UnderlyingToken::new();
+        let wrapper = vm.contract_address();
+        vm.set_sender(ALICE);
         let token_ids = random_token_ids(1);
 
-        contract.sender(alice).constructor(erc721_contract.address());
+        contract.constructor(UNDERLYING);
 
-        erc721_contract
-            .sender(alice)
-            ._mint(alice, token_ids[0])
-            .motsu_expect("should mint {token_id} for {alice}");
+        underlying
+            .sender(ALICE)
+            ._mint(ALICE, token_ids[0])
+            .expect("should mint {token_id} for {alice}");
 
+        underlying.mock_transfer_from(&vm, ALICE, wrapper, token_ids[0]);
         let err = contract
-            .sender(alice)
-            .deposit_for(alice, token_ids.clone())
-            .motsu_expect_err("should return Error::InvalidReceiverWithReason");
+            .deposit_for(ALICE, token_ids.clone())
+            .expect_err("should return Error::InvalidReceiverWithReason");
 
         let expected_error: Vec<u8> = erc721::Error::InsufficientApproval(
             erc721::ERC721InsufficientApproval {
-                operator: contract.address(),
+                operator: wrapper,
                 token_id: token_ids[0],
             },
         )
@@ -665,37 +777,37 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn deposit_for_reverts_when_wrapped_token_already_exists(
-        contract: Contract<Erc721WrapperTestExample>,
-        erc721_contract: Contract<Erc721>,
-        alice: Address,
-    ) {
+    #[test]
+    fn deposit_for_reverts_when_wrapped_token_already_exists() {
+        let vm = TestVM::default();
+        let mut contract = Erc721WrapperTestExample::from(&vm);
+        let mut underlying = UnderlyingToken::new();
+        let wrapper = vm.contract_address();
+        vm.set_sender(ALICE);
         let token_ids = random_token_ids(1);
 
-        contract.sender(alice).constructor(erc721_contract.address());
+        contract.constructor(UNDERLYING);
 
-        erc721_contract
-            .sender(alice)
-            ._mint(alice, token_ids[0])
-            .motsu_expect("should mint {token_id} for {alice}");
+        underlying
+            .sender(ALICE)
+            ._mint(ALICE, token_ids[0])
+            .expect("should mint {token_id} for {alice}");
 
-        erc721_contract
-            .sender(alice)
-            .approve(contract.address(), token_ids[0])
-            .motsu_expect("should approve {token_id} for {contract.address()}");
+        underlying
+            .sender(ALICE)
+            .approve(wrapper, token_ids[0])
+            .expect("should approve {token_id} for {contract.address()}");
 
         // Mint an "unexpected" wrapped token.
         contract
-            .sender(alice)
             .erc721
-            ._mint(alice, token_ids[0])
-            .motsu_expect("should mint {token_id} for {alice}");
+            ._mint(ALICE, token_ids[0])
+            .expect("should mint {token_id} for {alice}");
 
+        underlying.mock_transfer_from(&vm, ALICE, wrapper, token_ids[0]);
         let err = contract
-            .sender(alice)
-            .deposit_for(alice, token_ids.clone())
-            .motsu_expect_err("should return Error::Erc721");
+            .deposit_for(ALICE, token_ids.clone())
+            .expect_err("should return Error::Erc721");
 
         assert!(matches!(
             err,
@@ -705,113 +817,114 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn deposit_for_works(
-        contract: Contract<Erc721WrapperTestExample>,
-        erc721_contract: Contract<Erc721>,
-        alice: Address,
-    ) {
+    #[test]
+    fn deposit_for_works() {
+        let vm = TestVM::default();
+        let mut contract = Erc721WrapperTestExample::from(&vm);
+        let mut underlying = UnderlyingToken::new();
+        let wrapper = vm.contract_address();
+        vm.set_sender(ALICE);
         let tokens = 4;
         let token_ids = random_token_ids(tokens);
 
-        contract.sender(alice).constructor(erc721_contract.address());
+        contract.constructor(UNDERLYING);
 
         for &token_id in &token_ids {
-            erc721_contract
-                .sender(alice)
-                ._mint(alice, token_id)
-                .motsu_expect("should mint {token_id} for {alice}");
+            underlying
+                .sender(ALICE)
+                ._mint(ALICE, token_id)
+                .expect("should mint {token_id} for {alice}");
 
-            erc721_contract
-                .sender(alice)
-                .approve(contract.address(), token_id)
-                .motsu_expect(
-                    "should approve {token_id} for {contract.address()}",
-                );
+            underlying
+                .sender(ALICE)
+                .approve(wrapper, token_id)
+                .expect("should approve {token_id} for {contract.address()}");
         }
 
         let initial_balance =
-            erc721_contract.sender(alice).balance_of(alice).motsu_unwrap();
+            underlying.sender(ALICE).balance_of(ALICE).unwrap();
         let initial_wrapped_balance =
-            contract.sender(alice).erc721.balance_of(alice).motsu_unwrap();
+            contract.erc721.balance_of(ALICE).unwrap();
 
-        let initial_contract_balance = erc721_contract
-            .sender(alice)
-            .balance_of(contract.address())
-            .motsu_unwrap();
+        let initial_contract_balance =
+            underlying.sender(ALICE).balance_of(wrapper).unwrap();
 
+        for &token_id in &token_ids {
+            underlying.mock_transfer_from(&vm, ALICE, wrapper, token_id);
+        }
         assert!(contract
-            .sender(alice)
-            .deposit_for(alice, token_ids.clone())
-            .motsu_expect("should deposit"));
+            .deposit_for(ALICE, token_ids.clone())
+            .expect("should deposit"));
 
         for token_id in token_ids {
-            erc721_contract.assert_emitted(&erc721::Transfer {
-                from: alice,
-                to: contract.address(),
+            underlying.assert_emitted(&erc721::Transfer {
+                from: ALICE,
+                to: wrapper,
                 token_id,
             });
 
-            contract.assert_emitted(&erc721::Transfer {
-                from: Address::ZERO,
-                to: alice,
-                token_id,
-            });
+            assert_emitted(
+                &vm,
+                &erc721::Transfer { from: Address::ZERO, to: ALICE, token_id },
+            );
         }
 
         assert_eq!(
-            erc721_contract.sender(alice).balance_of(alice).motsu_unwrap(),
+            underlying.sender(ALICE).balance_of(ALICE).unwrap(),
             initial_balance - U256::from(tokens)
         );
 
         assert_eq!(
-            contract.sender(alice).erc721.balance_of(alice).motsu_unwrap(),
+            contract.erc721.balance_of(ALICE).unwrap(),
             initial_wrapped_balance + U256::from(tokens)
         );
 
         assert_eq!(
-            erc721_contract
-                .sender(contract.address())
-                .balance_of(contract.address())
-                .motsu_unwrap(),
+            underlying.sender(wrapper).balance_of(wrapper).unwrap(),
             initial_contract_balance + U256::from(tokens)
         );
     }
 
-    #[motsu::test]
-    fn withdraw_to_reverts_when_invalid_receiver(
-        contract: Contract<Erc721WrapperTestExample>,
-        erc721_contract: Contract<Erc721>,
-        alice: Address,
-    ) {
+    #[test]
+    fn withdraw_to_reverts_when_invalid_receiver() {
+        let vm = TestVM::default();
+        let mut contract = Erc721WrapperTestExample::from(&vm);
+        let mut underlying = UnderlyingToken::new();
+        let wrapper = vm.contract_address();
+        vm.set_sender(ALICE);
         let tokens = 4;
         let token_ids = random_token_ids(tokens);
 
-        contract.sender(alice).constructor(erc721_contract.address());
+        contract.constructor(UNDERLYING);
 
         for token_id in &token_ids {
-            erc721_contract
-                .sender(alice)
-                ._mint(alice, *token_id)
-                .motsu_expect("should mint {token_id} for {alice}");
+            underlying
+                .sender(ALICE)
+                ._mint(ALICE, *token_id)
+                .expect("should mint {token_id} for {alice}");
 
-            erc721_contract
-                .sender(alice)
-                .approve(contract.address(), *token_id)
-                .motsu_expect(
-                    "should approve {token_id} for {contract.address()}",
-                );
+            underlying
+                .sender(ALICE)
+                .approve(wrapper, *token_id)
+                .expect("should approve {token_id} for {contract.address()}");
         }
 
+        for &token_id in &token_ids {
+            underlying.mock_transfer_from(&vm, ALICE, wrapper, token_id);
+        }
         assert!(contract
-            .sender(alice)
-            .deposit_for(alice, token_ids.clone())
-            .motsu_expect("should deposit"));
+            .deposit_for(ALICE, token_ids.clone())
+            .expect("should deposit"));
 
+        underlying.mock_safe_transfer_from(
+            &vm,
+            wrapper,
+            Address::ZERO,
+            token_ids[0],
+        );
         let err = contract
-            .sender(alice)
             .withdraw_to(Address::ZERO, token_ids.clone())
-            .motsu_expect_err("should return Error::InvalidReceiverWithReason");
+            .expect_err("should return Error::InvalidReceiverWithReason");
 
         let expected_error: Vec<u8> =
             erc721::Error::InvalidReceiver(erc721::ERC721InvalidReceiver {
@@ -828,21 +941,19 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn withdraw_to_reverts_when_nonexistent_token(
-        contract: Contract<Erc721WrapperTestExample>,
-        erc721_contract: Contract<Erc721>,
-        alice: Address,
-    ) {
+    #[test]
+    fn withdraw_to_reverts_when_nonexistent_token() {
+        let vm = TestVM::default();
+        let mut contract = Erc721WrapperTestExample::from(&vm);
+        vm.set_sender(ALICE);
         let tokens = 1;
         let token_ids = random_token_ids(tokens);
 
-        contract.sender(alice).constructor(erc721_contract.address());
+        contract.constructor(UNDERLYING);
 
         let err = contract
-            .sender(alice)
-            .withdraw_to(alice, token_ids.clone())
-            .motsu_expect_err("should return Error::Erc721");
+            .withdraw_to(ALICE, token_ids.clone())
+            .expect_err("should return Error::Erc721");
 
         assert!(matches!(
             err,
@@ -852,145 +963,141 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn withdraw_to_reverts_when_insufficient_approval(
-        contract: Contract<Erc721WrapperTestExample>,
-        erc721_contract: Contract<Erc721>,
-        alice: Address,
-        bob: Address,
-    ) {
+    #[test]
+    fn withdraw_to_reverts_when_insufficient_approval() {
+        let vm = TestVM::default();
+        let mut contract = Erc721WrapperTestExample::from(&vm);
+        let mut underlying = UnderlyingToken::new();
+        let wrapper = vm.contract_address();
+        vm.set_sender(ALICE);
         let tokens = 1;
         let token_ids = random_token_ids(tokens);
 
-        contract.sender(alice).constructor(erc721_contract.address());
+        contract.constructor(UNDERLYING);
 
-        erc721_contract
-            .sender(alice)
-            ._mint(alice, token_ids[0])
-            .motsu_expect("should mint {token_id} for {alice}");
+        underlying
+            .sender(ALICE)
+            ._mint(ALICE, token_ids[0])
+            .expect("should mint {token_id} for {alice}");
 
-        erc721_contract
-            .sender(alice)
-            .approve(contract.address(), token_ids[0])
-            .motsu_expect("should approve {token_id} for {contract.address()}");
+        underlying
+            .sender(ALICE)
+            .approve(wrapper, token_ids[0])
+            .expect("should approve {token_id} for {contract.address()}");
 
+        underlying.mock_transfer_from(&vm, ALICE, wrapper, token_ids[0]);
         assert!(contract
-            .sender(alice)
-            .deposit_for(alice, token_ids.clone())
-            .motsu_expect("should deposit"));
+            .deposit_for(ALICE, token_ids.clone())
+            .expect("should deposit"));
 
+        vm.set_sender(BOB);
         let err = contract
-            .sender(bob)
-            .withdraw_to(alice, token_ids.clone())
-            .motsu_expect_err("should return Error::Erc721");
+            .withdraw_to(ALICE, token_ids.clone())
+            .expect_err("should return Error::Erc721");
 
         assert!(matches!(
             err,
             Error::InsufficientApproval(
                 erc721::ERC721InsufficientApproval { token_id, operator},
-            ) if token_id == token_ids[0] && operator == bob
+            ) if token_id == token_ids[0] && operator == BOB
         ));
     }
 
-    #[motsu::test]
-    fn withdraw_to_works(
-        contract: Contract<Erc721WrapperTestExample>,
-        erc721_contract: Contract<Erc721>,
-        alice: Address,
-    ) {
+    #[test]
+    fn withdraw_to_works() {
+        let vm = TestVM::default();
+        let mut contract = Erc721WrapperTestExample::from(&vm);
+        let mut underlying = UnderlyingToken::new();
+        let wrapper = vm.contract_address();
+        vm.set_sender(ALICE);
         let tokens = 4;
         let token_ids = random_token_ids(tokens);
 
-        contract.sender(alice).constructor(erc721_contract.address());
+        contract.constructor(UNDERLYING);
 
         for token_id in &token_ids {
-            erc721_contract
-                .sender(alice)
-                ._mint(alice, *token_id)
-                .motsu_expect("should mint {token_id} for {alice}");
+            underlying
+                .sender(ALICE)
+                ._mint(ALICE, *token_id)
+                .expect("should mint {token_id} for {alice}");
 
-            erc721_contract
-                .sender(alice)
-                .approve(contract.address(), *token_id)
-                .motsu_expect(
-                    "should approve {token_id} for {contract.address()}",
-                );
+            underlying
+                .sender(ALICE)
+                .approve(wrapper, *token_id)
+                .expect("should approve {token_id} for {contract.address()}");
         }
 
+        for &token_id in &token_ids {
+            underlying.mock_transfer_from(&vm, ALICE, wrapper, token_id);
+        }
         assert!(contract
-            .sender(alice)
-            .deposit_for(alice, token_ids.clone())
-            .motsu_expect("should deposit"));
+            .deposit_for(ALICE, token_ids.clone())
+            .expect("should deposit"));
 
         let initial_balance =
-            erc721_contract.sender(alice).balance_of(alice).motsu_unwrap();
+            underlying.sender(ALICE).balance_of(ALICE).unwrap();
         let initial_wrapped_balance =
-            contract.sender(alice).erc721.balance_of(alice).motsu_unwrap();
+            contract.erc721.balance_of(ALICE).unwrap();
 
-        let initial_contract_balance = erc721_contract
-            .sender(alice)
-            .balance_of(contract.address())
-            .motsu_unwrap();
+        let initial_contract_balance =
+            underlying.sender(ALICE).balance_of(wrapper).unwrap();
 
+        for &token_id in &token_ids {
+            underlying.mock_safe_transfer_from(&vm, wrapper, ALICE, token_id);
+        }
         assert!(contract
-            .sender(alice)
-            .withdraw_to(alice, token_ids.clone())
-            .motsu_expect("should withdraw"));
+            .withdraw_to(ALICE, token_ids.clone())
+            .expect("should withdraw"));
 
         for token_id in token_ids {
-            erc721_contract.assert_emitted(&erc721::Transfer {
-                from: contract.address(),
-                to: alice,
+            underlying.assert_emitted(&erc721::Transfer {
+                from: wrapper,
+                to: ALICE,
                 token_id,
             });
 
-            contract.assert_emitted(&erc721::Transfer {
-                from: alice,
-                to: Address::ZERO,
-                token_id,
-            });
+            assert_emitted(
+                &vm,
+                &erc721::Transfer { from: ALICE, to: Address::ZERO, token_id },
+            );
         }
 
         assert_eq!(
-            erc721_contract.sender(alice).balance_of(alice).unwrap(),
+            underlying.sender(ALICE).balance_of(ALICE).unwrap(),
             initial_balance + U256::from(tokens)
         );
 
         assert_eq!(
-            contract.sender(alice).erc721.balance_of(alice).unwrap(),
+            contract.erc721.balance_of(ALICE).unwrap(),
             initial_wrapped_balance - U256::from(tokens)
         );
 
         assert_eq!(
-            erc721_contract
-                .sender(contract.address())
-                .balance_of(contract.address())
-                .motsu_unwrap(),
+            underlying.sender(wrapper).balance_of(wrapper).unwrap(),
             initial_contract_balance - U256::from(tokens)
         );
     }
 
-    #[motsu::test]
-    fn on_erc721_received_reverts_when_sender_is_unsupported_token(
-        contract: Contract<Erc721WrapperTestExample>,
-        erc721_contract: Contract<Erc721>,
-        alice: Address,
-    ) {
+    #[test]
+    fn on_erc721_received_reverts_when_sender_is_unsupported_token() {
+        let vm = TestVM::default();
+        let mut contract = Erc721WrapperTestExample::from(&vm);
         let token_id = random_token_ids(1)[0];
+        vm.set_sender(ALICE);
 
-        contract.sender(alice).constructor(erc721_contract.address());
+        contract.constructor(UNDERLYING);
 
-        let invalid_operator = alice;
+        let invalid_operator = ALICE;
 
+        vm.set_sender(invalid_operator);
         let err = contract
-            .sender(invalid_operator)
             .on_erc721_received(
                 invalid_operator,
-                alice,
+                ALICE,
                 token_id,
                 vec![].into(),
             )
-            .motsu_expect_err("should return Error::UnsupportedToken");
+            .expect_err("should return Error::UnsupportedToken");
 
         assert_eq!(
             err,
@@ -998,29 +1105,27 @@ mod tests {
         );
     }
 
-    #[motsu::test]
-    fn on_erc721_received_reverts_when_wrapped_token_already_exists(
-        contract: Contract<Erc721WrapperTestExample>,
-        erc721_contract: Contract<Erc721>,
-        alice: Address,
-    ) {
+    #[test]
+    fn on_erc721_received_reverts_when_wrapped_token_already_exists() {
+        let vm = TestVM::default();
+        let mut contract = Erc721WrapperTestExample::from(&vm);
         let token_id = random_token_ids(1)[0];
+        vm.set_sender(ALICE);
 
-        contract.sender(alice).constructor(erc721_contract.address());
+        contract.constructor(UNDERLYING);
 
         // Mint an "unexpected" wrapped token.
         contract
-            .sender(alice)
             .erc721
-            ._mint(alice, token_id)
-            .motsu_expect("should mint {token_id} for {alice}");
+            ._mint(ALICE, token_id)
+            .expect("should mint {token_id} for {alice}");
 
-        let operator = alice;
+        let operator = ALICE;
 
+        vm.set_sender(UNDERLYING);
         let err = contract
-            .sender(erc721_contract.address())
-            .on_erc721_received(operator, alice, token_id, vec![].into())
-            .motsu_expect_err("should return Error::Erc721");
+            .on_erc721_received(operator, ALICE, token_id, vec![].into())
+            .expect_err("should return Error::Erc721");
 
         assert_eq!(
             err,
@@ -1028,56 +1133,50 @@ mod tests {
         );
     }
 
-    #[motsu::test]
-    fn on_erc721_received_works(
-        contract: Contract<Erc721WrapperTestExample>,
-        erc721_contract: Contract<Erc721>,
-        alice: Address,
-    ) {
+    #[test]
+    fn on_erc721_received_works() {
+        let vm = TestVM::default();
+        let mut contract = Erc721WrapperTestExample::from(&vm);
         let token_id = random_token_ids(1)[0];
+        vm.set_sender(ALICE);
 
-        contract.sender(alice).constructor(erc721_contract.address());
+        contract.constructor(UNDERLYING);
 
         let initial_wrapped_balance =
-            contract.sender(alice).erc721.balance_of(alice).motsu_unwrap();
+            contract.erc721.balance_of(ALICE).unwrap();
 
-        let operator = alice;
+        let operator = ALICE;
+        vm.set_sender(UNDERLYING);
         let interface_id = contract
-            .sender(erc721_contract.address())
-            .on_erc721_received(operator, alice, token_id, vec![].into())
-            .motsu_expect("should handle ERC721Received");
+            .on_erc721_received(operator, ALICE, token_id, vec![].into())
+            .expect("should handle ERC721Received");
 
         assert_eq!(interface_id, RECEIVER_FN_SELECTOR);
 
-        contract.assert_emitted(&erc721::Transfer {
-            from: Address::ZERO,
-            to: alice,
-            token_id,
-        });
+        assert_emitted(
+            &vm,
+            &erc721::Transfer { from: Address::ZERO, to: ALICE, token_id },
+        );
 
         assert_eq!(
-            contract.sender(alice).erc721.balance_of(alice).motsu_unwrap(),
+            contract.erc721.balance_of(ALICE).unwrap(),
             initial_wrapped_balance + uint!(1_U256)
         );
     }
 
-    // TODO: motsu should revert on calling a function that doesn't exist at
-    // specified address.
-    #[motsu::test]
-    #[ignore = "impossible with current motsu limitations"]
-    fn recover_reverts_when_invalid_token(
-        contract: Contract<Erc721WrapperTestExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn recover_reverts_when_invalid_token() {
+        let vm = TestVM::default();
+        let mut contract = Erc721WrapperTestExample::from(&vm);
         let token_id = random_token_ids(1)[0];
-        let invalid_token_address = alice;
+        vm.set_sender(ALICE);
+        let invalid_token_address = ALICE;
 
-        contract.sender(alice).constructor(invalid_token_address);
+        contract.constructor(invalid_token_address);
 
         let err = contract
-            .sender(alice)
-            .recover(alice, token_id)
-            .motsu_expect_err("should return Error::Erc721FailedOperation");
+            .recover(ALICE, token_id)
+            .expect_err("should return Error::Erc721FailedOperation");
 
         assert!(matches!(
             err,
@@ -1086,69 +1185,68 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn recover_reverts_when_incorrect_owner(
-        contract: Contract<Erc721WrapperTestExample>,
-        erc721_contract: Contract<Erc721>,
-        alice: Address,
-    ) {
+    #[test]
+    fn recover_reverts_when_incorrect_owner() {
+        let vm = TestVM::default();
+        let mut contract = Erc721WrapperTestExample::from(&vm);
+        let mut underlying = UnderlyingToken::new();
+        let wrapper = vm.contract_address();
+        vm.set_sender(ALICE);
         let token_id = random_token_ids(1)[0];
 
-        contract.sender(alice).constructor(erc721_contract.address());
+        contract.constructor(UNDERLYING);
 
-        erc721_contract
-            .sender(alice)
-            ._mint(alice, token_id)
-            .motsu_expect("should mint {token_id} for {alice}");
+        underlying
+            .sender(ALICE)
+            ._mint(ALICE, token_id)
+            .expect("should mint {token_id} for {alice}");
 
+        underlying.mock_owner_of(&vm, token_id);
         let err = contract
-            .sender(alice)
-            .recover(alice, token_id)
-            .motsu_expect_err("should return Error::Erc721");
+            .recover(ALICE, token_id)
+            .expect_err("should return Error::Erc721");
 
         assert!(matches!(
             err,
             Error::IncorrectOwner(
                 erc721::ERC721IncorrectOwner { sender, token_id: t_id, owner },
-            ) if sender == contract.address() && t_id == token_id && owner == alice
+            ) if sender == wrapper && t_id == token_id && owner == ALICE
         ));
     }
 
-    #[motsu::test]
-    fn recover_reverts_when_wrapped_token_already_exists(
-        contract: Contract<Erc721WrapperTestExample>,
-        erc721_contract: Contract<Erc721>,
-        alice: Address,
-    ) {
+    #[test]
+    fn recover_reverts_when_wrapped_token_already_exists() {
+        let vm = TestVM::default();
+        let mut contract = Erc721WrapperTestExample::from(&vm);
+        let mut underlying = UnderlyingToken::new();
+        let wrapper = vm.contract_address();
+        vm.set_sender(ALICE);
         let token_id = random_token_ids(1)[0];
 
-        contract.sender(alice).constructor(erc721_contract.address());
+        contract.constructor(UNDERLYING);
 
-        erc721_contract
-            .sender(alice)
-            ._mint(alice, token_id)
-            .motsu_expect("should mint {token_id} for {alice}");
+        underlying
+            .sender(ALICE)
+            ._mint(ALICE, token_id)
+            .expect("should mint {token_id} for {alice}");
 
-        erc721_contract
-            .sender(alice)
-            .transfer_from(
-                alice,
-                contract.address(),
-                token_id,
-            )
-            .motsu_expect("should transfer {token_id} from {alice} to {contract.address()}");
+        underlying
+            .sender(ALICE)
+            .transfer_from(ALICE, wrapper, token_id)
+            .expect(
+            "should transfer {token_id} from {alice} to {contract.address()}",
+        );
 
         // Mint an "unexpected" wrapped token.
         contract
-            .sender(alice)
             .erc721
-            ._mint(alice, token_id)
-            .motsu_expect("should mint {token_id} for {alice}");
+            ._mint(ALICE, token_id)
+            .expect("should mint {token_id} for {alice}");
 
+        underlying.mock_owner_of(&vm, token_id);
         let err = contract
-            .sender(alice)
-            .recover(alice, token_id)
-            .motsu_expect_err("should return Error::Erc721");
+            .recover(ALICE, token_id)
+            .expect_err("should return Error::Erc721");
 
         assert!(matches!(
             err,
@@ -1158,51 +1256,48 @@ mod tests {
         ));
     }
 
-    #[motsu::test]
-    fn recover_works(
-        contract: Contract<Erc721WrapperTestExample>,
-        erc721_contract: Contract<Erc721>,
-        alice: Address,
-    ) {
+    #[test]
+    fn recover_works() {
+        let vm = TestVM::default();
+        let mut contract = Erc721WrapperTestExample::from(&vm);
+        let mut underlying = UnderlyingToken::new();
+        let wrapper = vm.contract_address();
+        vm.set_sender(ALICE);
         let token_id = random_token_ids(1)[0];
 
-        contract.sender(alice).constructor(erc721_contract.address());
+        contract.constructor(UNDERLYING);
 
-        erc721_contract
-            .sender(alice)
-            ._mint(alice, token_id)
-            .motsu_expect("should mint {token_id} for {alice}");
+        underlying
+            .sender(ALICE)
+            ._mint(ALICE, token_id)
+            .expect("should mint {token_id} for {alice}");
 
-        erc721_contract
-            .sender(alice)
-            .transfer_from(
-                alice,
-                contract.address(),
-                token_id,
-            )
-            .motsu_expect("should transfer {token_id} from {alice} to {contract.address()}");
+        underlying
+            .sender(ALICE)
+            .transfer_from(ALICE, wrapper, token_id)
+            .expect(
+            "should transfer {token_id} from {alice} to {contract.address()}",
+        );
 
         let initial_wrapped_balance =
-            contract.sender(alice).erc721.balance_of(alice).motsu_unwrap();
+            contract.erc721.balance_of(ALICE).unwrap();
 
+        underlying.mock_owner_of(&vm, token_id);
         contract
-            .sender(alice)
-            .recover(alice, token_id)
-            .motsu_expect("should recover {token_id} for {alice}");
+            .recover(ALICE, token_id)
+            .expect("should recover {token_id} for {alice}");
 
-        let wrapped_balance =
-            contract.sender(alice).erc721.balance_of(alice).motsu_unwrap();
+        let wrapped_balance = contract.erc721.balance_of(ALICE).unwrap();
 
         assert_eq!(wrapped_balance, initial_wrapped_balance + uint!(1_U256));
 
-        contract.assert_emitted(&erc721::Transfer {
-            from: Address::ZERO,
-            to: alice,
-            token_id,
-        });
+        assert_emitted(
+            &vm,
+            &erc721::Transfer { from: Address::ZERO, to: ALICE, token_id },
+        );
 
         assert_eq!(
-            contract.sender(alice).erc721.balance_of(alice).motsu_unwrap(),
+            contract.erc721.balance_of(ALICE).unwrap(),
             initial_wrapped_balance + uint!(1_U256)
         );
     }
