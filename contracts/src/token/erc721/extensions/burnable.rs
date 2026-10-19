@@ -212,7 +212,8 @@ mod tests {
             err,
             Error::InsufficientApproval(ERC721InsufficientApproval {
                     operator,
-                    token_id: t_id}) if operator == ALICE && t_id == TOKEN_ID
+                    token_id: t_id,
+            }) if operator == ALICE && t_id == TOKEN_ID
         ));
     }
 

@@ -1150,7 +1150,8 @@ mod tests {
         assert!(matches!(
             err,
             Error::NonexistentToken(ERC721NonexistentToken {
-                token_id: t_id}) if t_id == TOKEN_ID
+                token_id: t_id,
+            }) if t_id == TOKEN_ID
         ));
     }
 
