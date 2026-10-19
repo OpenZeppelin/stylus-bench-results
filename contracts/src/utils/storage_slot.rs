@@ -32,12 +32,12 @@ const SLOT_BYTE_SPACE: u8 = 32;
 /// #[public]
 /// impl Erc1967 {
 ///     fn get_implementation(&self) -> Address {
-///         return StorageSlot::get_slot::<StorageAddress>(IMPLEMENTATION_SLOT).get();
+///         return StorageSlot::get_slot::<StorageAddress>(self, IMPLEMENTATION_SLOT).get();
 ///     }
 ///
 ///     fn set_implementation(&mut self, new_implementation: Address) {
-///         assert!(new_implementation.has_code());
-///         StorageSlot::get_slot::<StorageAddress>(IMPLEMENTATION_SLOT).set(new_implementation);
+///         assert!(self.vm().code_size(new_implementation) > 0);
+///         StorageSlot::get_slot::<StorageAddress>(self, IMPLEMENTATION_SLOT).set(new_implementation);
 ///     }
 /// }
 /// ```
@@ -48,6 +48,8 @@ impl StorageSlot {
     ///
     /// # Arguments
     ///
+    /// * `context` - Read access to the contract's host, which is shared with
+    ///   the returned storage accessor.
     /// * `slot` - The slot to get the address from.
     #[must_use]
     pub fn get_slot<ST: StorageType>(
