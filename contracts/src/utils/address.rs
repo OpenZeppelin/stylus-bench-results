@@ -161,3 +161,118 @@ impl AddressUtils {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use stylus_sdk::testing::TestVM;
+
+    use super::*;
+    use crate::test_utils::BOB;
+
+    #[storage]
+    struct Caller;
+
+    unsafe impl TopLevelStorage for Caller {}
+
+    #[test]
+    fn has_code_returns_false_for_account_without_code() {
+        let vm = TestVM::default();
+        let contract = Caller::from(&vm);
+
+        assert!(!AddressUtils::has_code(&contract, BOB));
+    }
+
+    #[test]
+    fn has_code_returns_true_for_account_with_code() {
+        let vm = TestVM::default();
+        let contract = Caller::from(&vm);
+        vm.set_code(BOB, vec![0x60, 0x80]);
+
+        assert!(AddressUtils::has_code(&contract, BOB));
+    }
+
+    #[test]
+    fn function_delegate_call_returns_the_returned_data() {
+        let vm = TestVM::default();
+        let mut contract = Caller::from(&vm);
+        vm.mock_delegate_call(BOB, vec![1, 2, 3], Ok(vec![4, 5]));
+
+        let result = AddressUtils::function_delegate_call(
+            &mut contract,
+            BOB,
+            &[1, 2, 3],
+        );
+
+        assert_eq!(result.unwrap(), vec![4, 5]);
+    }
+
+    #[test]
+    fn function_delegate_call_errors_when_target_has_no_code() {
+        let vm = TestVM::default();
+        let mut contract = Caller::from(&vm);
+        vm.mock_delegate_call(BOB, vec![1, 2, 3], Ok(vec![]));
+
+        let result = AddressUtils::function_delegate_call(
+            &mut contract,
+            BOB,
+            &[1, 2, 3],
+        );
+
+        assert!(matches!(
+            result,
+            Err(Error::EmptyCode(AddressEmptyCode { target })) if target == BOB
+        ));
+    }
+
+    #[test]
+    fn function_delegate_call_accepts_empty_data_from_a_contract() {
+        let vm = TestVM::default();
+        let mut contract = Caller::from(&vm);
+        vm.set_code(BOB, vec![0x60, 0x80]);
+        vm.mock_delegate_call(BOB, vec![1, 2, 3], Ok(vec![]));
+
+        let result = AddressUtils::function_delegate_call(
+            &mut contract,
+            BOB,
+            &[1, 2, 3],
+        );
+
+        assert_eq!(result.unwrap(), Vec::<u8>::new());
+    }
+
+    #[test]
+    fn function_delegate_call_errors_when_call_reverts_without_reason() {
+        let vm = TestVM::default();
+        let mut contract = Caller::from(&vm);
+        vm.mock_delegate_call(BOB, vec![1, 2, 3], Err(vec![]));
+
+        let result = AddressUtils::function_delegate_call(
+            &mut contract,
+            BOB,
+            &[1, 2, 3],
+        );
+
+        assert!(matches!(result, Err(Error::FailedCall(_))));
+    }
+
+    #[test]
+    fn function_delegate_call_bubbles_up_the_revert_reason() {
+        let vm = TestVM::default();
+        let mut contract = Caller::from(&vm);
+        let reason = vec![0xde, 0xad, 0xbe, 0xef];
+        vm.mock_delegate_call(BOB, vec![1, 2, 3], Err(reason.clone()));
+
+        let result = AddressUtils::function_delegate_call(
+            &mut contract,
+            BOB,
+            &[1, 2, 3],
+        );
+
+        assert!(matches!(
+            result,
+            Err(Error::FailedCallWithReason(FailedCallWithReason {
+                reason: bubbled
+            })) if bubbled.to_vec() == reason
+        ));
+    }
+}
