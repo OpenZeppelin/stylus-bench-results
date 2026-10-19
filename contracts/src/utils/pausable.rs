@@ -17,7 +17,9 @@
 use alloc::{vec, vec::Vec};
 
 pub use sol::*;
-use stylus_sdk::{stylus_core::calls::errors::MethodError, prelude::*, storage::StorageBool};
+use stylus_sdk::{
+    prelude::*, storage::StorageBool, stylus_core::calls::errors::MethodError,
+};
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -58,7 +60,8 @@ pub enum Error {
     EnforcedPause(EnforcedPause),
     /// Indicates an error related to the operation that failed
     /// because the contract had been in `Unpaused` state.
-    ExpectedPause(ExpectedPause)}
+    ExpectedPause(ExpectedPause),
+}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -70,10 +73,13 @@ impl MethodError for Error {
 #[storage]
 pub struct Pausable {
     /// Indicates whether the contract is `Paused`.
-    pub(crate) paused: StorageBool}
+    pub(crate) paused: StorageBool,
+}
 
 /// Pausable interface.
 #[public]
+// The `#[public]` macro adds an undocumented helper method to the trait.
+#[allow(missing_docs)]
 pub trait IPausable {
     /// Returns true if the contract is paused, and false otherwise.
     ///
