@@ -174,7 +174,7 @@ impl IOwnable2Step for Ownable2Step {
     fn transfer_ownership(
         &mut self,
         new_owner: Address,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), ownable::Error> {
         self.ownable.only_owner()?;
         self.pending_owner.set(new_owner);
 
@@ -186,7 +186,7 @@ impl IOwnable2Step for Ownable2Step {
         Ok(())
     }
 
-    fn accept_ownership(&mut self) -> Result<(), Self::Error> {
+    fn accept_ownership(&mut self) -> Result<(), ownable::Error> {
         let sender = self.vm().msg_sender();
         let pending_owner = self.pending_owner();
         if sender != pending_owner {
@@ -198,7 +198,7 @@ impl IOwnable2Step for Ownable2Step {
         Ok(())
     }
 
-    fn renounce_ownership(&mut self) -> Result<(), Self::Error> {
+    fn renounce_ownership(&mut self) -> Result<(), ownable::Error> {
         self.ownable.only_owner()?;
         self._transfer_ownership(Address::ZERO);
         Ok(())

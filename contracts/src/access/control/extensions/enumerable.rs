@@ -110,7 +110,7 @@ impl IAccessControlEnumerable for AccessControlEnumerable {
         &self,
         role: B256,
         index: U256,
-    ) -> Result<Address, Self::Error> {
+    ) -> Result<Address, Error> {
         let members = self.role_members.get(role);
         match members.at(index) {
             Some(member) => Ok(member),

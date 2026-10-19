@@ -269,7 +269,7 @@ impl IAccessControl for AccessControl {
         self.roles.getter(role).has_role.get(account)
     }
 
-    fn only_role(&self, role: B256) -> Result<(), Self::Error> {
+    fn only_role(&self, role: B256) -> Result<(), Error> {
         self._check_role(role, self.vm().msg_sender())
     }
 
@@ -281,7 +281,7 @@ impl IAccessControl for AccessControl {
         &mut self,
         role: B256,
         account: Address,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let admin_role = self.get_role_admin(role);
         self.only_role(admin_role)?;
         self._grant_role(role, account);
@@ -292,7 +292,7 @@ impl IAccessControl for AccessControl {
         &mut self,
         role: B256,
         account: Address,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         let admin_role = self.get_role_admin(role);
         self.only_role(admin_role)?;
         self._revoke_role(role, account);
@@ -303,7 +303,7 @@ impl IAccessControl for AccessControl {
         &mut self,
         role: B256,
         confirmation: Address,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Error> {
         if self.vm().msg_sender() != confirmation {
             return Err(Error::BadConfirmation(
                 AccessControlBadConfirmation {},
