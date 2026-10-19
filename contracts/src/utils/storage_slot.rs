@@ -72,29 +72,27 @@ impl StorageSlot {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unused_self)]
-
     use alloy_primitives::{uint, Address, U256};
-    use motsu::prelude::*;
-    use stylus_sdk::storage::StorageAddress;
+    use stylus_sdk::{storage::StorageAddress, testing::TestVM};
 
     use super::*;
+    use crate::test_utils::{ALICE, BOB};
 
     const IMPLEMENTATION_SLOT: U256 = uint!(12345_U256);
 
     #[storage]
-    #[entrypoint]
-    pub struct Erc1967 {
-        address: StorageAddress}
+    struct Erc1967 {
+        address: StorageAddress,
+    }
 
-    #[public]
     impl Erc1967 {
         fn get_implementation(&self) -> Address {
-            StorageSlot::get_slot::<StorageAddress>(IMPLEMENTATION_SLOT).get()
+            StorageSlot::get_slot::<StorageAddress>(self, IMPLEMENTATION_SLOT)
+                .get()
         }
 
-        fn set_implementation(&self, new_implementation: Address) {
-            StorageSlot::get_slot::<StorageAddress>(IMPLEMENTATION_SLOT)
+        fn set_implementation(&mut self, new_implementation: Address) {
+            StorageSlot::get_slot::<StorageAddress>(self, IMPLEMENTATION_SLOT)
                 .set(new_implementation);
         }
 
@@ -107,49 +105,50 @@ mod tests {
         }
 
         fn get_address_at_zero_slot(&self) -> Address {
-            StorageSlot::get_slot::<StorageAddress>(U256::ZERO).get()
+            StorageSlot::get_slot::<StorageAddress>(self, U256::ZERO).get()
         }
 
         fn set_address_at_zero_slot(&mut self, new_address: Address) {
-            StorageSlot::get_slot::<StorageAddress>(U256::ZERO)
+            StorageSlot::get_slot::<StorageAddress>(self, U256::ZERO)
                 .set(new_address);
         }
     }
 
-    #[motsu::test]
-    fn test_storage_slot(
-        contract: Contract<Erc1967>,
-        alice: Address,
-        impl_address: Address,
-    ) {
-        let implementation = contract.sender(alice).get_implementation();
+    #[test]
+    fn test_storage_slot() {
+        let vm = TestVM::default();
+        vm.set_sender(ALICE);
+        let mut contract = Erc1967::from(&vm);
+        let impl_address = BOB;
+
+        let implementation = contract.get_implementation();
         assert_eq!(implementation, Address::ZERO);
 
-        contract.sender(alice).set_implementation(impl_address);
+        contract.set_implementation(impl_address);
 
-        let implementation = contract.sender(alice).get_implementation();
+        let implementation = contract.get_implementation();
         assert_eq!(implementation, impl_address);
-        let address = contract.sender(alice).get_address_at_zero_slot();
+        let address = contract.get_address_at_zero_slot();
         assert_eq!(address, Address::ZERO);
-        let address = contract.sender(alice).get_address();
+        let address = contract.get_address();
         assert_eq!(address, Address::ZERO);
 
-        contract.sender(alice).set_address(impl_address);
+        contract.set_address(impl_address);
 
-        let implementation = contract.sender(alice).get_implementation();
+        let implementation = contract.get_implementation();
         assert_eq!(implementation, impl_address);
-        let address = contract.sender(alice).get_address_at_zero_slot();
+        let address = contract.get_address_at_zero_slot();
         assert_eq!(address, impl_address);
-        let address = contract.sender(alice).get_address();
+        let address = contract.get_address();
         assert_eq!(address, impl_address);
 
-        contract.sender(alice).set_address_at_zero_slot(alice);
+        contract.set_address_at_zero_slot(ALICE);
 
-        let implementation = contract.sender(alice).get_implementation();
+        let implementation = contract.get_implementation();
         assert_eq!(implementation, impl_address);
-        let address = contract.sender(alice).get_address_at_zero_slot();
-        assert_eq!(address, alice);
-        let address = contract.sender(alice).get_address();
-        assert_eq!(address, alice);
+        let address = contract.get_address_at_zero_slot();
+        assert_eq!(address, ALICE);
+        let address = contract.get_address();
+        assert_eq!(address, ALICE);
     }
 }
