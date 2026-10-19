@@ -1,0 +1,641 @@
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/mod.rs:178:1
+    |
+178 | #[storage]
+    | ^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `storage` crate for guidance on how handle this unexpected cfg
+    = help: the attribute macro `storage` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the attribute macro `storage` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/mod.rs:193:1
+    |
+193 | #[public]
+    | ^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+    = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/mod.rs:219:8
+    |
+219 |     fn balance_of_batch(
+    |        ^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/mod.rs:243:8
+    |
+243 |     fn set_approval_for_all(
+    |        ^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/mod.rs:257:8
+    |
+257 |     fn is_approved_for_all(&self, account: Address, operator: Address) -> bool;
+    |        ^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/mod.rs:287:8
+    |
+287 |     fn safe_transfer_from(
+    |        ^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/mod.rs:326:8
+    |
+326 |     fn safe_batch_transfer_from(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/mod.rs:192:1
+    |
+192 | #[interface_id]
+    | ^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `interface_id` crate for guidance on how handle this unexpected cfg
+    = help: the attribute macro `interface_id` may come from an old version of the `openzeppelin_stylus_proc` crate, try updating your dependency with `cargo update -p openzeppelin_stylus_proc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the attribute macro `interface_id` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/mod.rs:336:1
+    |
+336 | #[public]
+    | ^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+    = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/mod.rs:340:1
+    |
+340 | #[public]
+    | ^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+    = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/mod.rs:348:8
+    |
+348 |     fn balance_of_batch(
+    |        ^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/mod.rs:364:8
+    |
+364 |     fn set_approval_for_all(
+    |        ^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/mod.rs:372:8
+    |
+372 |     fn is_approved_for_all(&self, account: Address, operator: Address) -> bool {
+    |        ^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/mod.rs:376:8
+    |
+376 |     fn safe_transfer_from(
+    |        ^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/mod.rs:388:8
+    |
+388 |     fn safe_batch_transfer_from(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/mod.rs:401:1
+    |
+401 | #[public]
+    | ^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+    = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unused import: `call`
+  --> contracts/src/token/erc1155/mod.rs:10:30
+   |
+10 | use stylus_sdk::{abi::Bytes, call, function_selector, prelude::*, storage::{StorageBool, StorageMap, StorageU256}};
+   |                              ^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/burnable.rs:15:1
+   |
+15 | #[public]
+   | ^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/burnable.rs:64:8
+   |
+64 |     fn burn_batch(
+   |        ^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/burnable.rs:14:1
+   |
+14 | #[interface_id]
+   | ^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `interface_id` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `interface_id` may come from an old version of the `openzeppelin_stylus_proc` crate, try updating your dependency with `cargo update -p openzeppelin_stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `interface_id` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/burnable.rs:72:1
+   |
+72 | #[public]
+   | ^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/burnable.rs:86:8
+   |
+86 |     fn burn_batch(
+   |        ^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/metadata_uri.rs:34:1
+   |
+34 | #[storage]
+   | ^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `storage` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `storage` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `storage` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/metadata_uri.rs:42:1
+   |
+42 | #[public]
+   | ^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/metadata_uri.rs:41:1
+   |
+41 | #[interface_id]
+   | ^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `interface_id` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `interface_id` may come from an old version of the `openzeppelin_stylus_proc` crate, try updating your dependency with `cargo update -p openzeppelin_stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `interface_id` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/metadata_uri.rs:56:1
+   |
+56 | #[public]
+   | ^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/metadata_uri.rs:66:1
+   |
+66 | #[public]
+   | ^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/metadata_uri.rs:81:1
+   |
+81 | #[public]
+   | ^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/supply.rs:27:1
+   |
+27 | #[storage]
+   | ^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `storage` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `storage` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `storage` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/supply.rs:38:1
+   |
+38 | #[public]
+   | ^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/supply.rs:54:8
+   |
+54 |     fn total_supply_all(&self) -> U256;
+   |        ^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/supply.rs:62:8
+   |
+62 |     fn exists(&self, id: U256) -> bool;
+   |        ^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/supply.rs:37:1
+   |
+37 | #[interface_id]
+   | ^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `interface_id` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `interface_id` may come from an old version of the `openzeppelin_stylus_proc` crate, try updating your dependency with `cargo update -p openzeppelin_stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `interface_id` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/supply.rs:65:1
+   |
+65 | #[public]
+   | ^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/supply.rs:69:1
+   |
+69 | #[public]
+   | ^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/supply.rs:75:8
+   |
+75 |     fn total_supply_all(&self) -> U256 {
+   |        ^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/supply.rs:79:8
+   |
+79 |     fn exists(&self, id: U256) -> bool {
+   |        ^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/supply.rs:84:1
+   |
+84 | #[public]
+   | ^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/supply.rs:92:8
+   |
+92 |     fn balance_of_batch(
+   |        ^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/extensions/supply.rs:100:8
+    |
+100 |     fn set_approval_for_all(
+    |        ^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/extensions/supply.rs:108:8
+    |
+108 |     fn is_approved_for_all(&self, account: Address, operator: Address) -> bool {
+    |        ^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/extensions/supply.rs:112:8
+    |
+112 |     fn safe_transfer_from(
+    |        ^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/extensions/supply.rs:124:8
+    |
+124 |     fn safe_batch_transfer_from(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/extensions/supply.rs:137:1
+    |
+137 | #[public]
+    | ^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+    = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/uri_storage.rs:13:1
+   |
+13 | #[storage]
+   | ^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `storage` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `storage` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `storage` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/uri_storage.rs:23:1
+   |
+23 | #[public]
+   | ^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/extensions/uri_storage.rs:22:1
+   |
+22 | #[interface_id]
+   | ^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `interface_id` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `interface_id` may come from an old version of the `openzeppelin_stylus_proc` crate, try updating your dependency with `cargo update -p openzeppelin_stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `interface_id` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/receiver.rs:64:1
+   |
+64 | #[public]
+   | ^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+   --> contracts/src/token/erc1155/receiver.rs:112:8
+    |
+112 |     fn on_erc1155_batch_received(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `export-abi` and `reentrant`
+    = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/receiver.rs:63:1
+   |
+63 | #[interface_id]
+   | ^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `interface_id` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `interface_id` may come from an old version of the `openzeppelin_stylus_proc` crate, try updating your dependency with `cargo update -p openzeppelin_stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `interface_id` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/utils/holder.rs:15:1
+   |
+15 | #[storage]
+   | ^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `storage` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `storage` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `storage` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/utils/holder.rs:18:1
+   |
+18 | #[public]
+   | ^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/utils/holder.rs:22:1
+   |
+22 | #[public]
+   | ^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/utils/holder.rs:37:8
+   |
+37 |     fn on_erc1155_batch_received(
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = help: consider adding `contract-client-gen` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+=========
+warning: unexpected `cfg` condition value: `contract-client-gen`
+  --> contracts/src/token/erc1155/utils/holder.rs:49:1
+   |
+49 | #[public]
+   | ^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `export-abi` and `reentrant`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `public` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `public` may come from an old version of the `stylus_proc` crate, try updating your dependency with `cargo update -p stylus_proc`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+=========

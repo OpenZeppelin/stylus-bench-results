@@ -1,0 +1,974 @@
+error[E0433]: failed to resolve: use of undeclared type `Vec`
+  --> contracts/src/token/erc20/extensions/burnable.rs:62:1
+   |
+62 | #[public]
+   | ^^^^^^^^^ use of undeclared type `Vec`
+   |
+   = note: this error originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing one of these structs
+   |
+ 3 + use crate::token::erc20::Vec;
+   |
+ 3 + use alloc::vec::Vec;
+   |
+=======
+error[E0412]: cannot find type `Vec` in this scope
+  --> contracts/src/token/erc20/extensions/burnable.rs:62:1
+   |
+62 | #[public]
+   | ^^^^^^^^^ not found in this scope
+   |
+   = note: this error originates in the attribute macro `public` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing one of these structs
+   |
+ 3 + use crate::token::erc20::Vec;
+   |
+ 3 + use alloc::vec::Vec;
+   |
+=======
+error[E0277]: the trait bound `alloy_primitives::Address: stylus_sdk::prelude::StaticCallContext` is not satisfied
+   --> contracts/src/finance/vesting_wallet.rs:546:45
+    |
+546 |             .balance_of(Call::new_in(self), self.vm().contract_address())
+    |              ----------                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `stylus_sdk::prelude::StaticCallContext` is not implemented for `alloy_primitives::Address`
+    |              |
+    |              required by a bound introduced by this call
+    |
+    = help: the trait `stylus_sdk::prelude::StaticCallContext` is implemented for `stylus_sdk::prelude::Call`
+note: required by a bound in `erc20::interface::token::Erc20Interface::balance_of`
+   --> contracts/src/token/erc20/interface.rs:11:5
+    |
+ 11 | /     sol_interface! {
+ 12 | |         interface Erc20Interface {
+ 13 | |             function totalSupply() external view returns (uint256);
+ 14 | |             function balanceOf(address account) external view returns (uint256);
+...   |
+ 20 | |     }
+    | |_____^ required by this bound in `Erc20Interface::balance_of`
+    = note: this error originates in the macro `sol_interface` (in Nightly builds, run with -Z macro-backtrace for more info)
+=======
+error[E0061]: this method takes 3 arguments but 2 arguments were supplied
+   --> contracts/src/finance/vesting_wallet.rs:546:14
+    |
+546 |             .balance_of(Call::new_in(self), self.vm().contract_address())
+    |              ^^^^^^^^^^-------------------------------------------------- argument #3 of type `alloy_primitives::Address` is missing
+    |
+note: method defined here
+   --> contracts/src/token/erc20/interface.rs:14:22
+    |
+ 11 | /     sol_interface! {
+ 12 | |         interface Erc20Interface {
+ 13 | |             function totalSupply() external view returns (uint256);
+ 14 | |             function balanceOf(address account) external view returns (uint256);
+    | |                      ^^^^^^^^^
+...   |
+ 20 | |     }
+    | |_____-
+help: provide the argument
+    |
+546 |             .balance_of(Call::new_in(self), self.vm().contract_address(), /* alloy_primitives::Address */)
+    |                                                                         +++++++++++++++++++++++++++++++++
+=======
+error[E0599]: no method named `vm` found for mutable reference `&mut Erc20` in the current scope
+  --> contracts/src/token/erc20/extensions/burnable.rs:67:25
+   |
+67 |         self._burn(self.vm().msg_sender(), value)
+   |                         ^^ method not found in `&mut Erc20`
+   |
+   = help: items from traits can only be used if the trait is in scope
+help: trait `HostAccess` which provides `vm` is implemented but not in scope; perhaps you want to import it
+   |
+ 3 + use stylus_sdk::prelude::HostAccess;
+   |
+=======
+error[E0599]: no method named `vm` found for mutable reference `&mut Erc20` in the current scope
+  --> contracts/src/token/erc20/extensions/burnable.rs:75:45
+   |
+75 |         self._spend_allowance(account, self.vm().msg_sender(), value)?;
+   |                                             ^^ method not found in `&mut Erc20`
+   |
+   = help: items from traits can only be used if the trait is in scope
+help: trait `HostAccess` which provides `vm` is implemented but not in scope; perhaps you want to import it
+   |
+ 3 + use stylus_sdk::prelude::HostAccess;
+   |
+=======
+error[E0277]: the trait bound `Erc4626: stylus_sdk::prelude::Host` is not satisfied
+   --> contracts/src/token/erc20/extensions/erc4626.rs:653:25
+    |
+653 |             .balance_of(self, self.vm().contract_address())
+    |              ---------- ^^^^ unsatisfied trait bound
+    |              |
+    |              required by a bound introduced by this call
+    |
+help: the trait `stylus_sdk::prelude::Host` is not implemented for `Erc4626`
+   --> contracts/src/token/erc20/extensions/erc4626.rs:178:1
+    |
+178 | #[storage]
+    | ^^^^^^^^^^
+    = help: the following other types implement trait `stylus_sdk::prelude::Host`:
+              VM
+              WasmVM
+note: required by a bound in `erc20::interface::token::Erc20Interface::balance_of`
+   --> contracts/src/token/erc20/interface.rs:11:5
+    |
+ 11 | /     sol_interface! {
+ 12 | |         interface Erc20Interface {
+ 13 | |             function totalSupply() external view returns (uint256);
+ 14 | |             function balanceOf(address account) external view returns (uint256);
+...   |
+ 20 | |     }
+    | |_____^ required by this bound in `Erc20Interface::balance_of`
+    = note: this error originates in the attribute macro `storage` which comes from the expansion of the macro `sol_interface` (in Nightly builds, run with -Z macro-backtrace for more info)
+=======
+error[E0277]: the trait bound `alloy_primitives::Address: stylus_sdk::prelude::StaticCallContext` is not satisfied
+   --> contracts/src/token/erc20/extensions/erc4626.rs:653:31
+    |
+653 |             .balance_of(self, self.vm().contract_address())
+    |              ----------       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `stylus_sdk::prelude::StaticCallContext` is not implemented for `alloy_primitives::Address`
+    |              |
+    |              required by a bound introduced by this call
+    |
+    = help: the trait `stylus_sdk::prelude::StaticCallContext` is implemented for `stylus_sdk::prelude::Call`
+note: required by a bound in `erc20::interface::token::Erc20Interface::balance_of`
+   --> contracts/src/token/erc20/interface.rs:11:5
+    |
+ 11 | /     sol_interface! {
+ 12 | |         interface Erc20Interface {
+ 13 | |             function totalSupply() external view returns (uint256);
+ 14 | |             function balanceOf(address account) external view returns (uint256);
+...   |
+ 20 | |     }
+    | |_____^ required by this bound in `Erc20Interface::balance_of`
+    = note: this error originates in the macro `sol_interface` (in Nightly builds, run with -Z macro-backtrace for more info)
+=======
+error[E0061]: this method takes 3 arguments but 2 arguments were supplied
+   --> contracts/src/token/erc20/extensions/erc4626.rs:653:14
+    |
+653 |             .balance_of(self, self.vm().contract_address())
+    |              ^^^^^^^^^^------------------------------------ argument #3 of type `alloy_primitives::Address` is missing
+    |
+note: method defined here
+   --> contracts/src/token/erc20/interface.rs:14:22
+    |
+ 11 | /     sol_interface! {
+ 12 | |         interface Erc20Interface {
+ 13 | |             function totalSupply() external view returns (uint256);
+ 14 | |             function balanceOf(address account) external view returns (uint256);
+    | |                      ^^^^^^^^^
+...   |
+ 20 | |     }
+    | |_____-
+help: provide the argument
+    |
+653 |             .balance_of(self, self.vm().contract_address(), /* alloy_primitives::Address */)
+    |                                                           +++++++++++++++++++++++++++++++++
+=======
+error[E0599]: no function or associated item named `new_in` found for struct `stylus_sdk::prelude::Call<MUTATING, HAS_VALUE>` in the current scope
+    --> contracts/src/token/erc20/extensions/erc4626.rs:1102:26
+     |
+1102 |         let call = Call::new_in(self);
+     |                          ^^^^^^ function or associated item not found in `stylus_sdk::prelude::Call<_, _>`
+     |
+note: if you're trying to build a new `stylus_sdk::prelude::Call<_, _>` consider using one of the following associated functions:
+      stylus_sdk::prelude::Call::new
+      stylus_sdk::prelude::Call::<true>::new_mutating
+      stylus_sdk::prelude::Call::<true, true>::new_payable
+    --> /Users/pepe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stylus-core-0.10.10/src/calls/mod.rs:89:5
+     |
+  89 |     pub fn new() -> Self {
+     |     ^^^^^^^^^^^^^^^^^^^^
+...
+  98 |     pub fn new_mutating(_storage: &mut impl TopLevelStorage) -> Self {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 107 |     pub fn new_payable(_storage: &mut impl TopLevelStorage, value: U256) -> Self {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: there is an associated function `new` with a similar name
+    --> /Users/pepe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stylus-core-0.10.10/src/calls/mod.rs:89:5
+     |
+  89 |     pub fn new() -> Self {
+     |     ^^^^^^^^^^^^^^^^^^^^
+=======
+error[E0061]: this method takes 2 arguments but 1 argument was supplied
+    --> contracts/src/token/erc20/extensions/erc4626.rs:1103:15
+     |
+1103 |         erc20.decimals(call).ok()
+     |               ^^^^^^^^------ argument #2 is missing
+     |
+note: method defined here
+    --> contracts/src/token/erc20/interface.rs:27:22
+     |
+  22 | /     sol_interface! {
+  23 | |         /// Solidity Interface of the ERC-20 Metadata token.
+  24 | |         interface IErc20MetadataInterface {
+  25 | |             function name() external view returns (string);
+  26 | |             function symbol() external view returns (string);
+  27 | |             function decimals() external view returns (uint8);
+     | |                      ^^^^^^^^
+  28 | |         }
+  29 | |     }
+     | |_____-
+help: provide the argument
+     |
+1103 |         erc20.decimals(call, /* context */).ok()
+     |                            +++++++++++++++
+=======
+error[E0599]: no function or associated item named `has_code` found for struct `alloy_primitives::Address` in the current scope
+   --> contracts/src/token/erc20/extensions/flash_mint.rs:306:22
+    |
+306 |         if !Address::has_code(&receiver) {
+    |                      ^^^^^^^^ function or associated item not found in `alloy_primitives::Address`
+    |
+note: if you're trying to build a new `alloy_primitives::Address` consider using one of the following associated functions:
+      alloy_primitives::Address::new
+      alloy_primitives::Address::with_last_byte
+      alloy_primitives::Address::repeat_byte
+      alloy_primitives::Address::from_slice
+      and 5 others
+   --> /Users/pepe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/alloy-primitives-1.5.7/src/bits/address.rs:45:1
+    |
+ 45 | / wrap_fixed_bytes!(
+ 46 | |     // we implement Display with the checksum, so we don't derive it
+ 47 | |     extra_derives: [],
+ 48 | |     /// An Ethereum address, 20 bytes in length.
+...   |
+ 88 | |     pub struct Address<20>;
+ 89 | | );
+    | |_^
+    = note: this error originates in the macro `wrap_fixed_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+=======
+error[E0599]: no function or associated item named `new_in` found for struct `stylus_sdk::prelude::Call<MUTATING, HAS_VALUE>` in the current scope
+   --> contracts/src/token/erc20/extensions/flash_mint.rs:315:23
+    |
+315 |                 Call::new_in(self),
+    |                       ^^^^^^ function or associated item not found in `stylus_sdk::prelude::Call<_, _>`
+    |
+note: if you're trying to build a new `stylus_sdk::prelude::Call<_, _>` consider using one of the following associated functions:
+      stylus_sdk::prelude::Call::new
+      stylus_sdk::prelude::Call::<true>::new_mutating
+      stylus_sdk::prelude::Call::<true, true>::new_payable
+   --> /Users/pepe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stylus-core-0.10.10/src/calls/mod.rs:89:5
+    |
+ 89 |     pub fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^
+...
+ 98 |     pub fn new_mutating(_storage: &mut impl TopLevelStorage) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+107 |     pub fn new_payable(_storage: &mut impl TopLevelStorage, value: U256) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: there is an associated function `new` with a similar name
+   --> /Users/pepe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stylus-core-0.10.10/src/calls/mod.rs:89:5
+    |
+ 89 |     pub fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^
+=======
+error[E0277]: the trait bound `alloy_primitives::Address: stylus_sdk::prelude::NonPayableCallContext` is not satisfied
+   --> contracts/src/token/erc20/extensions/flash_mint.rs:316:17
+    |
+314 |             .on_flash_loan(
+    |              ------------- required by a bound introduced by this call
+315 |                 Call::new_in(self),
+316 |                 self.vm().msg_sender(),
+    |                 ^^^^^^^^^^^^^^^^^^^^^^ the trait `stylus_sdk::prelude::NonPayableCallContext` is not implemented for `alloy_primitives::Address`
+    |
+    = help: the trait `stylus_sdk::prelude::NonPayableCallContext` is implemented for `stylus_sdk::prelude::Call<true>`
+note: required by a bound in `IERC3156FlashBorrower::on_flash_loan`
+   --> contracts/src/token/erc20/extensions/flash_mint.rs:120:5
+    |
+120 | /     sol_interface! {
+121 | |         /// Interface of the ERC-3156 Flash Borrower, as defined in [ERC-3156].
+122 | |         ///
+123 | |         /// [ERC-3156]: https://eips.ethereum.org/EIPS/eip-3156
+...   |
+146 | |     }
+    | |_____^ required by this bound in `IERC3156FlashBorrower::on_flash_loan`
+    = note: this error originates in the macro `sol_interface` (in Nightly builds, run with -Z macro-backtrace for more info)
+=======
+error[E0277]: the trait bound `alloy_primitives::Uint<256, 4>: From<Vec<u8>>` is not satisfied
+   --> contracts/src/token/erc20/extensions/flash_mint.rs:320:31
+    |
+320 |                 data.to_vec().into(),
+    |                               ^^^^ the trait `From<Vec<u8>>` is not implemented for `alloy_primitives::Uint<256, 4>`
+    |
+    = help: the following other types implement trait `From<T>`:
+              `alloy_primitives::Uint<256, 4>` implements `From<ParseUnits>`
+              `alloy_primitives::Uint<256, 4>` implements `From<alloy_primitives::FixedBytes<32>>`
+              `alloy_primitives::Uint<256, 4>` implements `From<alloy_sol_types::Panic>`
+    = note: required for `Vec<u8>` to implement `Into<alloy_primitives::Uint<256, 4>>`
+=======
+error[E0061]: this method takes 7 arguments but 6 arguments were supplied
+   --> contracts/src/token/erc20/extensions/flash_mint.rs:314:14
+    |
+314 |               .on_flash_loan(
+    |  ______________^^^^^^^^^^^^^-
+315 | |                 Call::new_in(self),
+316 | |                 self.vm().msg_sender(),
+317 | |                 token,
+...   |
+320 | |                 data.to_vec().into(),
+321 | |             )
+    | |_____________- argument #7 of type `alloy_primitives::Bytes` is missing
+    |
+note: expected `Address`, found `Uint<256, 4>`
+   --> contracts/src/token/erc20/extensions/flash_mint.rs:318:17
+    |
+318 |                 value,
+    |                 ^^^^^
+    = note: expected struct `alloy_primitives::Address`
+               found struct `alloy_primitives::Uint<256, 4>`
+note: method defined here
+   --> contracts/src/token/erc20/extensions/flash_mint.rs:138:22
+    |
+120 | /     sol_interface! {
+121 | |         /// Interface of the ERC-3156 Flash Borrower, as defined in [ERC-3156].
+122 | |         ///
+123 | |         /// [ERC-3156]: https://eips.ethereum.org/EIPS/eip-3156
+...   |
+138 | |             function onFlashLoan(
+    | |                      ^^^^^^^^^^^
+...   |
+146 | |     }
+    | |_____-
+    | |_____|
+    |
+help: provide the argument
+    |
+314 ~             .on_flash_loan(
+315 +                 Call::new_in(self),
+316 +                 self.vm().msg_sender(),
+317 +                 token,
+318 +                 /* alloy_primitives::Address */,
+319 +                 fee,
+320 +                 data.to_vec().into(),
+321 +                 /* alloy_primitives::Bytes */,
+322 +             )
+    |
+=======
+error[E0277]: the trait bound `Erc20Wrapper: stylus_sdk::prelude::Host` is not satisfied
+   --> contracts/src/token/erc20/extensions/wrapper.rs:224:27
+    |
+224 |                 .decimals(self)
+    |                  -------- ^^^^ unsatisfied trait bound
+    |                  |
+    |                  required by a bound introduced by this call
+    |
+help: the trait `stylus_sdk::prelude::Host` is not implemented for `Erc20Wrapper`
+   --> contracts/src/token/erc20/extensions/wrapper.rs:111:1
+    |
+111 | #[storage]
+    | ^^^^^^^^^^
+    = help: the following other types implement trait `stylus_sdk::prelude::Host`:
+              VM
+              WasmVM
+note: required by a bound in `erc20::interface::token::IErc20MetadataInterface::decimals`
+   --> contracts/src/token/erc20/interface.rs:22:5
+    |
+ 22 | /     sol_interface! {
+ 23 | |         /// Solidity Interface of the ERC-20 Metadata token.
+ 24 | |         interface IErc20MetadataInterface {
+ 25 | |             function name() external view returns (string);
+...   |
+ 29 | |     }
+    | |_____^ required by this bound in `IErc20MetadataInterface::decimals`
+    = note: this error originates in the attribute macro `storage` which comes from the expansion of the macro `sol_interface` (in Nightly builds, run with -Z macro-backtrace for more info)
+=======
+error[E0061]: this method takes 2 arguments but 1 argument was supplied
+   --> contracts/src/token/erc20/extensions/wrapper.rs:224:18
+    |
+224 |                 .decimals(self)
+    |                  ^^^^^^^^------ argument #2 is missing
+    |
+note: method defined here
+   --> contracts/src/token/erc20/interface.rs:27:22
+    |
+ 22 | /     sol_interface! {
+ 23 | |         /// Solidity Interface of the ERC-20 Metadata token.
+ 24 | |         interface IErc20MetadataInterface {
+ 25 | |             function name() external view returns (string);
+ 26 | |             function symbol() external view returns (string);
+ 27 | |             function decimals() external view returns (uint8);
+    | |                      ^^^^^^^^
+ 28 | |         }
+ 29 | |     }
+    | |_____-
+help: provide the argument
+    |
+224 |                 .decimals(self, /* context */)
+    |                               +++++++++++++++
+=======
+error[E0599]: no function or associated item named `new_in` found for struct `stylus_sdk::prelude::Call<MUTATING, HAS_VALUE>` in the current scope
+   --> contracts/src/token/erc20/extensions/wrapper.rs:348:31
+    |
+348 |             .balance_of(Call::new_in(self), contract_address)
+    |                               ^^^^^^ function or associated item not found in `stylus_sdk::prelude::Call<_, _>`
+    |
+note: if you're trying to build a new `stylus_sdk::prelude::Call<_, _>` consider using one of the following associated functions:
+      stylus_sdk::prelude::Call::new
+      stylus_sdk::prelude::Call::<true>::new_mutating
+      stylus_sdk::prelude::Call::<true, true>::new_payable
+   --> /Users/pepe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stylus-core-0.10.10/src/calls/mod.rs:89:5
+    |
+ 89 |     pub fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^
+...
+ 98 |     pub fn new_mutating(_storage: &mut impl TopLevelStorage) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+107 |     pub fn new_payable(_storage: &mut impl TopLevelStorage, value: U256) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: there is an associated function `new` with a similar name
+   --> /Users/pepe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stylus-core-0.10.10/src/calls/mod.rs:89:5
+    |
+ 89 |     pub fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^
+=======
+error[E0277]: the trait bound `alloy_primitives::Address: stylus_sdk::prelude::StaticCallContext` is not satisfied
+   --> contracts/src/token/erc20/extensions/wrapper.rs:348:45
+    |
+348 |             .balance_of(Call::new_in(self), contract_address)
+    |              ----------                     ^^^^^^^^^^^^^^^^ the trait `stylus_sdk::prelude::StaticCallContext` is not implemented for `alloy_primitives::Address`
+    |              |
+    |              required by a bound introduced by this call
+    |
+    = help: the trait `stylus_sdk::prelude::StaticCallContext` is implemented for `stylus_sdk::prelude::Call`
+note: required by a bound in `erc20::interface::token::Erc20Interface::balance_of`
+   --> contracts/src/token/erc20/interface.rs:11:5
+    |
+ 11 | /     sol_interface! {
+ 12 | |         interface Erc20Interface {
+ 13 | |             function totalSupply() external view returns (uint256);
+ 14 | |             function balanceOf(address account) external view returns (uint256);
+...   |
+ 20 | |     }
+    | |_____^ required by this bound in `Erc20Interface::balance_of`
+    = note: this error originates in the macro `sol_interface` (in Nightly builds, run with -Z macro-backtrace for more info)
+=======
+error[E0061]: this method takes 3 arguments but 2 arguments were supplied
+   --> contracts/src/token/erc20/extensions/wrapper.rs:348:14
+    |
+348 |             .balance_of(Call::new_in(self), contract_address)
+    |              ^^^^^^^^^^-------------------------------------- argument #3 of type `alloy_primitives::Address` is missing
+    |
+note: method defined here
+   --> contracts/src/token/erc20/interface.rs:14:22
+    |
+ 11 | /     sol_interface! {
+ 12 | |         interface Erc20Interface {
+ 13 | |             function totalSupply() external view returns (uint256);
+ 14 | |             function balanceOf(address account) external view returns (uint256);
+    | |                      ^^^^^^^^^
+...   |
+ 20 | |     }
+    | |_____-
+help: provide the argument
+    |
+348 |             .balance_of(Call::new_in(self), contract_address, /* alloy_primitives::Address */)
+    |                                                             +++++++++++++++++++++++++++++++++
+=======
+error[E0599]: no method named `has_code` found for struct `alloy_primitives::Address` in the current scope
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:470:16
+    |
+470 |         if !to.has_code() {
+    |                ^^^^^^^^ method not found in `alloy_primitives::Address`
+=======
+error[E0599]: no method named `has_code` found for struct `alloy_primitives::Address` in the current scope
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:474:19
+    |
+474 |         if !token.has_code() {
+    |                   ^^^^^^^^ method not found in `alloy_primitives::Address`
+=======
+error[E0277]: the trait bound `SafeErc20: stylus_sdk::prelude::Host` is not satisfied
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:481:13
+    |
+480 |         match Erc1363Interface::new(token).transfer_and_call(
+    |                                            ----------------- required by a bound introduced by this call
+481 |             self,
+    |             ^^^^ unsatisfied trait bound
+    |
+help: the trait `stylus_sdk::prelude::Host` is not implemented for `SafeErc20`
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:96:1
+    |
+ 96 | #[storage]
+    | ^^^^^^^^^^
+    = help: the following other types implement trait `stylus_sdk::prelude::Host`:
+              VM
+              WasmVM
+note: required by a bound in `Erc1363Interface::transfer_and_call`
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:86:5
+    |
+ 86 | /     stylus_sdk::prelude::sol_interface! {
+ 87 | |         interface Erc1363Interface {
+ 88 | |             function transferAndCall(address to, uint256 value, bytes calldata data) external returns (bool);
+ 89 | |             function transferFromAndCall(address from, address to, uint256 value, bytes calldata data) external returns (bool);
+...   |
+ 92 | |     }
+    | |_____^ required by this bound in `Erc1363Interface::transfer_and_call`
+    = note: this error originates in the attribute macro `storage` which comes from the expansion of the macro `stylus_sdk::prelude::sol_interface` (in Nightly builds, run with -Z macro-backtrace for more info)
+=======
+error[E0277]: the trait bound `alloy_primitives::Address: stylus_sdk::prelude::NonPayableCallContext` is not satisfied
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:482:13
+    |
+480 |         match Erc1363Interface::new(token).transfer_and_call(
+    |                                            ----------------- required by a bound introduced by this call
+481 |             self,
+482 |             to,
+    |             ^^ the trait `stylus_sdk::prelude::NonPayableCallContext` is not implemented for `alloy_primitives::Address`
+    |
+    = help: the trait `stylus_sdk::prelude::NonPayableCallContext` is implemented for `stylus_sdk::prelude::Call<true>`
+note: required by a bound in `Erc1363Interface::transfer_and_call`
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:86:5
+    |
+ 86 | /     stylus_sdk::prelude::sol_interface! {
+ 87 | |         interface Erc1363Interface {
+ 88 | |             function transferAndCall(address to, uint256 value, bytes calldata data) external returns (bool);
+ 89 | |             function transferFromAndCall(address from, address to, uint256 value, bytes calldata data) external returns (bool);
+...   |
+ 92 | |     }
+    | |_____^ required by this bound in `Erc1363Interface::transfer_and_call`
+    = note: this error originates in the macro `stylus_sdk::prelude::sol_interface` (in Nightly builds, run with -Z macro-backtrace for more info)
+=======
+error[E0277]: the trait bound `alloy_primitives::Uint<256, 4>: From<Vec<u8>>` is not satisfied
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:484:27
+    |
+484 |             data.to_vec().into(),
+    |                           ^^^^ the trait `From<Vec<u8>>` is not implemented for `alloy_primitives::Uint<256, 4>`
+    |
+    = help: the following other types implement trait `From<T>`:
+              `alloy_primitives::Uint<256, 4>` implements `From<ParseUnits>`
+              `alloy_primitives::Uint<256, 4>` implements `From<alloy_primitives::FixedBytes<32>>`
+              `alloy_primitives::Uint<256, 4>` implements `From<alloy_sol_types::Panic>`
+    = note: required for `Vec<u8>` to implement `Into<alloy_primitives::Uint<256, 4>>`
+help: consider removing this method call, as the receiver has type `alloy_primitives::Bytes` and `alloy_primitives::Bytes: From<Vec<u8>>` trivially holds
+    |
+484 -             data.to_vec().into(),
+484 +             data.into(),
+    |
+=======
+error[E0061]: this method takes 5 arguments but 4 arguments were supplied
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:480:44
+    |
+480 |           match Erc1363Interface::new(token).transfer_and_call(
+    |  ____________________________________________^^^^^^^^^^^^^^^^^-
+481 | |             self,
+482 | |             to,
+483 | |             value,
+484 | |             data.to_vec().into(),
+485 | |         ) {
+    | |_________- argument #5 of type `alloy_primitives::Bytes` is missing
+    |
+note: expected `Address`, found `Uint<256, 4>`
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:483:13
+    |
+483 |             value,
+    |             ^^^^^
+    = note: expected struct `alloy_primitives::Address`
+               found struct `alloy_primitives::Uint<256, 4>`
+note: method defined here
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:88:22
+    |
+ 86 | /     stylus_sdk::prelude::sol_interface! {
+ 87 | |         interface Erc1363Interface {
+ 88 | |             function transferAndCall(address to, uint256 value, bytes calldata data) external returns (bool);
+    | |                      ^^^^^^^^^^^^^^^
+ 89 | |             function transferFromAndCall(address from, address to, uint256 value, bytes calldata data) external returns (bool);
+...   |
+ 92 | |     }
+    | |_____-
+    | |_____|
+    |
+help: provide the argument
+    |
+480 ~         match Erc1363Interface::new(token).transfer_and_call(
+481 +             self,
+482 +             to,
+483 +             /* alloy_primitives::Address */,
+484 +             data.to_vec().into(),
+485 +             /* alloy_primitives::Bytes */,
+486 ~         ) {
+    |
+=======
+error[E0599]: no method named `has_code` found for struct `alloy_primitives::Address` in the current scope
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:502:16
+    |
+502 |         if !to.has_code() {
+    |                ^^^^^^^^ method not found in `alloy_primitives::Address`
+=======
+error[E0599]: no method named `has_code` found for struct `alloy_primitives::Address` in the current scope
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:506:19
+    |
+506 |         if !token.has_code() {
+    |                   ^^^^^^^^ method not found in `alloy_primitives::Address`
+=======
+error[E0277]: the trait bound `SafeErc20: stylus_sdk::prelude::Host` is not satisfied
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:513:13
+    |
+512 |         match Erc1363Interface::new(token).transfer_from_and_call(
+    |                                            ---------------------- required by a bound introduced by this call
+513 |             self,
+    |             ^^^^ unsatisfied trait bound
+    |
+help: the trait `stylus_sdk::prelude::Host` is not implemented for `SafeErc20`
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:96:1
+    |
+ 96 | #[storage]
+    | ^^^^^^^^^^
+    = help: the following other types implement trait `stylus_sdk::prelude::Host`:
+              VM
+              WasmVM
+note: required by a bound in `Erc1363Interface::transfer_from_and_call`
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:86:5
+    |
+ 86 | /     stylus_sdk::prelude::sol_interface! {
+ 87 | |         interface Erc1363Interface {
+ 88 | |             function transferAndCall(address to, uint256 value, bytes calldata data) external returns (bool);
+ 89 | |             function transferFromAndCall(address from, address to, uint256 value, bytes calldata data) external returns (bool);
+...   |
+ 92 | |     }
+    | |_____^ required by this bound in `Erc1363Interface::transfer_from_and_call`
+    = note: this error originates in the attribute macro `storage` which comes from the expansion of the macro `stylus_sdk::prelude::sol_interface` (in Nightly builds, run with -Z macro-backtrace for more info)
+=======
+error[E0277]: the trait bound `alloy_primitives::Address: stylus_sdk::prelude::NonPayableCallContext` is not satisfied
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:514:13
+    |
+512 |         match Erc1363Interface::new(token).transfer_from_and_call(
+    |                                            ---------------------- required by a bound introduced by this call
+513 |             self,
+514 |             from,
+    |             ^^^^ the trait `stylus_sdk::prelude::NonPayableCallContext` is not implemented for `alloy_primitives::Address`
+    |
+    = help: the trait `stylus_sdk::prelude::NonPayableCallContext` is implemented for `stylus_sdk::prelude::Call<true>`
+note: required by a bound in `Erc1363Interface::transfer_from_and_call`
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:86:5
+    |
+ 86 | /     stylus_sdk::prelude::sol_interface! {
+ 87 | |         interface Erc1363Interface {
+ 88 | |             function transferAndCall(address to, uint256 value, bytes calldata data) external returns (bool);
+ 89 | |             function transferFromAndCall(address from, address to, uint256 value, bytes calldata data) external returns (bool);
+...   |
+ 92 | |     }
+    | |_____^ required by this bound in `Erc1363Interface::transfer_from_and_call`
+    = note: this error originates in the macro `stylus_sdk::prelude::sol_interface` (in Nightly builds, run with -Z macro-backtrace for more info)
+=======
+error[E0277]: the trait bound `alloy_primitives::Uint<256, 4>: From<Vec<u8>>` is not satisfied
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:517:27
+    |
+517 |             data.to_vec().into(),
+    |                           ^^^^ the trait `From<Vec<u8>>` is not implemented for `alloy_primitives::Uint<256, 4>`
+    |
+    = help: the following other types implement trait `From<T>`:
+              `alloy_primitives::Uint<256, 4>` implements `From<ParseUnits>`
+              `alloy_primitives::Uint<256, 4>` implements `From<alloy_primitives::FixedBytes<32>>`
+              `alloy_primitives::Uint<256, 4>` implements `From<alloy_sol_types::Panic>`
+    = note: required for `Vec<u8>` to implement `Into<alloy_primitives::Uint<256, 4>>`
+help: consider removing this method call, as the receiver has type `alloy_primitives::Bytes` and `alloy_primitives::Bytes: From<Vec<u8>>` trivially holds
+    |
+517 -             data.to_vec().into(),
+517 +             data.into(),
+    |
+=======
+error[E0061]: this method takes 6 arguments but 5 arguments were supplied
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:512:44
+    |
+512 |           match Erc1363Interface::new(token).transfer_from_and_call(
+    |  ____________________________________________^^^^^^^^^^^^^^^^^^^^^^-
+513 | |             self,
+514 | |             from,
+515 | |             to,
+516 | |             value,
+517 | |             data.to_vec().into(),
+518 | |         ) {
+    | |_________- argument #6 of type `alloy_primitives::Bytes` is missing
+    |
+note: expected `Address`, found `Uint<256, 4>`
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:516:13
+    |
+516 |             value,
+    |             ^^^^^
+    = note: expected struct `alloy_primitives::Address`
+               found struct `alloy_primitives::Uint<256, 4>`
+note: method defined here
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:89:22
+    |
+ 86 | /     stylus_sdk::prelude::sol_interface! {
+ 87 | |         interface Erc1363Interface {
+ 88 | |             function transferAndCall(address to, uint256 value, bytes calldata data) external returns (bool);
+ 89 | |             function transferFromAndCall(address from, address to, uint256 value, bytes calldata data) external returns (bool);
+    | |                      ^^^^^^^^^^^^^^^^^^^
+...   |
+ 92 | |     }
+    | |_____-
+    | |_____|
+    |
+help: provide the argument
+    |
+512 ~         match Erc1363Interface::new(token).transfer_from_and_call(
+513 +             self,
+514 +             from,
+515 +             to,
+516 +             /* alloy_primitives::Address */,
+517 +             data.to_vec().into(),
+518 +             /* alloy_primitives::Bytes */,
+519 ~         ) {
+    |
+=======
+error[E0599]: no method named `has_code` found for struct `alloy_primitives::Address` in the current scope
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:534:21
+    |
+534 |         if !spender.has_code() {
+    |                     ^^^^^^^^ method not found in `alloy_primitives::Address`
+=======
+error[E0599]: no method named `has_code` found for struct `alloy_primitives::Address` in the current scope
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:538:19
+    |
+538 |         if !token.has_code() {
+    |                   ^^^^^^^^ method not found in `alloy_primitives::Address`
+=======
+error[E0277]: the trait bound `SafeErc20: stylus_sdk::prelude::Host` is not satisfied
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:545:13
+    |
+544 |         match Erc1363Interface::new(token).approve_and_call(
+    |                                            ---------------- required by a bound introduced by this call
+545 |             self,
+    |             ^^^^ unsatisfied trait bound
+    |
+help: the trait `stylus_sdk::prelude::Host` is not implemented for `SafeErc20`
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:96:1
+    |
+ 96 | #[storage]
+    | ^^^^^^^^^^
+    = help: the following other types implement trait `stylus_sdk::prelude::Host`:
+              VM
+              WasmVM
+note: required by a bound in `Erc1363Interface::approve_and_call`
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:86:5
+    |
+ 86 | /     stylus_sdk::prelude::sol_interface! {
+ 87 | |         interface Erc1363Interface {
+ 88 | |             function transferAndCall(address to, uint256 value, bytes calldata data) external returns (bool);
+ 89 | |             function transferFromAndCall(address from, address to, uint256 value, bytes calldata data) external returns (bool);
+...   |
+ 92 | |     }
+    | |_____^ required by this bound in `Erc1363Interface::approve_and_call`
+    = note: this error originates in the attribute macro `storage` which comes from the expansion of the macro `stylus_sdk::prelude::sol_interface` (in Nightly builds, run with -Z macro-backtrace for more info)
+=======
+error[E0277]: the trait bound `alloy_primitives::Address: stylus_sdk::prelude::NonPayableCallContext` is not satisfied
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:546:13
+    |
+544 |         match Erc1363Interface::new(token).approve_and_call(
+    |                                            ---------------- required by a bound introduced by this call
+545 |             self,
+546 |             spender,
+    |             ^^^^^^^ the trait `stylus_sdk::prelude::NonPayableCallContext` is not implemented for `alloy_primitives::Address`
+    |
+    = help: the trait `stylus_sdk::prelude::NonPayableCallContext` is implemented for `stylus_sdk::prelude::Call<true>`
+note: required by a bound in `Erc1363Interface::approve_and_call`
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:86:5
+    |
+ 86 | /     stylus_sdk::prelude::sol_interface! {
+ 87 | |         interface Erc1363Interface {
+ 88 | |             function transferAndCall(address to, uint256 value, bytes calldata data) external returns (bool);
+ 89 | |             function transferFromAndCall(address from, address to, uint256 value, bytes calldata data) external returns (bool);
+...   |
+ 92 | |     }
+    | |_____^ required by this bound in `Erc1363Interface::approve_and_call`
+    = note: this error originates in the macro `stylus_sdk::prelude::sol_interface` (in Nightly builds, run with -Z macro-backtrace for more info)
+=======
+error[E0277]: the trait bound `alloy_primitives::Uint<256, 4>: From<Vec<u8>>` is not satisfied
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:548:27
+    |
+548 |             data.to_vec().into(),
+    |                           ^^^^ the trait `From<Vec<u8>>` is not implemented for `alloy_primitives::Uint<256, 4>`
+    |
+    = help: the following other types implement trait `From<T>`:
+              `alloy_primitives::Uint<256, 4>` implements `From<ParseUnits>`
+              `alloy_primitives::Uint<256, 4>` implements `From<alloy_primitives::FixedBytes<32>>`
+              `alloy_primitives::Uint<256, 4>` implements `From<alloy_sol_types::Panic>`
+    = note: required for `Vec<u8>` to implement `Into<alloy_primitives::Uint<256, 4>>`
+help: consider removing this method call, as the receiver has type `alloy_primitives::Bytes` and `alloy_primitives::Bytes: From<Vec<u8>>` trivially holds
+    |
+548 -             data.to_vec().into(),
+548 +             data.into(),
+    |
+=======
+error[E0061]: this method takes 5 arguments but 4 arguments were supplied
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:544:44
+    |
+544 |           match Erc1363Interface::new(token).approve_and_call(
+    |  ____________________________________________^^^^^^^^^^^^^^^^-
+545 | |             self,
+546 | |             spender,
+547 | |             value,
+548 | |             data.to_vec().into(),
+549 | |         ) {
+    | |_________- argument #5 of type `alloy_primitives::Bytes` is missing
+    |
+note: expected `Address`, found `Uint<256, 4>`
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:547:13
+    |
+547 |             value,
+    |             ^^^^^
+    = note: expected struct `alloy_primitives::Address`
+               found struct `alloy_primitives::Uint<256, 4>`
+note: method defined here
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:90:22
+    |
+ 86 | /     stylus_sdk::prelude::sol_interface! {
+ 87 | |         interface Erc1363Interface {
+ 88 | |             function transferAndCall(address to, uint256 value, bytes calldata data) external returns (bool);
+ 89 | |             function transferFromAndCall(address from, address to, uint256 value, bytes calldata data) external returns (bool);
+ 90 | |             function approveAndCall(address spender, uint256 value, bytes calldata data) external returns (bool);
+    | |                      ^^^^^^^^^^^^^^
+ 91 | |         }
+ 92 | |     }
+    | |_____-
+    | |_____|
+    |
+help: provide the argument
+    |
+544 ~         match Erc1363Interface::new(token).approve_and_call(
+545 +             self,
+546 +             spender,
+547 +             /* alloy_primitives::Address */,
+548 +             data.to_vec().into(),
+549 +             /* alloy_primitives::Bytes */,
+550 ~         ) {
+    |
+=======
+error[E0599]: no method named `has_code` found for struct `alloy_primitives::Address` in the current scope
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:578:19
+    |
+578 |         if !token.has_code() {
+    |                   ^^^^^^^^ method not found in `alloy_primitives::Address`
+=======
+error[E0061]: this function takes 1 argument but 0 arguments were supplied
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:585:13
+    |
+585 |             RawCall::new()
+    |             ^^^^^^^^^^^^-- argument #1 of type `&_` is missing
+    |
+note: associated function defined here
+   --> /Users/pepe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stylus-sdk-0.10.10/src/call/raw.rs:68:12
+    |
+ 68 |     pub fn new(host: &'a H) -> Self {
+    |            ^^^
+help: provide the argument
+    |
+585 |             RawCall::new(/* host */)
+    |                          ++++++++++
+=======
+error[E0061]: this function takes 1 argument but 2 arguments were supplied
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:594:24
+    |
+594 |                     || Bool::abi_decode(&data, true)
+    |                        ^^^^^^^^^^^^^^^^        ---- unexpected argument #2 of type `bool`
+    |
+note: associated function defined here
+   --> /Users/pepe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/alloy-sol-types-1.5.7/src/types/ty.rs:240:8
+    |
+240 |     fn abi_decode(data: &[u8]) -> Result<Self::RustType> {
+    |        ^^^^^^^^^^
+help: remove the extra argument
+    |
+594 -                     || Bool::abi_decode(&data, true)
+594 +                     || Bool::abi_decode(&data)
+    |
+=======
+error[E0599]: no function or associated item named `has_code` found for struct `alloy_primitives::Address` in the current scope
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:620:22
+    |
+620 |         if !Address::has_code(&token) {
+    |                      ^^^^^^^^ function or associated item not found in `alloy_primitives::Address`
+    |
+note: if you're trying to build a new `alloy_primitives::Address` consider using one of the following associated functions:
+      alloy_primitives::Address::new
+      alloy_primitives::Address::with_last_byte
+      alloy_primitives::Address::repeat_byte
+      alloy_primitives::Address::from_slice
+      and 5 others
+   --> /Users/pepe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/alloy-primitives-1.5.7/src/bits/address.rs:45:1
+    |
+ 45 | / wrap_fixed_bytes!(
+ 46 | |     // we implement Display with the checksum, so we don't derive it
+ 47 | |     extra_derives: [],
+ 48 | |     /// An Ethereum address, 20 bytes in length.
+...   |
+ 88 | |     pub struct Address<20>;
+ 89 | | );
+    | |_^
+    = note: this error originates in the macro `wrap_fixed_bytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+=======
+error[E0277]: the trait bound `SafeErc20: stylus_sdk::prelude::Host` is not satisfied
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:625:25
+    |
+625 |         erc20.allowance(self, self.vm().contract_address(), spender).map_err(|_e| {
+    |               --------- ^^^^ unsatisfied trait bound
+    |               |
+    |               required by a bound introduced by this call
+    |
+help: the trait `stylus_sdk::prelude::Host` is not implemented for `SafeErc20`
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:96:1
+    |
+ 96 | #[storage]
+    | ^^^^^^^^^^
+    = help: the following other types implement trait `stylus_sdk::prelude::Host`:
+              VM
+              WasmVM
+note: required by a bound in `erc20::interface::token::Erc20Interface::allowance`
+   --> contracts/src/token/erc20/interface.rs:11:5
+    |
+ 11 | /     sol_interface! {
+ 12 | |         interface Erc20Interface {
+ 13 | |             function totalSupply() external view returns (uint256);
+ 14 | |             function balanceOf(address account) external view returns (uint256);
+...   |
+ 20 | |     }
+    | |_____^ required by this bound in `Erc20Interface::allowance`
+    = note: this error originates in the attribute macro `storage` which comes from the expansion of the macro `sol_interface` (in Nightly builds, run with -Z macro-backtrace for more info)
+=======
+error[E0277]: the trait bound `alloy_primitives::Address: stylus_sdk::prelude::StaticCallContext` is not satisfied
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:625:31
+    |
+625 |         erc20.allowance(self, self.vm().contract_address(), spender).map_err(|_e| {
+    |               ---------       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `stylus_sdk::prelude::StaticCallContext` is not implemented for `alloy_primitives::Address`
+    |               |
+    |               required by a bound introduced by this call
+    |
+    = help: the trait `stylus_sdk::prelude::StaticCallContext` is implemented for `stylus_sdk::prelude::Call`
+note: required by a bound in `erc20::interface::token::Erc20Interface::allowance`
+   --> contracts/src/token/erc20/interface.rs:11:5
+    |
+ 11 | /     sol_interface! {
+ 12 | |         interface Erc20Interface {
+ 13 | |             function totalSupply() external view returns (uint256);
+ 14 | |             function balanceOf(address account) external view returns (uint256);
+...   |
+ 20 | |     }
+    | |_____^ required by this bound in `Erc20Interface::allowance`
+    = note: this error originates in the macro `sol_interface` (in Nightly builds, run with -Z macro-backtrace for more info)
+=======
+error[E0061]: this method takes 4 arguments but 3 arguments were supplied
+   --> contracts/src/token/erc20/utils/safe_erc20.rs:625:15
+    |
+625 |         erc20.allowance(self, self.vm().contract_address(), spender).map_err(|_e| {
+    |               ^^^^^^^^^--------------------------------------------- argument #4 of type `alloy_primitives::Address` is missing
+    |
+note: method defined here
+   --> contracts/src/token/erc20/interface.rs:16:22
+    |
+ 11 | /     sol_interface! {
+ 12 | |         interface Erc20Interface {
+ 13 | |             function totalSupply() external view returns (uint256);
+ 14 | |             function balanceOf(address account) external view returns (uint256);
+ 15 | |             function transfer(address to, uint256 value) external returns (bool);
+ 16 | |             function allowance(address owner, address spender) external view returns (uint256);
+    | |                      ^^^^^^^^^
+...   |
+ 20 | |     }
+    | |_____-
+help: provide the argument
+    |
+625 |         erc20.allowance(self, self.vm().contract_address(), spender, /* alloy_primitives::Address */).map_err(|_e| {
+    |                                                                    +++++++++++++++++++++++++++++++++
+=======

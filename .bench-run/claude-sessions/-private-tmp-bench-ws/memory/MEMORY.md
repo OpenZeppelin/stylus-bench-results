@@ -1,0 +1,2 @@
+- [Migration state](project-migration-state.md) — commits, worktrees, agent ownership, next steps for the SDK 0.10.10 migration
+- [Working style](feedback-working-style.md) — autonomy, commit trailer, DX > gas > size priority, evidence-only rule

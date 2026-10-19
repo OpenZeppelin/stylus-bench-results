@@ -1,0 +1,1143 @@
+commit 7e3623329fbb2aad5a14786590155400f8168dfc
+Author: bench-agent <bench-agent@localhost>
+Date:   Mon Oct 19 07:59:17 2026 +0200
+
+    build: move to Stylus SDK 0.10.10 on Rust 1.91.0
+    
+    Bump the toolchain to 1.91.0 and the Stylus SDK to 0.10.10 with the matching
+    alloy-primitives/alloy-sol-types 1.5.7 and alloy 1.7.3. Drop motsu, which
+    conflicts with alloy 1.x over the ckzg native library. Replace the
+    SDK 0.9 global accessors, call paths and public trait markers in the core
+    utilities and proxy helpers. The contracts crate does not compile yet; the
+    remaining modules are migrated in follow-up commits.
+    
+    Co-Authored-By: Claude Haiku 5.5 <noreply@anthropic.com>
+
+diff --git a/contracts/src/token/common/erc2981.rs b/contracts/src/token/common/erc2981.rs
+index 1834755..d92f03c 100644
+--- a/contracts/src/token/common/erc2981.rs
++++ b/contracts/src/token/common/erc2981.rs
+@@ -21,20 +21,14 @@ use alloc::{vec, vec::Vec};
+ 
+ use alloy_primitives::{
+     aliases::{B32, U96},
+-    Address, U256,
+-};
++    Address, U256};
+ use openzeppelin_stylus_proc::interface_id;
+ pub use sol::*;
+-use stylus_sdk::{
+-    call::MethodError,
+-    prelude::*,
+-    storage::{StorageAddress, StorageMap},
+-};
++use stylus_sdk::{stylus_core::calls::errors::MethodError, prelude::*, storage::{StorageAddress, StorageMap}};
+ 
+ use crate::utils::{
+     introspection::erc165::IErc165,
+-    structs::checkpoints::{Size, S160},
+-};
++    structs::checkpoints::{Size, S160}};
+ 
+ type StorageU96 = <S160 as Size>::KeyStorage;
+ 
+@@ -95,8 +89,7 @@ pub enum Error {
+     InvalidTokenRoyalty(ERC2981InvalidTokenRoyalty),
+ 
+     /// Indicates that the royalty receiver for `token_id` is invalid.
+-    InvalidTokenRoyaltyReceiver(ERC2981InvalidTokenRoyaltyReceiver),
+-}
++    InvalidTokenRoyaltyReceiver(ERC2981InvalidTokenRoyaltyReceiver)}
+ 
+ impl MethodError for Error {
+     fn encode(self) -> alloc::vec::Vec<u8> {
+@@ -111,8 +104,7 @@ pub struct RoyaltyInfo {
+     /// The receiver address for royalty.
+     receiver: StorageAddress,
+     /// Fraction of royalty for receiver.
+-    royalty_fraction: StorageU96,
+-}
++    royalty_fraction: StorageU96}
+ 
+ /// State of an [`Erc2981`] contract.
+ #[storage]
+@@ -123,8 +115,7 @@ pub struct Erc2981 {
+     pub(crate) token_royalty_info: StorageMap<U256, RoyaltyInfo>,
+     /// The fee denominator for royalty fraction.
+     /// Should be set in the constructor.
+-    pub fee_denominator: StorageU96,
+-}
++    pub fee_denominator: StorageU96}
+ 
+ /// Interface for the NFT Royalty Standard.
+ ///
+@@ -132,6 +123,7 @@ pub struct Erc2981 {
+ /// tokens (NFTs) to enable universal support for royalty payments across all
+ /// NFT marketplaces and ecosystem participants.
+ #[interface_id]
++#[public]
+ pub trait IErc2981: IErc165 {
+     /// Returns how much royalty is owed and to whom, based on a sale price that
+     /// may be denominated in any unit of exchange.
+@@ -246,8 +238,7 @@ impl Erc2981 {
+             return Err(Error::InvalidDefaultRoyalty(
+                 ERC2981InvalidDefaultRoyalty {
+                     numerator: U256::from(fee_numerator),
+-                    denominator: U256::from(denominator),
+-                },
++                    denominator: U256::from(denominator)},
+             ));
+         }
+ 
+@@ -300,8 +291,7 @@ impl Erc2981 {
+                 ERC2981InvalidTokenRoyalty {
+                     token_id,
+                     numerator: U256::from(fee_numerator),
+-                    denominator: U256::from(denominator),
+-                },
++                    denominator: U256::from(denominator)},
+             ));
+         }
+ 
+diff --git a/contracts/src/token/erc20/extensions/burnable.rs b/contracts/src/token/erc20/extensions/burnable.rs
+index ad08d49..ab4ebe9 100644
+--- a/contracts/src/token/erc20/extensions/burnable.rs
++++ b/contracts/src/token/erc20/extensions/burnable.rs
+@@ -1,13 +1,14 @@
+ //! Optional Burnable extension of the ERC-20 standard.
+ 
+ use alloy_primitives::{Address, U256};
+-use stylus_sdk::msg;
++use stylus_sdk::prelude::public;
+ 
+ use crate::token::erc20::{self, Erc20};
+ 
+ /// Extension of [`Erc20`] that allows token holders to destroy both
+ /// their own tokens and those that they have an allowance for,
+ /// in a way that can be recognized off-chain (via event analysis).
++#[public]
+ pub trait IErc20Burnable {
+     /// The error type associated to this ERC-20 Burnable trait implementation.
+     type Error: Into<alloc::vec::Vec<u8>>;
+@@ -58,11 +59,12 @@ pub trait IErc20Burnable {
+     ) -> Result<(), Self::Error>;
+ }
+ 
++#[public]
+ impl IErc20Burnable for Erc20 {
+     type Error = erc20::Error;
+ 
+     fn burn(&mut self, value: U256) -> Result<(), Self::Error> {
+-        self._burn(msg::sender(), value)
++        self._burn(self.vm().msg_sender(), value)
+     }
+ 
+     fn burn_from(
+@@ -70,7 +72,7 @@ impl IErc20Burnable for Erc20 {
+         account: Address,
+         value: U256,
+     ) -> Result<(), Self::Error> {
+-        self._spend_allowance(account, msg::sender(), value)?;
++        self._spend_allowance(account, self.vm().msg_sender(), value)?;
+         self._burn(account, value)
+     }
+ }
+diff --git a/contracts/src/token/erc20/extensions/capped.rs b/contracts/src/token/erc20/extensions/capped.rs
+index a09315b..320ea04 100644
+--- a/contracts/src/token/erc20/extensions/capped.rs
++++ b/contracts/src/token/erc20/extensions/capped.rs
+@@ -10,7 +10,7 @@ use alloc::{vec, vec::Vec};
+ use alloy_primitives::U256;
+ use openzeppelin_stylus_proc::interface_id;
+ pub use sol::*;
+-use stylus_sdk::{call::MethodError, prelude::*, storage::StorageU256};
++use stylus_sdk::{stylus_core::calls::errors::MethodError, prelude::*, storage::StorageU256};
+ 
+ #[cfg_attr(coverage_nightly, coverage(off))]
+ mod sol {
+@@ -39,8 +39,7 @@ pub enum Error {
+     ExceededCap(ERC20ExceededCap),
+     /// Indicates an error related to the operation that failed
+     /// because the supplied `cap` is not a valid cap value.
+-    InvalidCap(ERC20InvalidCap),
+-}
++    InvalidCap(ERC20InvalidCap)}
+ 
+ impl MethodError for Error {
+     fn encode(self) -> alloc::vec::Vec<u8> {
+@@ -52,11 +51,11 @@ impl MethodError for Error {
+ #[storage]
+ pub struct Capped {
+     /// A cap to the supply of tokens.
+-    pub(crate) cap: StorageU256,
+-}
++    pub(crate) cap: StorageU256}
+ 
+ /// Interface for the token supply cap logic.
+ #[interface_id]
++#[public]
+ pub trait ICapped {
+     /// Returns the cap on the token's total supply.
+     #[must_use]
+diff --git a/contracts/src/token/erc20/extensions/erc4626.rs b/contracts/src/token/erc20/extensions/erc4626.rs
+index 707e382..21f8f25 100644
+--- a/contracts/src/token/erc20/extensions/erc4626.rs
++++ b/contracts/src/token/erc20/extensions/erc4626.rs
+@@ -8,16 +8,12 @@
+ //! "assets" token which is an independent contract.
+ 
+ use alloc::{vec, vec::Vec};
++use stylus_sdk::stylus_core::calls::errors::MethodError;
+ 
+ use alloy_primitives::{uint, Address, U256, U8};
+ use openzeppelin_stylus_proc::interface_id;
+ pub use sol::*;
+-use stylus_sdk::{
+-    call::{Call, MethodError},
+-    contract, evm, msg,
+-    prelude::*,
+-    storage::{StorageAddress, StorageU8},
+-};
++use stylus_sdk::{ prelude::*, storage::{StorageAddress, StorageU8}};
+ 
+ use super::IErc20Metadata;
+ use crate::{
+@@ -25,10 +21,8 @@ use crate::{
+         self,
+         interface::{Erc20Interface, IErc20MetadataInterface},
+         utils::{safe_erc20, ISafeErc20, SafeErc20},
+-        Erc20, IErc20,
+-    },
+-    utils::math::alloy::{Math, Rounding},
+-};
++        Erc20, IErc20},
++    utils::math::alloy::{Math, Rounding}};
+ 
+ const ONE: U256 = uint!(1_U256);
+ const TEN: U256 = uint!(10_U256);
+@@ -143,8 +137,7 @@ pub enum Error {
+     InvalidSpender(erc20::ERC20InvalidSpender),
+     /// Indicates a failure with the `approver` of a token to be approved. Used
+     /// in approvals. approver Address initiating an approval operation.
+-    InvalidApprover(erc20::ERC20InvalidApprover),
+-}
++    InvalidApprover(erc20::ERC20InvalidApprover)}
+ 
+ impl From<safe_erc20::Error> for Error {
+     fn from(value: safe_erc20::Error) -> Self {
+@@ -171,8 +164,7 @@ impl From<erc20::Error> for Error {
+                 Error::InsufficientAllowance(e)
+             }
+             erc20::Error::InvalidSpender(e) => Error::InvalidSpender(e),
+-            erc20::Error::InvalidApprover(e) => Error::InvalidApprover(e),
+-        }
++            erc20::Error::InvalidApprover(e) => Error::InvalidApprover(e)}
+     }
+ }
+ 
+@@ -192,8 +184,7 @@ pub struct Erc4626 {
+     /// Decimals offset.
+     pub(crate) decimals_offset: StorageU8,
+     /// [`SafeErc20`] contract.
+-    safe_erc20: SafeErc20,
+-}
++    safe_erc20: SafeErc20}
+ 
+ /// NOTE: Implementation of [`TopLevelStorage`] to be able use `&mut self` when
+ /// calling other contracts and not `&mut (impl TopLevelStorage +
+@@ -202,6 +193,7 @@ unsafe impl TopLevelStorage for Erc4626 {}
+ 
+ /// ERC-4626 Tokenized Vault Standard Interface
+ #[interface_id]
++#[public]
+ pub trait IErc4626: IErc20Metadata {
+     /// The error type associated to the trait implementation.
+     type Error: Into<alloc::vec::Vec<u8>>;
+@@ -658,7 +650,7 @@ impl Erc4626 {
+         let asset = self.asset();
+         let erc20 = Erc20Interface::new(asset);
+         erc20
+-            .balance_of(self, contract::address())
++            .balance_of(self, self.vm().contract_address())
+             .map_err(|_| InvalidAsset { asset }.into())
+     }
+ 
+@@ -765,13 +757,12 @@ impl Erc4626 {
+             return Err(Error::ExceededMaxDeposit(ERC4626ExceededMaxDeposit {
+                 receiver,
+                 assets,
+-                max: max_assets,
+-            }));
++                max: max_assets}));
+         }
+ 
+         let shares = self.preview_deposit(assets, erc20)?;
+ 
+-        self._deposit(msg::sender(), receiver, assets, shares, erc20)?;
++        self._deposit(self.vm().msg_sender(), receiver, assets, shares, erc20)?;
+ 
+         Ok(shares)
+     }
+@@ -790,12 +781,11 @@ impl Erc4626 {
+             return Err(Error::ExceededMaxMint(ERC4626ExceededMaxMint {
+                 receiver,
+                 shares,
+-                max: max_shares,
+-            }));
++                max: max_shares}));
+         }
+ 
+         let assets = self.preview_mint(shares, erc20)?;
+-        self._deposit(msg::sender(), receiver, assets, shares, erc20)?;
++        self._deposit(self.vm().msg_sender(), receiver, assets, shares, erc20)?;
+ 
+         Ok(assets)
+     }
+@@ -818,7 +808,7 @@ impl Erc4626 {
+         }
+ 
+         let shares = self.preview_withdraw(assets, erc20)?;
+-        self._withdraw(msg::sender(), receiver, owner, assets, shares, erc20)?;
++        self._withdraw(self.vm().msg_sender(), receiver, owner, assets, shares, erc20)?;
+ 
+         Ok(shares)
+     }
+@@ -837,13 +827,12 @@ impl Erc4626 {
+             return Err(Error::ExceededMaxRedeem(ERC4626ExceededMaxRedeem {
+                 owner,
+                 shares,
+-                max: max_shares,
+-            }));
++                max: max_shares}));
+         }
+ 
+         let assets = self.preview_redeem(shares, erc20)?;
+ 
+-        self._withdraw(msg::sender(), receiver, owner, assets, shares, erc20)?;
++        self._withdraw(self.vm().msg_sender(), receiver, owner, assets, shares, erc20)?;
+ 
+         Ok(assets)
+     }
+@@ -1032,13 +1021,13 @@ impl Erc4626 {
+         self.safe_erc20.safe_transfer_from(
+             self.asset(),
+             caller,
+-            contract::address(),
++            self.vm().contract_address(),
+             assets,
+         )?;
+ 
+         erc20._mint(receiver, shares)?;
+ 
+-        evm::log(Deposit { sender: caller, owner: receiver, assets, shares });
++        self.vm().log(Deposit { sender: caller, owner: receiver, assets, shares });
+ 
+         Ok(())
+     }
+@@ -1090,7 +1079,7 @@ impl Erc4626 {
+ 
+         self.safe_erc20.safe_transfer(self.asset(), receiver, assets)?;
+ 
+-        evm::log(Withdraw { sender: caller, receiver, owner, assets, shares });
++        self.vm().log(Withdraw { sender: caller, receiver, owner, assets, shares });
+ 
+         Ok(())
+     }
+@@ -1135,17 +1124,14 @@ mod tests {
+     use crate::{
+         token::erc20::{
+             extensions::{Erc20Metadata, IErc20Metadata},
+-            Erc20,
+-        },
+-        utils::introspection::erc165::IErc165,
+-    };
++            Erc20},
++        utils::introspection::erc165::IErc165};
+ 
+     #[storage]
+     struct Erc4626TestExample {
+         erc4626: Erc4626,
+         erc20: Erc20,
+-        metadata: Erc20Metadata,
+-    }
++        metadata: Erc20Metadata}
+ 
+     #[public]
+     #[implements(IErc4626<Error = Error>, IErc20Metadata, IErc165)]
+diff --git a/contracts/src/token/erc20/extensions/flash_mint.rs b/contracts/src/token/erc20/extensions/flash_mint.rs
+index f178937..0a4412f 100644
+--- a/contracts/src/token/erc20/extensions/flash_mint.rs
++++ b/contracts/src/token/erc20/extensions/flash_mint.rs
+@@ -18,16 +18,11 @@
+ // ERC20Capped.
+ 
+ use alloc::{vec, vec::Vec};
++use stylus_sdk::stylus_core::calls::errors::MethodError;
+ 
+ use alloy_primitives::{Address, U256};
+ use openzeppelin_stylus_proc::interface_id;
+-use stylus_sdk::{
+-    abi::Bytes,
+-    call::{Call, MethodError},
+-    contract, msg,
+-    prelude::*,
+-    storage::{StorageAddress, StorageU256},
+-};
++use stylus_sdk::{abi::Bytes, prelude::*, storage::{StorageAddress, StorageU256}};
+ 
+ use crate::token::erc20::{self, Erc20, IErc20};
+ 
+@@ -90,8 +85,7 @@ pub enum Error {
+     InvalidSpender(erc20::ERC20InvalidSpender),
+     /// Indicates a failure with the `approver` of a token to be approved. Used
+     /// in approvals. approver Address initiating an approval operation.
+-    InvalidApprover(erc20::ERC20InvalidApprover),
+-}
++    InvalidApprover(erc20::ERC20InvalidApprover)}
+ 
+ impl From<erc20::Error> for Error {
+     fn from(value: erc20::Error) -> Self {
+@@ -105,8 +99,7 @@ impl From<erc20::Error> for Error {
+                 Error::InsufficientAllowance(e)
+             }
+             erc20::Error::InvalidSpender(e) => Error::InvalidSpender(e),
+-            erc20::Error::InvalidApprover(e) => Error::InvalidApprover(e),
+-        }
++            erc20::Error::InvalidApprover(e) => Error::InvalidApprover(e)}
+     }
+ }
+ 
+@@ -163,8 +156,7 @@ pub struct Erc20FlashMint {
+     // TODO: Remove this field once function overriding is possible. For now we
+     // keep this field `pub`, since this is used to simulate overriding.
+     /// Receiver address of the flash fee.
+-    pub flash_fee_receiver_address: StorageAddress,
+-}
++    pub flash_fee_receiver_address: StorageAddress}
+ 
+ /// NOTE: Implementation of [`TopLevelStorage`] to be able use `&mut self` when
+ /// calling other contracts and not `&mut (impl TopLevelStorage +
+@@ -175,6 +167,7 @@ unsafe impl TopLevelStorage for Erc20FlashMint {}
+ ///
+ /// [ERC-3156]: https://eips.ethereum.org/EIPS/eip-3156
+ #[interface_id]
++#[public]
+ pub trait IErc3156FlashLender {
+     /// The error type associated to this trait implementation.
+     type Error: Into<alloc::vec::Vec<u8>>;
+@@ -232,7 +225,7 @@ pub trait IErc3156FlashLender {
+     /// * `&mut self` - Write access to the contract's state.
+     /// * `receiver` - The receiver of the flash loan. Should implement the
+     ///   [`IERC3156FlashBorrower::on_flash_loan`] interface.
+-    /// * `token` - The token to be flash loaned. Only [`contract::address()`]
++    /// * `token` - The token to be flash loaned. Only [`self.vm().contract_address()`]
+     ///   is supported.
+     /// * `value` - The amount of tokens to be loaned.
+     /// * `data` - Arbitrary data that is passed to the receiver.
+@@ -269,7 +262,7 @@ impl Erc20FlashMint {
+     /// See [`IErc3156FlashLender::max_flash_loan`].
+     #[must_use]
+     pub fn max_flash_loan(&self, token: Address, erc20: &erc20::Erc20) -> U256 {
+-        if token == contract::address() {
++        if token == self.vm().contract_address() {
+             U256::MAX - erc20.total_supply()
+         } else {
+             U256::MIN
+@@ -283,7 +276,7 @@ impl Erc20FlashMint {
+         token: Address,
+         _value: U256,
+     ) -> Result<U256, Error> {
+-        if token == contract::address() {
++        if token == self.vm().contract_address() {
+             Ok(self.flash_fee_value.get())
+         } else {
+             Err(Error::UnsupportedToken(ERC3156UnsupportedToken { token }))
+@@ -306,8 +299,7 @@ impl Erc20FlashMint {
+         let max_loan = self.max_flash_loan(token, erc20);
+         if value > max_loan {
+             return Err(Error::ExceededMaxLoan(ERC3156ExceededMaxLoan {
+-                max_loan,
+-            }));
++                max_loan}));
+         }
+ 
+         let fee = self.flash_fee(token, value)?;
+@@ -321,7 +313,7 @@ impl Erc20FlashMint {
+         let loan_return = loan_receiver
+             .on_flash_loan(
+                 Call::new_in(self),
+-                msg::sender(),
++                self.vm().msg_sender(),
+                 token,
+                 value,
+                 fee,
+@@ -329,8 +321,7 @@ impl Erc20FlashMint {
+             )
+             .map_err(|_| {
+                 Error::ERC3156InvalidReceiver(ERC3156InvalidReceiver {
+-                    receiver,
+-                })
++                    receiver})
+             })?;
+         if loan_return != BORROWER_CALLBACK_VALUE {
+             return Err(Error::ERC3156InvalidReceiver(
+@@ -341,7 +332,7 @@ impl Erc20FlashMint {
+         let allowance = value
+             .checked_add(fee)
+             .expect("allowance should not exceed `U256::MAX`");
+-        erc20._spend_allowance(receiver, contract::address(), allowance)?;
++        erc20._spend_allowance(receiver, self.vm().contract_address(), allowance)?;
+ 
+         let flash_fee_receiver = self.flash_fee_receiver_address.get();
+ 
+@@ -368,19 +359,14 @@ impl Erc20FlashMint {
+ #[cfg(test)]
+ mod tests {
+     use motsu::prelude::*;
+-    use stylus_sdk::{
+-        abi::Bytes,
+-        alloy_primitives::{aliases::B32, uint, Address, U256},
+-        prelude::*,
+-    };
++    use stylus_sdk::{abi::Bytes, alloy_primitives::{aliases::B32, uint, Address, U256}, prelude::*};
+ 
+     use super::*;
+ 
+     #[storage]
+     struct Erc20FlashMintTestExample {
+         erc20_flash_mint: Erc20FlashMint,
+-        erc20: Erc20,
+-    }
++        erc20: Erc20}
+ 
+     #[public]
+     #[implements(IErc3156FlashLender<Error = Error>)]
+diff --git a/contracts/src/token/erc20/extensions/metadata.rs b/contracts/src/token/erc20/extensions/metadata.rs
+index 0dec655..1f73108 100644
+--- a/contracts/src/token/erc20/extensions/metadata.rs
++++ b/contracts/src/token/erc20/extensions/metadata.rs
+@@ -15,11 +15,11 @@ pub const DEFAULT_DECIMALS: U8 = uint!(18_U8);
+ #[storage]
+ pub struct Erc20Metadata {
+     /// [`Metadata`] contract.
+-    pub(crate) metadata: Metadata,
+-}
++    pub(crate) metadata: Metadata}
+ 
+ /// Interface for the optional metadata functions from the ERC-20 standard.
+ #[interface_id]
++#[public]
+ pub trait IErc20Metadata: IErc165 {
+     /// Returns the name of the token.
+     ///
+diff --git a/contracts/src/token/erc20/extensions/permit.rs b/contracts/src/token/erc20/extensions/permit.rs
+index d3df6ab..e6021a8 100644
+--- a/contracts/src/token/erc20/extensions/permit.rs
++++ b/contracts/src/token/erc20/extensions/permit.rs
+@@ -16,7 +16,7 @@ use alloc::{vec, vec::Vec};
+ 
+ use alloy_primitives::{aliases::B32, keccak256, Address, B256, U256, U8};
+ use alloy_sol_types::SolType;
+-use stylus_sdk::{block, call::MethodError, function_selector, prelude::*};
++use stylus_sdk::{stylus_core::calls::errors::MethodError, function_selector, prelude::*};
+ 
+ use crate::{
+     token::erc20::{self, Erc20},
+@@ -25,12 +25,8 @@ use crate::{
+         nonces::{INonces, Nonces},
+         precompiles::{
+             primitives::ecrecover::{
+-                self, ECDSAInvalidSignature, ECDSAInvalidSignatureS,
+-            },
+-            Precompiles,
+-        },
+-    },
+-};
++                self, ECDSAInvalidSignature, ECDSAInvalidSignatureS},
++            Precompiles}}};
+ 
+ const PERMIT_TYPEHASH: [u8; 32] =
+     keccak_const::Keccak256::new()
+@@ -87,8 +83,7 @@ pub enum Error {
+     /// The signature derives the [`Address::ZERO`].
+     InvalidSignature(ECDSAInvalidSignature),
+     /// The signature has an `S` value that is in the upper half order.
+-    InvalidSignatureS(ECDSAInvalidSignatureS),
+-}
++    InvalidSignatureS(ECDSAInvalidSignatureS)}
+ 
+ impl From<erc20::Error> for Error {
+     fn from(value: erc20::Error) -> Self {
+@@ -102,8 +97,7 @@ impl From<erc20::Error> for Error {
+                 Error::InsufficientAllowance(e)
+             }
+             erc20::Error::InvalidSpender(e) => Error::InvalidSpender(e),
+-            erc20::Error::InvalidApprover(e) => Error::InvalidApprover(e),
+-        }
++            erc20::Error::InvalidApprover(e) => Error::InvalidApprover(e)}
+     }
+ }
+ 
+@@ -128,8 +122,7 @@ impl MethodError for Error {
+ #[storage]
+ pub struct Erc20Permit<T: IEip712 + StorageType> {
+     /// Contract implementing [`IEip712`] trait.
+-    pub(crate) eip712: T,
+-}
++    pub(crate) eip712: T}
+ 
+ /// NOTE: Implementation of [`TopLevelStorage`] to be able use `&mut self` when
+ /// calling other contracts and not `&mut (impl TopLevelStorage +
+@@ -137,6 +130,7 @@ pub struct Erc20Permit<T: IEip712 + StorageType> {
+ unsafe impl<T: IEip712 + StorageType> TopLevelStorage for Erc20Permit<T> {}
+ 
+ /// Interface for [`Erc20Permit`]
++#[public]
+ pub trait IErc20Permit: INonces {
+     /// The error type associated to this interface.
+     type Error: Into<alloc::vec::Vec<u8>>;
+@@ -233,7 +227,7 @@ impl<T: IEip712 + StorageType> Erc20Permit<T> {
+         erc20: &mut Erc20,
+         nonces: &mut Nonces,
+     ) -> Result<(), Error> {
+-        if U256::from(block::timestamp()) > deadline {
++        if U256::from(self.vm().block_timestamp()) > deadline {
+             return Err(ERC2612ExpiredSignature { deadline }.into());
+         }
+ 
+diff --git a/contracts/src/token/erc20/extensions/wrapper.rs b/contracts/src/token/erc20/extensions/wrapper.rs
+index 398e577..e272e2a 100644
+--- a/contracts/src/token/erc20/extensions/wrapper.rs
++++ b/contracts/src/token/erc20/extensions/wrapper.rs
+@@ -12,23 +12,18 @@
+ //! See [`Erc20Wrapper::_recover`] for recovering value accrued to the wrapper.
+ 
+ use alloc::{vec, vec::Vec};
++use stylus_sdk::stylus_core::calls::errors::MethodError;
+ 
+ use alloy_primitives::{Address, U256, U8};
+ use openzeppelin_stylus_proc::interface_id;
+ pub use sol::*;
+-use stylus_sdk::{
+-    call::{Call, MethodError},
+-    contract, msg,
+-    prelude::*,
+-    storage::StorageAddress,
+-};
++use stylus_sdk::{ prelude::*, storage::StorageAddress};
+ 
+ use crate::token::erc20::{
+     self,
+     interface::{Erc20Interface, IErc20MetadataInterface},
+     utils::{safe_erc20, ISafeErc20, SafeErc20},
+-    Erc20, IErc20,
+-};
++    Erc20, IErc20};
+ 
+ /// Default number of decimals for an [ERC-20] token.
+ ///
+@@ -75,8 +70,7 @@ pub enum Error {
+         safe_erc20::SafeErc20FailedDecreaseAllowance,
+     ),
+     /// The underlying token couldn't be wrapped.
+-    InvalidUnderlying(ERC20InvalidUnderlying),
+-}
++    InvalidUnderlying(ERC20InvalidUnderlying)}
+ 
+ impl From<erc20::Error> for Error {
+     fn from(value: erc20::Error) -> Self {
+@@ -90,8 +84,7 @@ impl From<erc20::Error> for Error {
+                 Error::InsufficientAllowance(e)
+             }
+             erc20::Error::InvalidSpender(e) => Error::InvalidSpender(e),
+-            erc20::Error::InvalidApprover(e) => Error::InvalidApprover(e),
+-        }
++            erc20::Error::InvalidApprover(e) => Error::InvalidApprover(e)}
+     }
+ }
+ 
+@@ -120,11 +113,11 @@ pub struct Erc20Wrapper {
+     /// Address of the underlying token.
+     pub(crate) underlying: StorageAddress,
+     /// [`SafeErc20`] contract.
+-    safe_erc20: SafeErc20,
+-}
++    safe_erc20: SafeErc20}
+ 
+ /// ERC-20 Wrapper Standard Interface
+ #[interface_id]
++#[public]
+ pub trait IErc20Wrapper {
+     /// The error type associated to the trait implementation.
+     type Error: Into<alloc::vec::Vec<u8>>;
+@@ -173,7 +166,7 @@ pub trait IErc20Wrapper {
+     ///
+     /// # Errors
+     ///
+-    /// * [`Error::InvalidSender`] - If the `msg::sender()`'s address is the
++    /// * [`Error::InvalidSender`] - If the `self.vm().msg_sender()`'s address is the
+     ///   `contract:address()`.
+     /// * [`Error::InvalidReceiver`] - If the `account` address is a
+     ///   `contract:address()`.
+@@ -247,8 +240,8 @@ impl Erc20Wrapper {
+         value: U256,
+         erc20: &mut Erc20,
+     ) -> Result<bool, Error> {
+-        let contract_address = contract::address();
+-        let sender = msg::sender();
++        let contract_address = self.vm().contract_address();
++        let sender = self.vm().msg_sender();
+ 
+         if sender == contract_address {
+             return Err(erc20::ERC20InvalidSender { sender }.into());
+@@ -280,13 +273,13 @@ impl Erc20Wrapper {
+         value: U256,
+         erc20: &mut Erc20,
+     ) -> Result<bool, Error> {
+-        if account == contract::address() {
++        if account == self.vm().contract_address() {
+             return Err(
+                 erc20::ERC20InvalidReceiver { receiver: account }.into()
+             );
+         }
+ 
+-        erc20._burn(msg::sender(), value)?;
++        erc20._burn(self.vm().msg_sender(), value)?;
+ 
+         self.safe_erc20.safe_transfer(self.underlying(), account, value)?;
+ 
+@@ -311,10 +304,9 @@ impl Erc20Wrapper {
+         &mut self,
+         underlying_token: Address,
+     ) -> Result<(), Error> {
+-        if underlying_token == contract::address() {
++        if underlying_token == self.vm().contract_address() {
+             return Err(Error::InvalidUnderlying(ERC20InvalidUnderlying {
+-                token: underlying_token,
+-            }));
++                token: underlying_token}));
+         }
+         self.underlying.set(underlying_token);
+         Ok(())
+@@ -348,7 +340,7 @@ impl Erc20Wrapper {
+         account: Address,
+         erc20: &mut Erc20,
+     ) -> Result<U256, Error> {
+-        let contract_address = contract::address();
++        let contract_address = self.vm().contract_address();
+ 
+         let underlying_token = Erc20Interface::new(self.underlying());
+ 
+@@ -376,8 +368,7 @@ mod tests {
+     use super::*;
+     use crate::{
+         token::erc20::extensions::IErc20Metadata,
+-        utils::introspection::erc165::IErc165,
+-    };
++        utils::introspection::erc165::IErc165};
+ 
+     const DUMMY_TEST_DECIMALS: u8 = 12;
+     #[storage]
+@@ -415,8 +406,7 @@ mod tests {
+     #[storage]
+     struct Erc20WrapperTestExample {
+         wrapper: Erc20Wrapper,
+-        erc20: Erc20,
+-    }
++        erc20: Erc20}
+ 
+     #[public]
+     #[implements(IErc20Wrapper<Error = Error>)]
+@@ -697,14 +687,12 @@ mod tests {
+         erc20_contract.assert_emitted(&erc20::Transfer {
+             from: alice,
+             to: contract.address(),
+-            value: amount,
+-        });
++            value: amount});
+ 
+         contract.assert_emitted(&erc20::Transfer {
+             from: Address::ZERO,
+             to: alice,
+-            value: amount,
+-        });
++            value: amount});
+ 
+         assert_eq!(
+             erc20_contract.sender(alice).balance_of(alice),
+@@ -845,14 +833,12 @@ mod tests {
+         contract.assert_emitted(&erc20::Transfer {
+             from: alice,
+             to: Address::ZERO,
+-            value: amount,
+-        });
++            value: amount});
+ 
+         erc20_contract.assert_emitted(&erc20::Transfer {
+             from: contract.address(),
+             to: alice,
+-            value: amount,
+-        });
++            value: amount});
+ 
+         assert_eq!(
+             erc20_contract.sender(alice).balance_of(alice),
+@@ -1029,8 +1015,7 @@ mod tests {
+         contract.assert_emitted(&erc20::Transfer {
+             from: Address::ZERO,
+             to: alice,
+-            value: unexpected_delta,
+-        });
++            value: unexpected_delta});
+     }
+ 
+     #[motsu::test]
+diff --git a/contracts/src/token/erc20/mod.rs b/contracts/src/token/erc20/mod.rs
+index 4f33ce9..1c46b73 100644
+--- a/contracts/src/token/erc20/mod.rs
++++ b/contracts/src/token/erc20/mod.rs
+@@ -8,17 +8,11 @@ use alloc::{vec, vec::Vec};
+ 
+ use alloy_primitives::{aliases::B32, Address, U256};
+ use openzeppelin_stylus_proc::interface_id;
+-use stylus_sdk::{
+-    call::MethodError,
+-    evm, msg,
+-    prelude::*,
+-    storage::{StorageMap, StorageU256},
+-};
++use stylus_sdk::{stylus_core::calls::errors::MethodError, prelude::*, storage::{StorageMap, StorageU256}};
+ 
+ use crate::utils::{
+     introspection::erc165::IErc165,
+-    math::storage::{AddAssignChecked, AddAssignUnchecked, SubAssignUnchecked},
+-};
++    math::storage::{AddAssignChecked, AddAssignUnchecked, SubAssignUnchecked}};
+ 
+ pub mod extensions;
+ pub mod interface;
+@@ -117,8 +111,7 @@ pub enum Error {
+     InvalidSpender(ERC20InvalidSpender),
+     /// Indicates a failure with the `approver` of a token to be approved. Used
+     /// in approvals. approver Address initiating an approval operation.
+-    InvalidApprover(ERC20InvalidApprover),
+-}
++    InvalidApprover(ERC20InvalidApprover)}
+ 
+ impl MethodError for Error {
+     fn encode(self) -> alloc::vec::Vec<u8> {
+@@ -135,8 +128,7 @@ pub struct Erc20 {
+     pub(crate) allowances:
+         StorageMap<Address, StorageMap<Address, StorageU256>>,
+     /// The total supply of the token.
+-    pub(crate) total_supply: StorageU256,
+-}
++    pub(crate) total_supply: StorageU256}
+ 
+ /// NOTE: Implementation of [`TopLevelStorage`] to be able use `&mut self` when
+ /// calling other contracts and not `&mut (impl TopLevelStorage +
+@@ -145,6 +137,7 @@ unsafe impl TopLevelStorage for Erc20 {}
+ 
+ /// Required interface of an [`Erc20`] compliant contract.
+ #[interface_id]
++#[public]
+ pub trait IErc20 {
+     /// The error type associated to this ERC-20 trait implementation.
+     type Error: Into<alloc::vec::Vec<u8>>;
+@@ -293,7 +286,7 @@ impl IErc20 for Erc20 {
+         to: Address,
+         value: U256,
+     ) -> Result<bool, Self::Error> {
+-        let from = msg::sender();
++        let from = self.vm().msg_sender();
+         self._transfer(from, to, value)?;
+         Ok(true)
+     }
+@@ -307,7 +300,7 @@ impl IErc20 for Erc20 {
+         spender: Address,
+         value: U256,
+     ) -> Result<bool, Self::Error> {
+-        let owner = msg::sender();
++        let owner = self.vm().msg_sender();
+         self._approve(owner, spender, value, true)
+     }
+ 
+@@ -317,7 +310,7 @@ impl IErc20 for Erc20 {
+         to: Address,
+         value: U256,
+     ) -> Result<bool, Self::Error> {
+-        let spender = msg::sender();
++        let spender = self.vm().msg_sender();
+         self._spend_allowance(from, spender, value)?;
+         self._transfer(from, to, value)?;
+         Ok(true)
+@@ -353,19 +346,17 @@ impl Erc20 {
+     ) -> Result<bool, Error> {
+         if owner.is_zero() {
+             return Err(Error::InvalidApprover(ERC20InvalidApprover {
+-                approver: Address::ZERO,
+-            }));
++                approver: Address::ZERO}));
+         }
+ 
+         if spender.is_zero() {
+             return Err(Error::InvalidSpender(ERC20InvalidSpender {
+-                spender: Address::ZERO,
+-            }));
++                spender: Address::ZERO}));
+         }
+ 
+         self.allowances.setter(owner).insert(spender, value);
+         if emit_event {
+-            evm::log(Approval { owner, spender, value });
++            self.vm().log(Approval { owner, spender, value });
+         }
+         Ok(true)
+     }
+@@ -397,13 +388,11 @@ impl Erc20 {
+     ) -> Result<(), Error> {
+         if from.is_zero() {
+             return Err(Error::InvalidSender(ERC20InvalidSender {
+-                sender: Address::ZERO,
+-            }));
++                sender: Address::ZERO}));
+         }
+         if to.is_zero() {
+             return Err(Error::InvalidReceiver(ERC20InvalidReceiver {
+-                receiver: Address::ZERO,
+-            }));
++                receiver: Address::ZERO}));
+         }
+ 
+         self._update(from, to, value)?;
+@@ -433,8 +422,7 @@ impl Erc20 {
+     ) -> Result<(), Error> {
+         if account.is_zero() {
+             return Err(Error::InvalidReceiver(ERC20InvalidReceiver {
+-                receiver: Address::ZERO,
+-            }));
++                receiver: Address::ZERO}));
+         }
+         self._update(Address::ZERO, account, value)
+     }
+@@ -484,8 +472,7 @@ impl Erc20 {
+                     ERC20InsufficientBalance {
+                         sender: from,
+                         balance: from_balance,
+-                        needed: value,
+-                    },
++                        needed: value},
+                 ));
+             }
+             // Overflow not possible:
+@@ -505,7 +492,7 @@ impl Erc20 {
+             self.balances.setter(to).add_assign_unchecked(value);
+         }
+ 
+-        evm::log(Transfer { from, to, value });
++        self.vm().log(Transfer { from, to, value });
+ 
+         Ok(())
+     }
+@@ -534,8 +521,7 @@ impl Erc20 {
+     ) -> Result<(), Error> {
+         if account == Address::ZERO {
+             return Err(Error::InvalidSender(ERC20InvalidSender {
+-                sender: Address::ZERO,
+-            }));
++                sender: Address::ZERO}));
+         }
+         self._update(account, Address::ZERO, value)
+     }
+@@ -572,8 +558,7 @@ impl Erc20 {
+                     ERC20InsufficientAllowance {
+                         spender,
+                         allowance: current_allowance,
+-                        needed: value,
+-                    },
++                        needed: value},
+                 ));
+             }
+ 
+@@ -584,6 +569,7 @@ impl Erc20 {
+     }
+ }
+ 
++#[public]
+ impl IErc165 for Erc20 {
+     fn supports_interface(&self, interface_id: B32) -> bool {
+         <Self as IErc20>::interface_id() == interface_id
+@@ -620,8 +606,7 @@ mod tests {
+         contract.assert_emitted(&Transfer {
+             from: Address::ZERO,
+             to: alice,
+-            value: one,
+-        });
++            value: one});
+     }
+ 
+     #[motsu::test]
+@@ -716,8 +701,7 @@ mod tests {
+         contract.assert_emitted(&Transfer {
+             from: alice,
+             to: Address::ZERO,
+-            value: one,
+-        });
++            value: one});
+     }
+ 
+     #[motsu::test]
+@@ -913,8 +897,7 @@ mod tests {
+         contract.assert_emitted(&Approval {
+             owner: alice,
+             spender: bob,
+-            value: one,
+-        });
++            value: one});
+     }
+ 
+     #[motsu::test]
+diff --git a/contracts/src/token/erc20/utils/safe_erc20.rs b/contracts/src/token/erc20/utils/safe_erc20.rs
+index 09ddb41..cbce0ff 100644
+--- a/contracts/src/token/erc20/utils/safe_erc20.rs
++++ b/contracts/src/token/erc20/utils/safe_erc20.rs
+@@ -10,23 +10,17 @@
+ //! operations as `contract.safe_transfer(token_addr, ...)`, etc.
+ 
+ use alloc::{vec, vec::Vec};
++use stylus_sdk::stylus_core::calls::errors::MethodError;
+ 
+ use alloy_primitives::{aliases::B32, Address, U256};
+ use alloy_sol_types::{sol_data::Bool, SolCall, SolType};
+ use openzeppelin_stylus_proc::interface_id;
+ pub use sol::*;
+-use stylus_sdk::{
+-    abi::Bytes,
+-    call::{MethodError, RawCall},
+-    contract, function_selector,
+-    prelude::*,
+-    types::AddressVM,
+-};
++use stylus_sdk::{abi::Bytes, call::RawCall, function_selector, prelude::*};
+ 
+ use crate::{
+     token::erc20::interface::Erc20Interface,
+-    utils::introspection::erc165::IErc165,
+-};
++    utils::introspection::erc165::IErc165};
+ 
+ const BOOL_TYPE_SIZE: usize = 32;
+ 
+@@ -63,8 +57,7 @@ pub enum Error {
+     /// An operation with an ERC-20 token failed.
+     SafeErc20FailedOperation(SafeErc20FailedOperation),
+     /// Indicates a failed [`ISafeErc20::safe_decrease_allowance`] request.
+-    SafeErc20FailedDecreaseAllowance(SafeErc20FailedDecreaseAllowance),
+-}
++    SafeErc20FailedDecreaseAllowance(SafeErc20FailedDecreaseAllowance)}
+ 
+ impl MethodError for Error {
+     fn encode(self) -> alloc::vec::Vec<u8> {
+@@ -110,6 +103,7 @@ unsafe impl TopLevelStorage for SafeErc20 {}
+ 
+ /// Required interface of a [`SafeErc20`] utility contract.
+ #[interface_id]
++#[public]
+ pub trait ISafeErc20 {
+     /// The error type associated to this trait implementation.
+     type Error: Into<alloc::vec::Vec<u8>>;
+@@ -434,8 +428,7 @@ impl ISafeErc20 for SafeErc20 {
+             return Err(SafeErc20FailedDecreaseAllowance {
+                 spender,
+                 current_allowance,
+-                requested_decrease,
+-            }
++                requested_decrease}
+             .into());
+         }
+ 
+@@ -493,8 +486,7 @@ impl ISafeErc20 for SafeErc20 {
+             Ok(true) => Ok(()),
+             _ => {
+                 Err(Error::SafeErc20FailedOperation(SafeErc20FailedOperation {
+-                    token,
+-                }))
++                    token}))
+             }
+         }
+     }
+@@ -527,8 +519,7 @@ impl ISafeErc20 for SafeErc20 {
+             Ok(true) => Ok(()),
+             _ => {
+                 Err(Error::SafeErc20FailedOperation(SafeErc20FailedOperation {
+-                    token,
+-                }))
++                    token}))
+             }
+         }
+     }
+@@ -559,8 +550,7 @@ impl ISafeErc20 for SafeErc20 {
+             Ok(true) => Ok(()),
+             _ => {
+                 Err(Error::SafeErc20FailedOperation(SafeErc20FailedOperation {
+-                    token,
+-                }))
++                    token}))
+             }
+         }
+     }
+@@ -606,8 +596,7 @@ impl SafeErc20 {
+             {
+                 Ok(())
+             }
+-            _ => Err(SafeErc20FailedOperation { token }.into()),
+-        }
++            _ => Err(SafeErc20FailedOperation { token }.into())}
+     }
+ 
+     /// Returns the remaining number of ERC-20 tokens that `spender`
+@@ -633,12 +622,13 @@ impl SafeErc20 {
+         }
+ 
+         let erc20 = Erc20Interface::new(token);
+-        erc20.allowance(self, contract::address(), spender).map_err(|_e| {
++        erc20.allowance(self, self.vm().contract_address(), spender).map_err(|_e| {
+             Error::SafeErc20FailedOperation(SafeErc20FailedOperation { token })
+         })
+     }
+ }
+ 
++#[public]
+ impl IErc165 for SafeErc20 {
+     fn supports_interface(&self, interface_id: B32) -> bool {
+         <Self as ISafeErc20>::interface_id() == interface_id
+@@ -658,8 +648,7 @@ mod tests {
+     #[storage]
+     #[entrypoint]
+     struct SafeErc20Example {
+-        safe_erc20: SafeErc20,
+-    }
++        safe_erc20: SafeErc20}
+ 
+     #[public]
+     #[implements(ISafeErc20<Error = Error>)]
+@@ -840,8 +829,7 @@ mod tests {
+         err,
+         Error::SafeErc20FailedOperation(
+             SafeErc20FailedOperation {
+-                token,
+-            }) if token == no_code_addr
++                token}) if token == no_code_addr
+         ));
+     }
+ 
+@@ -860,8 +848,7 @@ mod tests {
+         err,
+         Error::SafeErc20FailedOperation(
+             SafeErc20FailedOperation {
+-                token,
+-            }) if token == no_code_addr
++                token}) if token == no_code_addr
+         ));
+     }
+ }
