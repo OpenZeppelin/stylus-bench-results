@@ -97,12 +97,12 @@ impl Erc721UriStorage {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{uint, Address};
-    use motsu::prelude::*;
-    use stylus_sdk::prelude::*;
+    use alloy_primitives::uint;
+    use stylus_sdk::{prelude::*, testing::TestVM};
 
     use super::*;
     use crate::{
+        test_utils::ALICE,
         token::erc721::{self, extensions::Erc721Metadata, Erc721},
         utils::introspection::erc165::IErc165,
     };
@@ -156,50 +156,44 @@ mod tests {
         }
     }
 
-    unsafe impl TopLevelStorage for Erc721MetadataExample {}
-
-    #[motsu::test]
+    #[test]
     fn interface_id() {
         let actual = <Erc721MetadataExample as IErc721Metadata>::interface_id();
         let expected: B32 = 0x5b5e139f_u32.into();
         assert_eq!(actual, expected);
     }
 
-    #[motsu::test]
-    fn supports_interface(
-        contract: Contract<Erc721MetadataExample>,
-        alice: Address,
-    ) {
-        assert!(contract.sender(alice).supports_interface(
+    #[test]
+    fn supports_interface() {
+        let vm = TestVM::default();
+        let contract = Erc721MetadataExample::from(&vm);
+        vm.set_sender(ALICE);
+        assert!(contract.supports_interface(
             <Erc721MetadataExample as IErc721Metadata>::interface_id()
         ));
-        assert!(contract.sender(alice).supports_interface(
+        assert!(contract.supports_interface(
             <Erc721MetadataExample as IErc165>::interface_id()
         ));
 
         let fake_interface_id: B32 = 0x12345678_u32.into();
-        assert!(!contract.sender(alice).supports_interface(fake_interface_id));
+        assert!(!contract.supports_interface(fake_interface_id));
     }
-    #[motsu::test]
-    fn token_uri_works(
-        contract: Contract<Erc721MetadataExample>,
-        alice: Address,
-    ) {
+    #[test]
+    fn token_uri_works() {
+        let vm = TestVM::default();
+        let mut contract = Erc721MetadataExample::from(&vm);
+        vm.set_sender(ALICE);
         contract
-            .sender(alice)
             .erc721
-            ._mint(alice, TOKEN_ID)
+            ._mint(ALICE, TOKEN_ID)
             .expect("should mint a token for Alice");
 
         let token_uri = String::from("https://docs.openzeppelin.com/contracts/5.x/api/token/erc721#Erc721URIStorage");
-        contract.sender(alice).set_token_uri(TOKEN_ID, token_uri.clone());
+        contract.set_token_uri(TOKEN_ID, token_uri.clone());
 
         assert_eq!(
             token_uri,
-            contract
-                .sender(alice)
-                .token_uri(TOKEN_ID)
-                .expect("should return token URI")
+            contract.token_uri(TOKEN_ID).expect("should return token URI")
         );
     }
 }
