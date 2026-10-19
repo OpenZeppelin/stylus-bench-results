@@ -16,7 +16,10 @@
 use alloc::{vec, vec::Vec};
 
 use alloy_primitives::{uint, U256};
-use stylus_sdk::{prelude::*, storage::{StorageMap, StorageU256}};
+use stylus_sdk::{
+    prelude::*,
+    storage::{StorageMap, StorageU256},
+};
 const ONE: U256 = uint!(0x1_U256);
 const HEX_FF: U256 = uint!(0xff_U256);
 
@@ -24,7 +27,8 @@ const HEX_FF: U256 = uint!(0xff_U256);
 #[storage]
 pub struct BitMap {
     /// Inner laying mapping.
-    pub(crate) data: StorageMap<U256, StorageU256>}
+    pub(crate) data: StorageMap<U256, StorageU256>,
+}
 
 impl BitMap {
     /// Returns whether the bit at `index` is set.

@@ -14,11 +14,16 @@ use alloc::{vec, vec::Vec};
 use alloy_primitives::{uint, U256, U32};
 pub use generic_size::{Size, S160, S208, S224};
 pub use sol::*;
-use stylus_sdk::{stylus_core::calls::errors::MethodError, prelude::*, storage::{StorageGuard, StorageGuardMut, StorageVec}};
+use stylus_sdk::{
+    prelude::*,
+    storage::{StorageGuard, StorageGuardMut, StorageVec},
+    stylus_core::calls::errors::MethodError,
+};
 
 use crate::utils::{
     math::alloy::Math,
-    structs::checkpoints::generic_size::{Accessor, Num}};
+    structs::checkpoints::generic_size::{Accessor, Num},
+};
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod sol {
@@ -35,7 +40,8 @@ mod sol {
 #[derive(SolidityError, Debug)]
 pub enum Error {
     /// A value was attempted to be inserted into a past checkpoint.
-    CheckpointUnorderedInsertion(CheckpointUnorderedInsertion)}
+    CheckpointUnorderedInsertion(CheckpointUnorderedInsertion),
+}
 
 impl MethodError for Error {
     fn encode(self) -> alloc::vec::Vec<u8> {
@@ -47,7 +53,8 @@ impl MethodError for Error {
 #[storage]
 pub struct Trace<S: Size> {
     /// Stores checkpoints in a dynamic array sorted by key.
-    pub(crate) checkpoints: StorageVec<Checkpoint<S>>}
+    pub(crate) checkpoints: StorageVec<Checkpoint<S>>,
+}
 
 /// State of a [`Checkpoint`] contract.
 #[storage]
@@ -55,7 +62,8 @@ pub struct Checkpoint<S: Size> {
     /// The key of the checkpoint. Used as a sorting key.
     pub(crate) key: S::KeyStorage,
     /// The value corresponding to the key.
-    pub(crate) value: S::ValueStorage}
+    pub(crate) value: S::ValueStorage,
+}
 
 impl<S: Size> Trace<S> {
     /// Pushes a (`key`, `value`) pair into a `Trace` so that it is
